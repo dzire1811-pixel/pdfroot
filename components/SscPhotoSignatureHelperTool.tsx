@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Camera, CheckCircle2, FileCheck2, Info } from "lucide-react";
+import { BrandText } from "@/components/Brand";
 import { ResizeImageExactKbTool } from "@/components/ResizeImageExactKbTool";
 import { SignatureResizeTool } from "@/components/SignatureResizeTool";
 
@@ -62,7 +63,7 @@ export function SscPhotoSignatureHelperTool() {
             </span>
             <div>
               <h3 className="text-xl font-black text-slate-950">What This Tool Can Help With</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Use PDFRoot for file preparation only where upload/resizing is required.</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Use <BrandText /> for file preparation only where upload/resizing is required.</p>
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { BrandPhrase, BrandText } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
@@ -118,13 +119,13 @@ export default function FaqPage() {
         <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
             <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              PDFRoot Help
+              <BrandText /> Help
             </p>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               Frequently Asked Questions
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              Simple answers about PDFRoot tools, file safety, government form helpers, mobile use, and support.
+              Simple answers about <BrandText /> tools, file safety, government form helpers, mobile use, and support.
             </p>
           </div>
         </section>
@@ -135,10 +136,12 @@ export default function FaqPage() {
               {faqs.map((faq) => (
                 <details key={faq.question} className="group p-6 open:bg-red-50/40">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-black text-slate-950">
-                    {faq.question}
+                    <BrandPhrase text={faq.question} />
                     <ArrowRight className="h-5 w-5 shrink-0 text-[#FF2D2D] transition group-open:rotate-90" aria-hidden="true" />
                   </summary>
-                  <p className="mt-4 leading-7 text-slate-600">{faq.answer}</p>
+                  <p className="mt-4 leading-7 text-slate-600">
+                    <BrandPhrase text={faq.answer} />
+                  </p>
                 </details>
               ))}
             </div>
@@ -146,7 +149,7 @@ export default function FaqPage() {
             <div className="mt-10 rounded-3xl bg-[#FF2D2D] p-8 text-center text-white shadow-[0_24px_70px_rgba(255,45,45,0.22)] sm:p-10">
               <h2 className="text-3xl font-black text-white">Still need help?</h2>
               <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-red-50">
-                Contact PDFRoot support for questions about PDF tools, image tools, government form files, or upload issues.
+                Contact <BrandText /> support for questions about PDF tools, image tools, government form files, or upload issues.
               </p>
               <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-4 text-base font-black text-slate-950 transition hover:-translate-y-0.5">
                 Contact Support

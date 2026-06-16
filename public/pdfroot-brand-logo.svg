@@ -1,4 +1,4 @@
-<svg width="470" height="146" viewBox="0 0 470 146" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="570" height="146" viewBox="0 0 570 146" fill="none" xmlns="http://www.w3.org/2000/svg">
   <title>PDFRoot logo</title>
   <g aria-label="PDFRoot icon">
     <path d="M34 18C34 12.4772 38.4772 8 44 8H100L128 36V111C128 116.523 123.523 121 118 121H44C38.4772 121 34 116.523 34 111V18Z" fill="#FF2D2D"/>
@@ -8,6 +8,6 @@
   </g>
   <g aria-label="PDFRoot wordmark">
     <text x="162" y="88" fill="#FF2D2D" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="0" text-rendering="geometricPrecision">PDF</text>
-    <text x="308" y="88" fill="#0F172A" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="0" text-rendering="geometricPrecision">Root</text>
+    <text x="324" y="88" fill="#0F172A" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="0" text-rendering="geometricPrecision">Root</text>
   </g>
 </svg>

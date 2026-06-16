@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
-import { SectionHeading } from "@/components/Brand";
+import { BrandText, SectionHeading } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
@@ -96,13 +96,13 @@ export default function AboutPage() {
         <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
             <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              About PDFRoot
+              About <BrandText />
             </p>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               Simple PDF and Image Tools for Everyone
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              PDFRoot is a free online PDF and image toolkit created to make daily document work simple, fast, and easy without heavy software or complicated settings.
+              <BrandText /> is a free online PDF and image toolkit created to make daily document work simple, fast, and easy without heavy software or complicated settings.
             </p>
           </div>
         </section>
@@ -117,13 +117,13 @@ export default function AboutPage() {
             />
             <div className="rounded-3xl border border-slate-200 bg-white p-7 text-base leading-8 text-slate-600 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
               <p>
-                Users often need to convert JPG to PDF, PDF to JPG, compress PDF, merge PDF files, resize images to exact KB, crop photos, resize signatures, or prepare documents for online upload. PDFRoot brings these useful tools together in one clean and easy-to-use website.
+                Users often need to convert JPG to PDF, PDF to JPG, compress PDF, merge PDF files, resize images to exact KB, crop photos, resize signatures, or prepare documents for online upload. <BrandText /> brings these useful tools together in one clean and easy-to-use website.
               </p>
               <p className="mt-4">
-                PDFRoot is especially helpful for students, government job applicants, cyber cafe users, office users, business owners, and general users who regularly work with PDF and image files.
+                <BrandText /> is especially helpful for students, government job applicants, cyber cafe users, office users, business owners, and general users who regularly work with PDF and image files.
               </p>
               <p className="mt-4">
-                Whether you are preparing documents for SSC, RRB, IBPS, OJAS, GPSC, UPSC, school admission, college admission, online verification, or another form submission, PDFRoot helps you prepare your files quickly and correctly.
+                Whether you are preparing documents for SSC, RRB, IBPS, OJAS, GPSC, UPSC, school admission, college admission, online verification, or another form submission, <BrandText /> helps you prepare your files quickly and correctly.
               </p>
             </div>
           </div>
@@ -152,12 +152,12 @@ export default function AboutPage() {
         <section className="px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-2">
             <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-              <h2 className="text-3xl font-black tracking-tight text-slate-950">Why PDFRoot is Useful</h2>
+              <h2 className="text-3xl font-black tracking-tight text-slate-950">Why <BrandText /> is Useful</h2>
               <p className="mt-5 leading-8 text-slate-600">
                 Many websites and online forms have strict upload requirements. A form may ask for a photo under 20KB, a signature in a fixed size, a PDF under a specific limit, or documents in JPG or PDF format.
               </p>
               <p className="mt-4 leading-8 text-slate-600">
-                With PDFRoot, users do not need professional editing software. They can resize, convert, compress, crop, and prepare files directly from the browser.
+                With <BrandText />, users do not need professional editing software. They can resize, convert, compress, crop, and prepare files directly from the browser.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
@@ -166,7 +166,7 @@ export default function AboutPage() {
                 Our mission is to provide a simple, reliable, and user-friendly platform for PDF and image tools. We want to make document preparation easier for everyone, especially users who apply for government jobs, fill online forms, manage office documents, or need quick file conversion tools.
               </p>
               <p className="mt-4 leading-8 text-slate-600">
-                PDFRoot is focused on speed, simplicity, and practical use. Every tool is created to help users complete their work with fewer steps and less confusion.
+                <BrandText /> is focused on speed, simplicity, and practical use. Every tool is created to help users complete their work with fewer steps and less confusion.
               </p>
             </div>
           </div>
@@ -192,7 +192,7 @@ export default function AboutPage() {
             />
             <BulletGrid items={focusItems} />
             <div className="mt-10 rounded-3xl bg-[#FF2D2D] p-8 text-center text-white shadow-[0_24px_70px_rgba(255,45,45,0.22)] sm:p-10">
-              <h2 className="text-3xl font-black text-white">PDFRoot is created with one clear purpose</h2>
+              <h2 className="text-3xl font-black text-white"><BrandText /> is created with one clear purpose</h2>
               <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-red-50">
                 To make PDF and image file work simple for everyone.
               </p>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Search } from "lucide-react";
 import { AllToolsExplorer } from "@/components/AllToolsExplorer";
-import { LogoMark, SectionHeading } from "@/components/Brand";
+import { BrandText, LogoMark, SectionHeading } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SocialLinks } from "@/components/SocialLinks";
 import { ToolCard } from "@/components/ToolCard";
@@ -29,7 +29,7 @@ function Footer() {
           <div className="inline-flex rounded-3xl bg-white p-3">
             <LogoMark />
           </div>
-          <p className="mt-4 max-w-md leading-7 text-slate-300">PDFRoot - Smart PDF & Image Toolkit.</p>
+          <p className="mt-4 max-w-md leading-7 text-slate-300"><BrandText /> - Smart PDF & Image Toolkit.</p>
         </div>
         <Link href="/" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:text-[#FF2D2D]">
           Back to Homepage
@@ -38,7 +38,7 @@ function Footer() {
         <div className="flex flex-col gap-4 sm:items-end">
           <div className="flex flex-wrap justify-center gap-4 text-sm font-black text-slate-300 sm:justify-end">
             <Link href="/about" className="transition hover:text-white">
-              About PDFRoot
+              About <BrandText />
             </Link>
             <Link href="/contact" className="transition hover:text-white">
               Contact
@@ -60,13 +60,13 @@ export function ToolsDirectoryPage() {
           <div className="mx-auto max-w-4xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
               <Search className="h-4 w-4" aria-hidden="true" />
-              PDFRoot Tools Directory
+              <BrandText /> Tools Directory
             </div>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               All PDF & Image Tools
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              Search, filter, and open PDFRoot tools for PDF conversion, compression, image resizing, exact KB files, and government form uploads.
+              Search, filter, and open <BrandText /> tools for PDF conversion, compression, image resizing, exact KB files, and government form uploads.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
               {["PDF Tools", "Image Tools", "Government Form Tools", "No Registration"].map((badge) => (

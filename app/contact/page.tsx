@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Mail, MessageSquare, ShieldCheck, Timer } from "lucide-react";
-import { LogoMark, SectionHeading } from "@/components/Brand";
+import { BrandText, LogoMark, SectionHeading } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SocialLinks } from "@/components/SocialLinks";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
@@ -44,7 +44,7 @@ function Footer() {
           <div className="inline-flex rounded-3xl bg-white p-3">
             <LogoMark />
           </div>
-          <p className="mt-4 max-w-md leading-7 text-slate-300">PDFRoot - Smart PDF & Image Toolkit.</p>
+          <p className="mt-4 max-w-md leading-7 text-slate-300"><BrandText /> - Smart PDF & Image Toolkit.</p>
         </div>
         <Link href="/" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:text-[#FF2D2D]">
           Back to Homepage
@@ -64,13 +64,13 @@ export default function ContactPage() {
         <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
             <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              PDFRoot Support
+              <BrandText /> Support
             </p>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               Contact Us
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              Need help with a PDF or image tool? Send us a message and the PDFRoot team will review your request.
+              Need help with a PDF or image tool? Send us a message and the <BrandText /> team will review your request.
             </p>
           </div>
         </section>
@@ -146,7 +146,7 @@ export default function ContactPage() {
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
               <h2 className="text-2xl font-black tracking-tight text-slate-950">Support Note</h2>
               <p className="mt-3 leading-7 text-slate-600">
-                PDFRoot support can help with website usage, tool guidance, error reports, feedback, and general questions about PDF and image workflows.
+                <BrandText /> support can help with website usage, tool guidance, error reports, feedback, and general questions about PDF and image workflows.
               </p>
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">

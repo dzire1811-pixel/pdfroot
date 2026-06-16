@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { BrandText } from "@/components/Brand";
 import { ToolCard } from "@/components/ToolCard";
 import { pdfTools, imageTools, tools } from "@/lib/tools";
 
@@ -60,13 +61,19 @@ export function AllToolsExplorer() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-h-[58px] flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4">
               <Search className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-              <input
-                value={query}
-                onChange={onSearchChange}
-                className="min-w-0 flex-1 bg-transparent py-4 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
-                placeholder="Search all PDFRoot tools"
-                aria-label="Search all PDFRoot tools"
-              />
+              <div className="relative min-w-0 flex-1">
+                {!query ? (
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-sm font-semibold text-slate-400">
+                    Search all <BrandText /> tools
+                  </span>
+                ) : null}
+                <input
+                  value={query}
+                  onChange={onSearchChange}
+                  className="relative z-10 w-full bg-transparent py-4 text-sm font-semibold text-slate-900 outline-none"
+                  aria-label="Search all PDFRoot tools"
+                />
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {filters.map((filter) => (

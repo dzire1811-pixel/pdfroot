@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useState } from "react";
 import { Download, FileArchive, FileImage, FileText, RotateCcw, UploadCloud } from "lucide-react";
+import { BrandText } from "@/components/Brand";
 import JSZip from "jszip";
 
 type JpgPage = {
@@ -201,7 +202,7 @@ export function PdfToJpgTool() {
               <FileImage className="h-9 w-9" aria-hidden="true" />
             </span>
             <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop PDF</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload one PDF file. PDFRoot will convert every page into a high-quality JPG image.</span>
+            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload one PDF file. <BrandText /> will convert every page into a high-quality JPG image.</span>
             <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
               Choose PDF
               <UploadCloud className="h-5 w-5" aria-hidden="true" />

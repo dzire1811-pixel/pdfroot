@@ -12,7 +12,7 @@ import {
   UploadCloud,
   Zap,
 } from "lucide-react";
-import { LogoMark, SectionHeading } from "@/components/Brand";
+import { BrandPhrase, BrandText, LogoMark, SectionHeading } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SocialLinks } from "@/components/SocialLinks";
 import { ToolCard } from "@/components/ToolCard";
@@ -206,7 +206,7 @@ function Footer() {
             <LogoMark />
           </div>
           <p className="mt-5 max-w-md leading-7 text-slate-300">
-            PDFRoot - Smart PDF & Image Toolkit for Indian students, cyber cafes, government job applicants, and office work.
+            <BrandText /> - Smart PDF & Image Toolkit for Indian students, cyber cafes, government job applicants, and office work.
           </p>
           <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-3 text-sm font-bold text-slate-300">
@@ -243,7 +243,7 @@ function Footer() {
         </div>
       </div>
       <div className="mx-auto mt-10 max-w-7xl border-t border-white/10 pt-6 text-sm text-slate-400">
-        © 2026 PDFRoot. All rights reserved.
+        © 2026 <BrandText />. All rights reserved.
       </div>
     </footer>
   );
@@ -259,7 +259,7 @@ export default function Home() {
             <div className="text-center lg:text-left">
               <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
                 <Sparkles className="h-4 w-4" aria-hidden="true" />
-                PDFRoot - Smart PDF & Image Toolkit
+                <BrandText /> - Smart PDF & Image Toolkit
               </div>
               <h1 className="mx-auto mt-6 max-w-4xl text-balance font-black tracking-tight text-slate-950 lg:mx-0">
                 All PDF & Image Tools in One Place
@@ -358,7 +358,7 @@ export default function Home() {
             />
             <div className="rounded-3xl border border-slate-200 bg-white p-7 leading-8 text-slate-600 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
               <p>
-                Indian government recruitment forms often require strict photo and signature sizes. PDFRoot focuses on exact KB image resize tools for SSC, RRB, IBPS, OJAS, GPSC, UPSC, railway, banking, scholarship, passport, and admission workflows.
+                Indian government recruitment forms often require strict photo and signature sizes. <BrandText /> focuses on exact KB image resize tools for SSC, RRB, IBPS, OJAS, GPSC, UPSC, railway, banking, scholarship, passport, and admission workflows.
               </p>
               <p className="mt-4">
                 The platform also includes PDF tools such as Merge PDF, Split PDF, Compress PDF, PDF to Word, Word to PDF, JPG to PDF, PDF to JPG, Protect PDF, Unlock PDF, and Organize PDF for everyday document work.
@@ -378,10 +378,12 @@ export default function Home() {
               {faqs.map((faq) => (
                 <details key={faq.question} className="group p-6 open:bg-red-50/40">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-black text-slate-950">
-                    {faq.question}
+                    <BrandPhrase text={faq.question} />
                     <ArrowRight className="h-5 w-5 text-[#FF2D2D] transition group-open:rotate-90" aria-hidden="true" />
                   </summary>
-                  <p className="mt-4 leading-7 text-slate-600">{faq.answer}</p>
+                  <p className="mt-4 leading-7 text-slate-600">
+                    <BrandPhrase text={faq.answer} />
+                  </p>
                 </details>
               ))}
             </div>

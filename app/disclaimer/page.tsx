@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { BrandPhrase, BrandText } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
@@ -74,7 +75,7 @@ export default function DisclaimerPage() {
         <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
             <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              PDFRoot Legal
+              <BrandText /> Legal
             </p>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               Disclaimer
@@ -93,14 +94,14 @@ export default function DisclaimerPage() {
                 <p className="mt-4 text-base leading-8 text-slate-600">
                   {section.title === "Contact Us" ? (
                     <>
-                      If you have questions about this Disclaimer, contact PDFRoot at{" "}
+                      If you have questions about this Disclaimer, contact <BrandText /> at{" "}
                       <a href="mailto:support@pdfroot.com" className="font-bold text-[#FF2D2D] hover:text-red-600">
                         support@pdfroot.com
                       </a>
                       .
                     </>
                   ) : (
-                    section.content
+                    <BrandPhrase text={section.content} />
                   )}
                 </p>
               </section>
@@ -109,7 +110,7 @@ export default function DisclaimerPage() {
             <div className="rounded-3xl bg-[#FF2D2D] p-8 text-center text-white shadow-[0_24px_70px_rgba(255,45,45,0.22)] sm:p-10">
               <h2 className="text-3xl font-black text-white">Need help understanding this disclaimer?</h2>
               <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-red-50">
-                Contact PDFRoot support if you have questions about file processing, government form tools, or safe website use.
+                Contact <BrandText /> support if you have questions about file processing, government form tools, or safe website use.
               </p>
               <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-4 text-base font-black text-slate-950 transition hover:-translate-y-0.5">
                 Contact Support

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Download, FileText, ShieldCheck, UploadCloud, Zap } from "lucide-react";
-import { LogoMark, SectionHeading } from "@/components/Brand";
+import { BrandPhrase, BrandText, LogoMark, SectionHeading } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SocialLinks } from "@/components/SocialLinks";
 import { ToolCard } from "@/components/ToolCard";
@@ -117,7 +117,7 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <LogoMark />
-          <p className="mt-4 max-w-md leading-7 text-slate-600">PDFRoot - Smart PDF & Image Toolkit.</p>
+          <p className="mt-4 max-w-md leading-7 text-slate-600"><BrandText /> - Smart PDF & Image Toolkit.</p>
         </div>
         <Link href="/" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:border-red-200 hover:text-[#FF2D2D]">
           Back to all tools
@@ -126,7 +126,7 @@ function Footer() {
         <div className="flex flex-col gap-4 sm:items-end">
           <div className="flex flex-wrap justify-center gap-4 text-sm font-black text-slate-700 sm:justify-end">
             <Link href="/about" className="transition hover:text-[#FF2D2D]">
-              About PDFRoot
+              About <BrandText />
             </Link>
             <Link href="/contact" className="transition hover:text-[#FF2D2D]">
               Contact
@@ -268,7 +268,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
               </div>
             )}
             <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              {toolIntro(tool.slug, tool.name)}
+              <BrandPhrase text={toolIntro(tool.slug, tool.name)} />
             </p>
             {tool.government && <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-red-700">{recruitmentCopy}</p>}
           </div>
@@ -308,7 +308,9 @@ export default async function ToolPage({ params }: ToolPageProps) {
                       <span className="text-4xl font-black text-slate-100">0{index + 1}</span>
                     </div>
                     <h3 className="mt-6 text-lg font-black text-slate-950">{title as string}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{description as string}</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      <BrandPhrase text={description as string} />
+                    </p>
                   </div>
                 );
               })}
@@ -339,9 +341,9 @@ export default async function ToolPage({ params }: ToolPageProps) {
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
               <p className="text-sm font-black uppercase tracking-[0.18em] text-[#FF2D2D]">SEO Tool Page</p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Why use PDFRoot {tool.name}?</h2>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Why use <BrandText /> {tool.name}?</h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                {tool.description} PDFRoot gives this workflow its own dedicated page so users can find the exact PDF or image tool they need from search and navigation.
+                {tool.description} <BrandText /> gives this workflow its own dedicated page so users can find the exact PDF or image tool they need from search and navigation.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 {tool.keywords.map((keyword) => (
@@ -361,7 +363,9 @@ export default async function ToolPage({ params }: ToolPageProps) {
                 <div key={title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
                   <ShieldCheck className="h-7 w-7 text-[#FF2D2D]" aria-hidden="true" />
                   <h3 className="mt-5 text-lg font-black text-slate-950">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    <BrandPhrase text={description} />
+                  </p>
                 </div>
               ))}
             </div>

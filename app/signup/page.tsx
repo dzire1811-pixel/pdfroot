@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogoMark } from "@/components/Brand";
+import { BrandText, LogoMark } from "@/components/Brand";
 
 export const metadata = {
   title: "Create PDFRoot Account",
@@ -15,7 +15,7 @@ export default function SignupPage() {
         </Link>
         <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
           <h1 className="text-3xl font-black tracking-tight text-slate-950">Create your account</h1>
-          <p className="mt-3 leading-7 text-slate-600">Start using PDFRoot tools for documents, photos, and forms.</p>
+          <p className="mt-3 leading-7 text-slate-600">Start using <BrandText /> tools for documents, photos, and forms.</p>
           <div className="mt-7 grid gap-4">
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Full name" />
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Email address" />

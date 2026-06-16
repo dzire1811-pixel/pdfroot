@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, BookOpen } from "lucide-react";
+import { BrandText } from "@/components/Brand";
 import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
@@ -70,7 +71,7 @@ export default function BlogPage() {
         <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
             <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              PDFRoot Blog
+              <BrandText /> Blog
             </p>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
               Simple PDF and Image Guides
@@ -94,7 +95,7 @@ export default function BlogPage() {
                 <h2 className="mt-5 text-2xl font-black tracking-tight text-slate-950">{post.title}</h2>
                 <p className="mt-3 leading-7 text-slate-600">{post.description}</p>
                 <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  This short PDFRoot guide will help you choose the right file workflow. Use the button below when you are ready to open the actual tool.
+                  This short <BrandText /> guide will help you choose the right file workflow. Use the button below when you are ready to open the actual tool.
                 </div>
                 <Link href={post.href} className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-5 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-red-600">
                   {post.cta}
