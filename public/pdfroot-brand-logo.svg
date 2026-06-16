@@ -1,18 +1,13 @@
 <svg width="470" height="146" viewBox="0 0 470 146" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <title>PDFRoot - Smart PDF &amp; Image Toolkit</title>
+  <title>PDFRoot logo</title>
   <g aria-label="PDFRoot icon">
     <path d="M34 18C34 12.4772 38.4772 8 44 8H100L128 36V111C128 116.523 123.523 121 118 121H44C38.4772 121 34 116.523 34 111V18Z" fill="#FF2D2D"/>
     <path d="M100 8V29C100 34.5228 104.477 39 110 39H128L100 8Z" fill="white"/>
     <path d="M63 42H91C106 42 116 51 116 64C116 78 106 86 91 86H69V104" stroke="white" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
     <path d="M65 66H93" stroke="white" stroke-width="15" stroke-linecap="round"/>
-    <rect x="34" y="127" width="8" height="8" fill="#FF2D2D"/>
-    <rect x="50" y="127" width="8" height="8" fill="#FF2D2D"/>
-    <rect x="66" y="127" width="8" height="8" fill="#FF2D2D"/>
-    <rect x="50" y="137" width="8" height="8" fill="#FF2D2D"/>
   </g>
   <g aria-label="PDFRoot wordmark">
-    <text x="162" y="69" fill="#FF2D2D" font-family="Inter, Arial, Helvetica, sans-serif" font-size="52" font-weight="850" letter-spacing="0" text-rendering="geometricPrecision">PDF</text>
-    <text x="271" y="69" fill="#0F172A" font-family="Inter, Arial, Helvetica, sans-serif" font-size="52" font-weight="850" letter-spacing="0" text-rendering="geometricPrecision">ROOT</text>
-    <text x="162" y="104" textLength="285" lengthAdjust="spacing" fill="#64748B" font-family="'Arial Narrow', Arial, Helvetica, sans-serif" font-size="11.2" font-weight="700" letter-spacing="0" text-rendering="geometricPrecision" style="-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;">SMART PDF &amp; IMAGE TOOL KIT</text>
+    <text x="162" y="88" fill="#FF2D2D" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="0" text-rendering="geometricPrecision">PDF</text>
+    <text x="308" y="88" fill="#0F172A" font-family="Inter, Arial, Helvetica, sans-serif" font-size="72" font-weight="900" letter-spacing="0" text-rendering="geometricPrecision">Root</text>
   </g>
 </svg>
