@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">PDFRoot online PDF tools</title>
+  <desc id="desc">Premium PDFRoot social preview with secure PDF cloud processing cards.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#eff6ff"/>
+      <stop offset=".52" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef2ff"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="80" y1="90" x2="1020" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#1e3a8a" flood-opacity=".16"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1020" cy="110" r="170" fill="#dbeafe"/>
+  <circle cx="160" cy="560" r="180" fill="#eef2ff"/>
+  <g transform="translate(88 88)">
+    <rect width="92" height="92" rx="28" fill="url(#brand)"/>
+    <path d="M30 22h28l16 16v32H30V22Z" fill="#fff"/>
+    <path d="M58 22v16h16" fill="#bfdbfe"/>
+    <path d="M39 49h25M39 60h18" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/>
+  </g>
+  <text x="210" y="130" font-family="Inter, Arial, sans-serif" font-size="48" font-weight="800" fill="#0f172a">PDFRoot</text>
+  <text x="210" y="170" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="700" fill="#2563eb">Fast, Secure &amp; Free PDF Tools</text>
+  <text x="88" y="292" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="900" fill="#0f172a">All Your PDF Tools</text>
+  <text x="88" y="374" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="900" fill="#0f172a">in One Place</text>
+  <text x="92" y="430" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="500" fill="#475569">Merge, split, compress, convert, and manage PDFs in seconds.</text>
+  <g transform="translate(780 176)" filter="url(#shadow)">
+    <rect width="310" height="294" rx="36" fill="#fff"/>
+    <rect x="28" y="28" width="254" height="82" rx="24" fill="url(#brand)"/>
+    <text x="58" y="80" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="800" fill="#fff">Secure Cloud</text>
+    <rect x="34" y="142" width="110" height="112" rx="24" fill="#eff6ff"/>
+    <rect x="166" y="142" width="110" height="112" rx="24" fill="#eef2ff"/>
+    <path d="M74 176h36M74 202h50M74 228h28" stroke="#2563eb" stroke-width="10" stroke-linecap="round"/>
+    <path d="M204 194l22 22 38-48" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

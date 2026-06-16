@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">PDFRoot logo</title>
+  <defs>
+    <linearGradient id="g" x1="96" y1="56" x2="424" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#g)"/>
+  <path d="M166 126h136l64 64v196H166V126Z" fill="#fff" opacity=".96"/>
+  <path d="M302 126v64h64" fill="#dbeafe"/>
+  <path d="M206 268h100M206 314h100M206 360h62" stroke="#2563eb" stroke-width="24" stroke-linecap="round"/>
+  <path d="M158 418c55-7 83-37 84-91 31 48 74 78 129 91" fill="none" stroke="#0f172a" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+</svg>
