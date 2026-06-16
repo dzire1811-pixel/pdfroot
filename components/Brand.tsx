@@ -33,7 +33,15 @@ export function LogoMark({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
       <div className="inline-flex shrink-0 items-center bg-transparent">
-        <Image src="/pdfroot-brand-logo.svg" alt="PDFRoot logo" width={570} height={146} sizes="140px" className="h-9 w-auto max-w-[140px] shrink-0 object-contain" priority />
+        <Image
+          src="/pdfroot-brand-logo.svg"
+          alt="PDFRoot logo"
+          width={570}
+          height={146}
+          sizes="156px"
+          className="h-10 w-auto max-w-[156px] shrink-0 transform-none object-contain opacity-100 blur-none filter-none"
+          priority
+        />
       </div>
     );
   }
@@ -45,8 +53,8 @@ export function LogoMark({ compact = false }: { compact?: boolean }) {
         alt="PDFRoot logo"
         width={570}
         height={146}
-        sizes="(min-width: 1024px) 220px, (min-width: 640px) 188px, 156px"
-        className="h-10 w-auto max-w-[156px] shrink-0 object-contain sm:h-12 sm:max-w-[188px] lg:h-14 lg:max-w-[220px]"
+        sizes="(min-width: 1024px) 172px, 156px"
+        className="h-10 w-auto max-w-[156px] shrink-0 transform-none object-contain opacity-100 blur-none filter-none lg:h-11 lg:max-w-[172px]"
         priority
       />
     </div>
