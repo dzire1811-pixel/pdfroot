@@ -1,4 +1,4 @@
-import Image from "next/image";
+/* eslint-disable @next/next/no-img-element */
 import type { ReactNode } from "react";
 
 export function BrandText() {
@@ -29,33 +29,17 @@ function formatBrandText(content: ReactNode) {
   return typeof content === "string" ? <BrandPhrase text={content} /> : content;
 }
 
-export function LogoMark({ compact = false }: { compact?: boolean }) {
-  if (compact) {
-    return (
-      <div className="inline-flex shrink-0 items-center bg-transparent">
-        <Image
-          src="/pdfroot-brand-logo.svg"
-          alt="PDFRoot logo"
-          width={570}
-          height={146}
-          sizes="156px"
-          className="h-10 w-auto max-w-[156px] shrink-0 transform-none object-contain opacity-100 blur-none filter-none"
-          priority
-        />
-      </div>
-    );
-  }
-
+export function LogoMark() {
   return (
     <div className="inline-flex shrink-0 items-center bg-transparent">
-      <Image
+      <img
         src="/pdfroot-brand-logo.svg"
         alt="PDFRoot logo"
         width={570}
         height={146}
-        sizes="(min-width: 1024px) 172px, 156px"
-        className="h-10 w-auto max-w-[156px] shrink-0 transform-none object-contain opacity-100 blur-none filter-none lg:h-11 lg:max-w-[172px]"
-        priority
+        className="block h-[42px] w-auto max-w-none shrink-0 transform-none object-contain opacity-100 blur-none filter-none lg:h-11"
+        decoding="sync"
+        draggable={false}
       />
     </div>
   );
