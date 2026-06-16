@@ -3,34 +3,23 @@ import Image from "next/image";
 export function LogoMark({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
-      <div className="inline-flex items-center gap-1.5 bg-transparent">
-        <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md">
-          <Image src="/pdfroot-icon-logo.png" alt="PDFRoot logo icon" fill sizes="36px" className="object-contain" priority />
-        </span>
-        <span className="whitespace-nowrap text-[1.35rem] font-black leading-none tracking-tight" aria-label="PDFRoot">
-          <span className="text-[#FF2D2D]">PDF</span>
-          <span className="text-slate-950">Root</span>
-        </span>
+      <div className="inline-flex items-center bg-transparent">
+        <Image src="/pdfroot-brand-logo.svg" alt="PDFRoot logo" width={470} height={146} sizes="116px" className="h-9 w-auto object-contain" priority />
       </div>
     );
   }
 
   return (
-    <div className="inline-flex items-center gap-1.5 bg-transparent sm:gap-2">
-      <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg sm:h-12 sm:w-12 lg:h-14 lg:w-14">
-        <Image
-          src="/pdfroot-icon-logo.png"
-          alt="PDFRoot logo icon"
-          fill
-          sizes="(min-width: 1024px) 56px, (min-width: 640px) 48px, 40px"
-          className="object-contain"
-          priority
-        />
-      </span>
-      <span className="whitespace-nowrap text-[1.5rem] font-black leading-none tracking-tight sm:text-[1.8rem] lg:text-[2.05rem]" aria-label="PDFRoot">
-        <span className="text-[#FF2D2D]">PDF</span>
-        <span className="text-slate-950">Root</span>
-      </span>
+    <div className="inline-flex items-center bg-transparent">
+      <Image
+        src="/pdfroot-brand-logo.svg"
+        alt="PDFRoot logo"
+        width={470}
+        height={146}
+        sizes="(min-width: 1024px) 180px, (min-width: 640px) 155px, 130px"
+        className="h-10 w-auto object-contain sm:h-12 lg:h-14"
+        priority
+      />
     </div>
   );
 }
