@@ -27,8 +27,8 @@ export default function DashboardPage() {
         </div>
       </header>
       <section className="mx-auto max-w-7xl px-5 py-12">
-        <h1 className="text-4xl font-black tracking-tight text-slate-950"><BrandText /> Dashboard</h1>
-        <p className="mt-3 max-w-2xl leading-7 text-slate-600">Choose a PDF or image workflow and continue with the same clean <BrandText /> experience.</p>
+        <h1 className="text-4xl font-black tracking-tight text-slate-950"><BrandText styled /> Dashboard</h1>
+        <p className="mt-3 max-w-2xl leading-7 text-slate-600">Choose a PDF or image workflow and continue with the same clean <BrandText styled /> experience.</p>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           {cards.map(({ title, description, href, icon: Icon }) => (
             <Link key={title} href={href} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:border-red-200">

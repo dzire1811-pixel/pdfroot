@@ -1,0 +1,43 @@
+{
+	"folders": [
+		{
+			"path": "../[slug]"
+		},
+		{
+			"path": "../about"
+		},
+		{
+			"path": "../api"
+		},
+		{
+			"path": "../blog"
+		},
+		{
+			"path": "../contact"
+		},
+		{
+			"path": "../dashboard"
+		},
+		{
+			"path": "../disclaimer"
+		},
+		{
+			"path": "."
+		},
+		{
+			"path": "../login"
+		},
+		{
+			"path": "../privacy-policy"
+		},
+		{
+			"path": "../signup"
+		},
+		{
+			"path": "../terms-and-conditions"
+		},
+		{
+			"path": "../tools"
+		}
+	]
+}

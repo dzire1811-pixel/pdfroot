@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { Download, IdCard, ImageUp, Sparkles, RotateCcw, UploadCloud } from "lucide-react";
+import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Preset = {
@@ -62,22 +63,6 @@ function loadImage(file: File) {
       reject(new Error("Could not read this photo. Please upload JPG, JPEG, or PNG."));
     };
     image.src = url;
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new Error("Could not create passport photo."));
-      },
-      "image/jpeg",
-      quality,
-    );
   });
 }
 
@@ -159,58 +144,11 @@ function enhanceCanvas(canvas: HTMLCanvasElement) {
   return canvas;
 }
 
-async function padBlobToMinimum(blob: Blob, minBytes: number, targetBytes: number) {
-  if (blob.size >= minBytes || blob.size >= targetBytes) {
-    return blob;
-  }
-
-  const paddingBytes = Math.max(0, Math.min(targetBytes - blob.size, minBytes - blob.size));
-  if (paddingBytes <= 0) {
-    return blob;
-  }
-
-  const marker = new TextEncoder().encode("\nPDFRoot_PASSPORT_PHOTO_PADDING\n");
-  const padding = new Uint8Array(paddingBytes);
-
-  for (let index = 0; index < padding.length; index += 1) {
-    padding[index] = marker[index % marker.length];
-  }
-
-  return new Blob([blob, padding], { type: "image/jpeg" });
-}
-
 async function compressCanvasToTarget(canvas: HTMLCanvasElement, targetKb: number) {
-  const targetBytes = targetKb * 1024;
-  const minimumBytes = Math.floor(targetBytes * 0.9);
-  let low = 0.1;
-  let high = 1;
-  let bestUnderTarget: Blob | null = null;
-
-  for (let index = 0; index < 18; index += 1) {
-    const quality = (low + high) / 2;
-    const blob = await canvasToBlob(canvas, quality);
-
-    if (blob.size <= targetBytes) {
-      bestUnderTarget = blob;
-      low = quality;
-    } else {
-      high = quality;
-    }
-  }
-
-  if (!bestUnderTarget) {
-    bestUnderTarget = await canvasToBlob(canvas, 0.1);
-  }
-
-  if (bestUnderTarget.size >= minimumBytes && bestUnderTarget.size <= targetBytes) {
-    return { blob: bestUnderTarget, isClosest: false };
-  }
-
-  const paddedBlob = await padBlobToMinimum(bestUnderTarget, minimumBytes, targetBytes);
-  return {
-    blob: paddedBlob,
-    isClosest: paddedBlob.size < minimumBytes || paddedBlob.size > targetBytes,
-  };
+  return compressCanvasToExactKb(canvas, targetKb, {
+    allowDimensionShrink: true,
+    marker: "\nPDFRoot_PASSPORT_PHOTO_PADDING\n",
+  });
 }
 
 export function PassportPhotoMakerTool() {
@@ -625,6 +563,9 @@ export function PassportPhotoMakerTool() {
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-black text-slate-950">
                   Output: {output.width} x {output.height}px - {output.sizeKb.toFixed(1)}KB / {targetKb}KB
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  Difference: {(output.sizeKb - targetKb).toFixed(1)}KB
                 </p>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
                   Basic Enhance: {output.enhanced ? "Applied" : "Off"}

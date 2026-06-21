@@ -14,7 +14,7 @@ export default function LoginPage() {
           <LogoMark />
         </Link>
         <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
-          <h1 className="text-3xl font-black tracking-tight text-slate-950">Login to <BrandText /></h1>
+          <h1 className="text-3xl font-black tracking-tight text-slate-950">Login to <BrandText styled /></h1>
           <p className="mt-3 leading-7 text-slate-600">Access your PDF and image toolkit dashboard.</p>
           <div className="mt-7 grid gap-4">
             <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Email address" />
@@ -24,7 +24,7 @@ export default function LoginPage() {
             </Link>
           </div>
           <p className="mt-6 text-center text-sm font-semibold text-slate-600">
-            New to <BrandText />?{" "}
+            New to <BrandText styled />?{" "}
             <Link href="/signup" className="text-[#FF2D2D]">
               Sign up
             </Link>

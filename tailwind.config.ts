@@ -8,6 +8,26 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        background: "oklch(1 0 0)",
+        foreground: "oklch(0.18 0 0)",
+        card: "oklch(1 0 0)",
+        "card-foreground": "oklch(0.18 0 0)",
+        popover: "oklch(1 0 0)",
+        "popover-foreground": "oklch(0.18 0 0)",
+        primary: "oklch(0.598 0.214 27.3)",
+        "primary-foreground": "oklch(0.99 0 0)",
+        secondary: "oklch(0.97 0 0)",
+        "secondary-foreground": "oklch(0.205 0 0)",
+        muted: "oklch(0.968 0 0)",
+        "muted-foreground": "oklch(0.5 0 0)",
+        accent: "oklch(0.968 0.008 27)",
+        "accent-foreground": "oklch(0.598 0.214 27.3)",
+        destructive: "oklch(0.598 0.214 27.3)",
+        border: "oklch(0.922 0 0)",
+        input: "oklch(0.922 0 0)",
+        ring: "oklch(0.598 0.214 27.3)",
+        success: "oklch(0.62 0.16 150)",
+        "success-foreground": "oklch(0.99 0 0)",
         brand: {
           50: "#fff1f1",
           100: "#ffe1e1",

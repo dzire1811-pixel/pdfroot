@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useState } from "react";
 import { AlertTriangle, CalendarDays, Download, ImageUp, PenLine, UploadCloud } from "lucide-react";
+import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 
 type DateFormat = "slash" | "dash";
 type DateMode = "without" | "with";
@@ -77,22 +78,6 @@ function loadImage(file: File) {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new Error("Could not create resized image."));
-      },
-      "image/jpeg",
-      quality,
-    );
-  });
-}
-
 function drawCenteredImage(
   image: HTMLImageElement,
   width: number,
@@ -162,47 +147,11 @@ function drawCenteredImage(
   return canvas;
 }
 
-async function padBlobToMinimum(blob: Blob, minBytes: number, targetBytes: number) {
-  if (blob.size >= minBytes || blob.size >= targetBytes) return blob;
-
-  const paddingBytes = Math.max(0, Math.min(targetBytes - blob.size, minBytes - blob.size));
-  if (paddingBytes <= 0) return blob;
-
-  const marker = new TextEncoder().encode("\nPDFRoot_GPSC_PADDING\n");
-  const padding = new Uint8Array(paddingBytes);
-  for (let index = 0; index < padding.length; index += 1) {
-    padding[index] = marker[index % marker.length];
-  }
-  return new Blob([blob, padding], { type: "image/jpeg" });
-}
-
 async function compressCanvasToTarget(canvas: HTMLCanvasElement, targetKb: number) {
-  const targetBytes = targetKb * 1024;
-  const minimumBytes = Math.floor(targetBytes * 0.9);
-  let low = 0.1;
-  let high = 1;
-  let bestUnderTarget: Blob | null = null;
-
-  for (let index = 0; index < 18; index += 1) {
-    const quality = (low + high) / 2;
-    const blob = await canvasToBlob(canvas, quality);
-    if (blob.size <= targetBytes) {
-      bestUnderTarget = blob;
-      low = quality;
-    } else {
-      high = quality;
-    }
-  }
-
-  if (!bestUnderTarget) {
-    bestUnderTarget = await canvasToBlob(canvas, 0.1);
-  }
-
-  const paddedBlob = await padBlobToMinimum(bestUnderTarget, minimumBytes, targetBytes);
-  return {
-    blob: paddedBlob,
-    isClosest: paddedBlob.size < minimumBytes || paddedBlob.size > targetBytes,
-  };
+  return compressCanvasToExactKb(canvas, targetKb, {
+    allowDimensionShrink: true,
+    marker: "\nPDFRoot_GPSC_PADDING\n",
+  });
 }
 
 function makeInitialWorkspace(status: string): WorkspaceState {
@@ -579,6 +528,7 @@ function ProcessFooter({ state, targetKb, buttonLabel, onProcess }: { state: Wor
       {state.output && (
         <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
           Output: {state.output.sizeKb.toFixed(1)}KB / {targetKb}KB
+          <span className="ml-2 text-emerald-800">Difference: {(state.output.sizeKb - targetKb).toFixed(1)}KB</span>
         </p>
       )}
       <button
@@ -613,6 +563,7 @@ function PreviewPanel({ state, title, targetKb, extra }: { state: WorkspaceState
           <p className="text-sm font-black text-slate-950">
             Final: {state.output.width} x {state.output.height}px - {state.output.sizeKb.toFixed(1)}KB / {targetKb}KB
           </p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">Difference: {(state.output.sizeKb - targetKb).toFixed(1)}KB</p>
           {extra && <p className="mt-1 text-sm font-semibold text-slate-500">{extra}</p>}
           {state.output.isClosest && <p className="mt-2 text-sm font-bold text-amber-700">Image is simple, closest possible file generated.</p>}
           <a href={state.output.url} download={state.output.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">

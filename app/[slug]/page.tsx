@@ -1,45 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ArrowRight, CheckCircle2, Download, FileText, ShieldCheck, UploadCloud, Zap } from "lucide-react";
-import { BrandPhrase, BrandText, LogoMark, SectionHeading } from "@/components/Brand";
-import { SiteHeader } from "@/components/SiteHeader";
-import { SocialLinks } from "@/components/SocialLinks";
+import { Check, Download, FileText, ShieldCheck, UploadCloud, Zap } from "lucide-react";
+import { BrandPhrase, BrandText, SectionHeading } from "@/components/Brand";
+import { HomepageSiteFooter } from "@/components/homepage/site-footer";
+import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { ToolCard } from "@/components/ToolCard";
-import { UploadBox } from "@/components/UploadBox";
+import { ToolRenderer } from "@/components/ToolRenderer";
+import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
-import { ResizeImageExactKbTool } from "@/components/ResizeImageExactKbTool";
-import { CompressImageTool } from "@/components/CompressImageTool";
-import { JpgToPngTool } from "@/components/JpgToPngTool";
-import { PngToJpgTool } from "@/components/PngToJpgTool";
-import { CropImageTool } from "@/components/CropImageTool";
-import { ResizeImageTool } from "@/components/ResizeImageTool";
-import { JpgToPdfTool } from "@/components/JpgToPdfTool";
-import { PdfToJpgTool } from "@/components/PdfToJpgTool";
-import { MergePdfTool } from "@/components/MergePdfTool";
-import { CompressPdfTool } from "@/components/CompressPdfTool";
-import { SplitPdfTool } from "@/components/SplitPdfTool";
-import { RotatePdfTool } from "@/components/RotatePdfTool";
-import { ProtectPdfTool } from "@/components/ProtectPdfTool";
-import { UnlockPdfTool } from "@/components/UnlockPdfTool";
-import { WatermarkPdfTool } from "@/components/WatermarkPdfTool";
-import { DeletePdfPagesTool } from "@/components/DeletePdfPagesTool";
-import { OrganizePdfPagesTool } from "@/components/OrganizePdfPagesTool";
-import { CropPdfTool } from "@/components/CropPdfTool";
-import { PdfToWordTool } from "@/components/PdfToWordTool";
-import { WordToPdfTool } from "@/components/WordToPdfTool";
-import { ExcelToPdfTool } from "@/components/ExcelToPdfTool";
-import { PdfToExcelTool } from "@/components/PdfToExcelTool";
-import { PowerPointToPdfTool } from "@/components/PowerPointToPdfTool";
-import { PdfToPowerPointTool } from "@/components/PdfToPowerPointTool";
-import { SignatureResizeTool } from "@/components/SignatureResizeTool";
-import { PassportPhotoMakerTool } from "@/components/PassportPhotoMakerTool";
-import { SscPhotoSignatureHelperTool } from "@/components/SscPhotoSignatureHelperTool";
-import { RrbPhotoSignatureHelperTool } from "@/components/RrbPhotoSignatureHelperTool";
-import { IbpsPhotoSignatureHelperTool } from "@/components/IbpsPhotoSignatureHelperTool";
-import { OjasPhotoSignatureTool } from "@/components/OjasPhotoSignatureTool";
-import { GpscPhotoSignatureTool, UpscPhotoSignatureTool } from "@/components/GpscPhotoSignatureTool";
-import { FrontBackCardMergeTool } from "@/components/FrontBackCardMergeTool";
 import { getToolBySlug, imageTools, pdfTools, recruitmentPlatforms, tools } from "@/lib/tools";
 
 type ToolPageProps = {
@@ -111,34 +79,6 @@ function toolIntro(slug: string, name: string) {
   return `Use PDFRoot ${name} to prepare images online with fast processing, clear controls, and mobile-friendly upload.`;
 }
 
-function Footer() {
-  return (
-    <footer className="border-t border-slate-200 bg-white px-5 py-10 text-slate-700 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <LogoMark />
-          <p className="mt-4 max-w-md leading-7 text-slate-600"><BrandText /> - Smart PDF & Image Toolkit.</p>
-        </div>
-        <Link href="/" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:border-red-200 hover:text-[#FF2D2D]">
-          Back to all tools
-          <ArrowRight className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
-        </Link>
-        <div className="flex flex-col gap-4 sm:items-end">
-          <div className="flex flex-wrap justify-center gap-4 text-sm font-black text-slate-700 sm:justify-end">
-            <Link href="/about" className="transition hover:text-[#FF2D2D]">
-              About <BrandText />
-            </Link>
-            <Link href="/contact" className="transition hover:text-[#FF2D2D]">
-              Contact
-            </Link>
-          </div>
-          <SocialLinks className="sm:justify-end" linkClassName="text-slate-500 hover:text-[#FF2D2D]" />
-        </div>
-      </div>
-    </footer>
-  );
-}
-
 export default async function ToolPage({ params }: ToolPageProps) {
   const { slug } = await params;
   const tool = getToolBySlug(slug);
@@ -184,108 +124,45 @@ export default async function ToolPage({ params }: ToolPageProps) {
   };
 
   return (
-    <>
-      <SiteHeader />
-      <main className="min-h-screen overflow-hidden bg-white text-slate-950">
-        <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-8">
-          <div className="mx-auto max-w-4xl text-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
+    <div className="v0-homepage v0-tool-page min-h-screen bg-background text-foreground">
+      <ToolUploadFlowEnhancer />
+      <HomepageSiteHeader />
+      <main className="overflow-hidden">
+        <section className="relative overflow-hidden border-b border-border bg-background px-5 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-8">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
+          />
+          <div className="relative mx-auto max-w-4xl text-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
               <Icon className="h-4 w-4" aria-hidden="true" />
               {tool.category}
             </div>
-            <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
+            <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
               {tool.name} Online
             </h1>
-            {tool.slug === "resize-image-to-exact-kb" ? (
-              <ResizeImageExactKbTool />
-            ) : tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" ? (
-              <CompressImageTool />
-            ) : tool.slug === "jpg-to-png" ? (
-              <JpgToPngTool />
-            ) : tool.slug === "png-to-jpg" ? (
-              <PngToJpgTool />
-            ) : tool.slug === "crop-image" ? (
-              <CropImageTool />
-            ) : tool.slug === "resize-image" ? (
-              <ResizeImageTool />
-            ) : tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" ? (
-              <JpgToPdfTool />
-            ) : tool.slug === "pdf-to-jpg" ? (
-              <PdfToJpgTool />
-            ) : tool.slug === "merge-pdf" ? (
-              <MergePdfTool />
-            ) : tool.slug === "compress-pdf" ? (
-              <CompressPdfTool />
-            ) : tool.slug === "split-pdf" ? (
-              <SplitPdfTool />
-            ) : tool.slug === "rotate-pdf" ? (
-              <RotatePdfTool />
-            ) : tool.slug === "protect-pdf" ? (
-              <ProtectPdfTool />
-            ) : tool.slug === "unlock-pdf" ? (
-              <UnlockPdfTool />
-            ) : tool.slug === "watermark-pdf" ? (
-              <WatermarkPdfTool />
-            ) : tool.slug === "delete-pdf-pages" ? (
-              <DeletePdfPagesTool />
-            ) : tool.slug === "organize-pdf-pages" ? (
-              <OrganizePdfPagesTool />
-            ) : tool.slug === "crop-pdf" ? (
-              <CropPdfTool />
-            ) : tool.slug === "pdf-to-word" ? (
-              <PdfToWordTool />
-            ) : tool.slug === "word-to-pdf" ? (
-              <WordToPdfTool />
-            ) : tool.slug === "excel-to-pdf" ? (
-              <ExcelToPdfTool />
-            ) : tool.slug === "pdf-to-excel" ? (
-              <PdfToExcelTool />
-            ) : tool.slug === "powerpoint-to-pdf" ? (
-              <PowerPointToPdfTool />
-            ) : tool.slug === "pdf-to-powerpoint" ? (
-              <PdfToPowerPointTool />
-            ) : tool.slug === "signature-resize-tool" ? (
-              <SignatureResizeTool />
-            ) : tool.slug === "passport-photo-maker" ? (
-              <PassportPhotoMakerTool />
-            ) : tool.slug === "ssc-photo-resize" ? (
-              <SscPhotoSignatureHelperTool />
-            ) : tool.slug === "rrb-photo-resize" ? (
-              <RrbPhotoSignatureHelperTool />
-            ) : tool.slug === "ibps-photo-resize" ? (
-              <IbpsPhotoSignatureHelperTool />
-            ) : tool.slug === "ojas-photo-resize" ? (
-              <OjasPhotoSignatureTool />
-            ) : tool.slug === "gpsc-photo-resize" ? (
-              <GpscPhotoSignatureTool />
-            ) : tool.slug === "upsc-photo-resize" ? (
-              <UpscPhotoSignatureTool />
-            ) : tool.slug === "front-back-card-merge" ? (
-              <FrontBackCardMergeTool />
-            ) : (
-              <div className="mx-auto mt-6 max-w-2xl">
-                <UploadBox title={`Upload for ${tool.name}`} description={tool.description} restoreTransferredFiles />
-              </div>
-            )}
-            <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              <BrandPhrase text={toolIntro(tool.slug, tool.name)} />
+            <ToolRenderer slug={tool.slug} name={tool.name} description={tool.description} />
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              <BrandPhrase text={toolIntro(tool.slug, tool.name)} styled />
             </p>
-            {tool.government && <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-6 text-red-700">{recruitmentCopy}</p>}
+            {tool.government && <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-primary">{recruitmentCopy}</p>}
           </div>
         </section>
 
-        <section className="border-b border-slate-200 bg-white px-5 py-5 sm:px-6 lg:px-8">
+        <section className="border-b border-border bg-background px-5 py-5 sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-7xl flex-wrap justify-center gap-3">
             {["Secure Files", "Fast Processing", "Instant Download"].map((item) => (
-              <div key={item} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm">
-                <CheckCircle2 className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+              <div key={item} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
                 {item}
               </div>
             ))}
           </div>
         </section>
 
-        <section className="px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <SectionHeading
               eyebrow="How It Works"
@@ -300,16 +177,16 @@ export default async function ToolPage({ params }: ToolPageProps) {
               ].map(([title, description, StepIcon], index) => {
                 const Step = StepIcon as typeof FileText;
                 return (
-                  <div key={title as string} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+                  <div key={title as string} className="flex flex-col rounded-2xl border border-border bg-card p-6">
                     <div className="flex items-center justify-between">
-                      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
+                      <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
                         <Step className="h-6 w-6" aria-hidden="true" />
                       </span>
-                      <span className="text-4xl font-black text-slate-100">0{index + 1}</span>
+                      <span className="text-4xl font-bold text-muted">0{index + 1}</span>
                     </div>
-                    <h3 className="mt-6 text-lg font-black text-slate-950">{title as string}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      <BrandPhrase text={description as string} />
+                    <h3 className="mt-6 text-base font-semibold text-foreground">{title as string}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      <BrandPhrase text={description as string} styled />
                     </p>
                   </div>
                 );
@@ -319,7 +196,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         </section>
 
         {tool.government && (
-          <section className="border-y border-slate-200 bg-slate-50 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+          <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
             <div className="mx-auto max-w-7xl">
               <SectionHeading
                 eyebrow="Government Recruitment Support"
@@ -328,7 +205,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
               />
               <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {recruitmentPlatforms.map((platform) => (
-                  <div key={platform} className="rounded-2xl border border-slate-200 bg-white p-4 text-center text-sm font-black text-slate-800 shadow-sm">
+                  <div key={platform} className="rounded-full border border-border bg-card px-3 py-2 text-center text-xs font-semibold text-foreground">
                     {platform}
                   </div>
                 ))}
@@ -337,17 +214,17 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </section>
         )}
 
-        <section className="border-y border-slate-200 bg-slate-50 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-[#FF2D2D]">SEO Tool Page</p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Why use <BrandText /> {tool.name}?</h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">
-                {tool.description} <BrandText /> gives this workflow its own dedicated page so users can find the exact PDF or image tool they need from search and navigation.
+            <div className="rounded-2xl border border-border bg-card p-7">
+              <p className="text-sm font-semibold uppercase tracking-wider text-primary">SEO Tool Page</p>
+              <h2 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Why use <BrandText styled /> {tool.name}?</h2>
+              <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
+                {tool.description} <BrandText styled /> gives this workflow its own dedicated page so users can find the exact PDF or image tool they need from search and navigation.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 {tool.keywords.map((keyword) => (
-                  <span key={keyword} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700">
+                  <span key={keyword} className="rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-foreground">
                     {keyword}
                   </span>
                 ))}
@@ -360,11 +237,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
                 ["Secure experience", "Trust-focused UI for document and image handling."],
                 ["Complete platform", `Part of ${categoryTools.length} ${tool.category.toLowerCase()} inside PDFRoot.`],
               ].map(([title, description]) => (
-                <div key={title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                  <ShieldCheck className="h-7 w-7 text-[#FF2D2D]" aria-hidden="true" />
-                  <h3 className="mt-5 text-lg font-black text-slate-950">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    <BrandPhrase text={description} />
+                <div key={title} className="flex flex-col rounded-2xl border border-border bg-card p-6">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-5 text-base font-semibold text-foreground">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <BrandPhrase text={description} styled />
                   </p>
                 </div>
               ))}
@@ -372,7 +251,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <SectionHeading
               eyebrow="Related Tools"
@@ -388,13 +267,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
         </section>
         <WhyChoosePdfRoot />
       </main>
-      <Footer />
+      <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify([pageSchema, breadcrumbSchema]),
         }}
       />
-    </>
+    </div>
   );
 }

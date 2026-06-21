@@ -144,7 +144,7 @@ export function UploadBox({
   }, [restoreTransferredFiles]);
 
   return (
-    <div id="upload" className="group rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] transition duration-300 hover:-translate-y-1 hover:border-red-200 hover:shadow-[0_30px_80px_rgba(255,45,45,0.12)]">
+    <div id="upload" className="group rounded-2xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg hover:shadow-foreground/5">
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -152,18 +152,18 @@ export function UploadBox({
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
-        className={`rounded-[1.35rem] border-2 border-dashed p-7 text-center transition duration-300 sm:p-8 ${
-          isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 group-hover:border-[#FF2D2D] group-hover:bg-red-50"
+        className={`rounded-xl border-2 border-dashed p-7 text-center transition duration-300 sm:p-8 ${
+          isDragging ? "border-primary bg-primary/5" : "border-primary/40 bg-primary/5 group-hover:border-primary"
         }`}
       >
         <input ref={inputRef} className="sr-only" type="file" multiple accept={acceptValue} onChange={onInputChange} />
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition duration-300 group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-primary/10 text-primary transition duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
           <ImageUp className="h-10 w-10" aria-hidden="true" />
         </div>
-        <h2 className="upload-title mt-5 font-black text-slate-950">{title}</h2>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">{description}</p>
+        <h2 className="upload-title mt-5 font-semibold text-foreground">{title}</h2>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">{description}</p>
         <button
-          className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-7 py-3.5 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition duration-300 hover:-translate-y-0.5 hover:bg-red-600"
+          className="mt-7 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-7 py-3.5 text-sm font-medium text-primary-foreground transition duration-300 hover:-translate-y-0.5 hover:bg-primary/90"
           type="button"
           onClick={() => inputRef.current?.click()}
         >
@@ -172,21 +172,21 @@ export function UploadBox({
         </button>
       </div>
 
-      {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">{error}</p>}
+      {error && <p className="mt-4 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm font-medium leading-relaxed text-destructive">{error}</p>}
 
       {selectedFiles.length > 0 && (
-        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+        <div className="mt-5 rounded-xl border border-border bg-muted/40 p-4 text-left">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Uploaded files</p>
-            <button type="button" onClick={clearFiles} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-slate-600 transition hover:border-red-200 hover:text-[#FF2D2D]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Uploaded files</p>
+            <button type="button" onClick={clearFiles} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground">
               Remove
             </button>
           </div>
           <div className="mt-3 grid gap-2">
             {selectedFiles.map((file) => (
-              <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2 text-sm shadow-sm">
-                <span className="min-w-0 truncate font-black text-slate-950">{file.name}</span>
-                <span className="shrink-0 font-semibold text-slate-500">{formatSize(file.size)}</span>
+              <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+                <span className="min-w-0 truncate font-semibold text-foreground">{file.name}</span>
+                <span className="shrink-0 font-medium text-muted-foreground">{formatSize(file.size)}</span>
               </div>
             ))}
           </div>
@@ -194,8 +194,8 @@ export function UploadBox({
       )}
 
       {suggestions.length > 0 && (
-        <div className="mt-5 rounded-2xl border border-red-100 bg-red-50/50 p-4 text-left">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FF2D2D]">Suggested tools</p>
+        <div className="mt-5 rounded-xl border border-border bg-muted/40 p-4 text-left">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Suggested tools</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {suggestions.map((tool) => {
               const Icon = tool.icon ?? FileText;
@@ -206,9 +206,9 @@ export function UploadBox({
                   onClick={() => {
                     void saveUploadSession(selectedFiles);
                   }}
-                  className="flex items-center gap-3 rounded-xl bg-white px-3 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:text-[#FF2D2D]"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-red-50 text-[#FF2D2D]">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
                   {tool.name}
@@ -221,8 +221,8 @@ export function UploadBox({
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         {["Secure Files", "Fast Processing", "Instant Download"].map((label, index) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 transition hover:border-red-200 hover:bg-red-50">
-            {index === 2 ? <Download className="mr-2 inline h-4 w-4 text-[#FF2D2D]" aria-hidden="true" /> : null}
+          <div key={label} className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm font-medium text-foreground transition hover:border-primary/40">
+            {index === 2 ? <Download className="mr-2 inline h-4 w-4 text-primary" aria-hidden="true" /> : null}
             {label}
           </div>
         ))}

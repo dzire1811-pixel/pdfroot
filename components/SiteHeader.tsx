@@ -12,7 +12,7 @@ const navItems = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-[#e5e7eb] bg-white shadow-sm">
       <nav className="mx-auto grid min-h-16 max-w-7xl grid-cols-[1fr_auto] items-center gap-4 px-5 py-3 sm:min-h-20 sm:px-6 lg:grid-cols-[1fr_auto_1fr] lg:px-8" aria-label="Main navigation">
         <Link href="/" className="inline-flex rounded-md p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-red-500" aria-label="PDFRoot home">
           <LogoMark />

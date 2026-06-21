@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { Download, ImageUp, RefreshCw, UploadCloud } from "lucide-react";
+import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type OutputState = {
@@ -36,22 +37,6 @@ function loadImage(file: File) {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-        } else {
-          reject(new Error("Could not compress the image. Please try another file."));
-        }
-      },
-      "image/jpeg",
-      quality,
-    );
-  });
-}
-
 function drawToCanvas(img: HTMLImageElement, width: number, height: number) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(width));
@@ -71,49 +56,13 @@ function drawToCanvas(img: HTMLImageElement, width: number, height: number) {
 }
 
 async function compressImageToTarget(file: File, targetKb: number) {
-  const targetBytes = targetKb * 1024;
   const img = await loadImage(file);
-  let scale = 1;
-  let best: { blob: Blob; width: number; height: number; diff: number } | null = null;
-
-  for (let scaleAttempt = 0; scaleAttempt < 12; scaleAttempt += 1) {
-    const width = Math.max(64, Math.round(img.naturalWidth * scale));
-    const height = Math.max(64, Math.round(img.naturalHeight * scale));
-    const canvas = drawToCanvas(img, width, height);
-
-    let low = 0.08;
-    let high = 0.95;
-
-    for (let i = 0; i < 14; i += 1) {
-      const quality = (low + high) / 2;
-      const blob = await canvasToBlob(canvas, quality);
-      const diff = Math.abs(blob.size - targetBytes);
-
-      if (!best || diff < best.diff) {
-        best = { blob, width, height, diff };
-      }
-
-      if (blob.size > targetBytes) {
-        high = quality;
-      } else {
-        low = quality;
-      }
-    }
-
-    const smallestAtScale = await canvasToBlob(canvas, 0.08);
-    if (smallestAtScale.size <= targetBytes || width <= 64 || height <= 64) {
-      break;
-    }
-
-    const ratio = Math.sqrt(targetBytes / smallestAtScale.size);
-    scale *= Math.max(0.62, Math.min(0.88, ratio * 0.92));
-  }
-
-  if (!best) {
-    throw new Error("Could not compress this image. Please try another file.");
-  }
-
-  return best;
+  const canvas = drawToCanvas(img, img.naturalWidth, img.naturalHeight);
+  return compressCanvasToExactKb(canvas, targetKb, {
+    allowDimensionGrowth: true,
+    allowDimensionShrink: true,
+    marker: "\nPDFRoot_RESIZE_EXACT_KB_PADDING\n",
+  });
 }
 
 export function ResizeImageExactKbTool() {
@@ -152,7 +101,7 @@ export function ResizeImageExactKbTool() {
     }
 
     setFile(nextFile);
-    setSourceUrl(URL.createObjectURL(nextFile));
+    setSourceUrl(null);
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -173,6 +122,22 @@ export function ResizeImageExactKbTool() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sourceUrl) {
+        URL.revokeObjectURL(sourceUrl);
+      }
+    };
+  }, [sourceUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (output?.url) {
+        URL.revokeObjectURL(output.url);
+      }
+    };
+  }, [output?.url]);
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
@@ -208,6 +173,7 @@ export function ResizeImageExactKbTool() {
         height: result.height,
         fileName: `${baseName}-${targetKb}kb.jpg`,
       });
+      setSourceUrl(URL.createObjectURL(file));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -331,6 +297,9 @@ export function ResizeImageExactKbTool() {
                 <p className="text-sm font-black text-slate-950">
                   Output size: {output.sizeKb.toFixed(1)} KB
                   <span className="ml-2 text-slate-400">Target: {targetKb} KB</span>
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  Difference: {(output.sizeKb - targetKb).toFixed(1)} KB
                 </p>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
                   Dimensions: {output.width} x {output.height}px

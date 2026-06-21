@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useState } from "react";
 import { AlertTriangle, Download, FileImage, Fingerprint, ImageUp, PenLine, ScrollText, UploadCloud } from "lucide-react";
+import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 
 type HelperItem = {
   id: string;
@@ -87,22 +88,6 @@ function loadImage(file: File) {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new Error("Could not create resized image."));
-      },
-      "image/jpeg",
-      quality,
-    );
-  });
-}
-
 function drawImageToSize(image: HTMLImageElement, width: number, height: number) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -121,52 +106,11 @@ function drawImageToSize(image: HTMLImageElement, width: number, height: number)
   return canvas;
 }
 
-async function padBlobToMinimum(blob: Blob, minBytes: number, targetBytes: number) {
-  if (blob.size >= minBytes || blob.size >= targetBytes) {
-    return blob;
-  }
-
-  const paddingBytes = Math.max(0, Math.min(targetBytes - blob.size, minBytes - blob.size));
-  if (paddingBytes <= 0) {
-    return blob;
-  }
-
-  const marker = new TextEncoder().encode("\nPDFRoot_IBPS_PADDING\n");
-  const padding = new Uint8Array(paddingBytes);
-  for (let index = 0; index < padding.length; index += 1) {
-    padding[index] = marker[index % marker.length];
-  }
-
-  return new Blob([blob, padding], { type: "image/jpeg" });
-}
-
 async function compressCanvasToTarget(canvas: HTMLCanvasElement, targetKb: number) {
-  const targetBytes = targetKb * 1024;
-  const minimumBytes = Math.floor(targetBytes * 0.9);
-  let low = 0.1;
-  let high = 1;
-  let bestUnderTarget: Blob | null = null;
-
-  for (let index = 0; index < 18; index += 1) {
-    const quality = (low + high) / 2;
-    const blob = await canvasToBlob(canvas, quality);
-    if (blob.size <= targetBytes) {
-      bestUnderTarget = blob;
-      low = quality;
-    } else {
-      high = quality;
-    }
-  }
-
-  if (!bestUnderTarget) {
-    bestUnderTarget = await canvasToBlob(canvas, 0.1);
-  }
-
-  const paddedBlob = await padBlobToMinimum(bestUnderTarget, minimumBytes, targetBytes);
-  return {
-    blob: paddedBlob,
-    isClosest: paddedBlob.size < minimumBytes || paddedBlob.size > targetBytes,
-  };
+  return compressCanvasToExactKb(canvas, targetKb, {
+    allowDimensionShrink: true,
+    marker: "\nPDFRoot_IBPS_PADDING\n",
+  });
 }
 
 function ToolIcon({ icon }: { icon: HelperItem["icon"] }) {
@@ -356,6 +300,7 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
                 <p className="text-sm font-black text-slate-950">
                   Output: {output.width} x {output.height}px - {output.sizeKb.toFixed(1)}KB / {targetKb}KB
                 </p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Difference: {(output.sizeKb - targetKb).toFixed(1)}KB</p>
                 {output.isClosest && <p className="mt-2 text-sm font-bold text-amber-700">Image is simple, closest possible file generated.</p>}
                 <a href={output.url} download={output.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
                   Download {item.title}

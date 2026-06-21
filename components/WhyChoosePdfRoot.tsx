@@ -27,7 +27,7 @@ const features = [
 
 export function WhyChoosePdfRoot() {
   return (
-    <section className="border-t border-slate-200 bg-slate-50 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+    <section className="border-t border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="Why Choose PDFRoot?"
@@ -39,12 +39,12 @@ export function WhyChoosePdfRoot() {
             const Icon = feature.icon;
 
             return (
-              <div key={feature.title} className="h-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-                <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
-                  <Icon className="h-6 w-6" aria-hidden="true" />
+              <div key={feature.title} className="flex h-full flex-col rounded-2xl border border-border bg-card p-6 text-center">
+                <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <h3 className="mt-5 text-base font-black text-slate-950">{feature.title}</h3>
-                {feature.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{feature.description}</p> : null}
+                <h3 className="mt-5 text-base font-semibold text-foreground">{feature.title}</h3>
+                {feature.description ? <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{feature.description}</p> : null}
               </div>
             );
           })}

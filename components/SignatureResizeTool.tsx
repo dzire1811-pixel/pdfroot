@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { Download, ImageUp, PenLine, RotateCcw, UploadCloud } from "lucide-react";
+import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type OutputState = {
@@ -50,22 +51,6 @@ function loadImage(file: File) {
       reject(new Error("Could not read this signature image. Please upload JPG, JPEG, or PNG."));
     };
     image.src = url;
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number) {
-  return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new Error("Could not create resized signature."));
-      },
-      "image/jpeg",
-      quality,
-    );
   });
 }
 
@@ -150,62 +135,11 @@ function drawSignature(image: HTMLImageElement, width: number, height: number, c
   return { canvas, cropped: bounds.cropped };
 }
 
-async function padBlobToMinimum(blob: Blob, minBytes: number, targetBytes: number) {
-  if (blob.size >= minBytes || blob.size >= targetBytes) {
-    return blob;
-  }
-
-  const paddingBytes = Math.max(0, Math.min(targetBytes - blob.size, minBytes - blob.size));
-  if (paddingBytes <= 0) {
-    return blob;
-  }
-
-  const marker = new TextEncoder().encode("\nPDFRoot_SIGNATURE_PADDING\n");
-  const padding = new Uint8Array(paddingBytes);
-
-  for (let index = 0; index < padding.length; index += 1) {
-    padding[index] = marker[index % marker.length];
-  }
-
-  return new Blob([blob, padding], { type: "image/jpeg" });
-}
-
 async function compressCanvasToTarget(canvas: HTMLCanvasElement, targetKb: number) {
-  const targetBytes = targetKb * 1024;
-  const minimumBytes = Math.floor(targetBytes * 0.9);
-  let low = 0.1;
-  let high = 1;
-  let bestUnderTarget: Blob | null = null;
-
-  for (let index = 0; index < 18; index += 1) {
-    const quality = (low + high) / 2;
-    const blob = await canvasToBlob(canvas, quality);
-
-    if (blob.size <= targetBytes) {
-      bestUnderTarget = blob;
-      low = quality;
-    } else {
-      high = quality;
-    }
-  }
-
-  if (!bestUnderTarget) {
-    bestUnderTarget = await canvasToBlob(canvas, 0.1);
-  }
-
-  if (!bestUnderTarget) {
-    throw new Error("Could not compress signature.");
-  }
-
-  if (bestUnderTarget.size >= minimumBytes && bestUnderTarget.size <= targetBytes) {
-    return { blob: bestUnderTarget, isClosest: false };
-  }
-
-  const paddedBlob = await padBlobToMinimum(bestUnderTarget, minimumBytes, targetBytes);
-  return {
-    blob: paddedBlob,
-    isClosest: paddedBlob.size < minimumBytes || paddedBlob.size > targetBytes,
-  };
+  return compressCanvasToExactKb(canvas, targetKb, {
+    allowDimensionShrink: true,
+    marker: "\nPDFRoot_SIGNATURE_PADDING\n",
+  });
 }
 
 export function SignatureResizeTool() {
@@ -540,6 +474,9 @@ export function SignatureResizeTool() {
                   <span className="ml-2 text-slate-500">
                     ({output.width} x {output.height}px)
                   </span>
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  Difference: {(output.sizeKb - targetKb).toFixed(1)}KB
                 </p>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
                   Auto crop: {output.cropped ? "Applied" : "No visible blank crop needed"}

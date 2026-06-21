@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PDFRoot P R monogram">
+  <rect x="40" y="40" width="432" height="432" rx="92" fill="#EF4444"/>
+  <path d="M118 112H188V400H118V112Z" fill="white"/>
+  <path d="M166 112H307C384 112 430 154 430 220C430 286 384 328 307 328H166V264H302C339 264 362 247 362 220C362 193 339 176 302 176H166V112Z" fill="white"/>
+  <path d="M267 304H338L416 400H331L267 304Z" fill="white"/>
+  <path d="M188 176H296C336 176 362 193 362 220C362 247 336 264 296 264H188V176Z" fill="#EF4444"/>
+  <path d="M224 210H298C319 210 333 214 344 220C333 226 319 230 298 230H224V210Z" fill="white"/>
+</svg>

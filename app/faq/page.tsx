@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { BrandPhrase, BrandText } from "@/components/Brand";
-import { SiteHeader } from "@/components/SiteHeader";
+import { InfoCta, InfoPageLayout } from "@/components/InfoPageLayout";
 
 export const metadata: Metadata = {
   title: "FAQ",
@@ -113,58 +113,42 @@ const faqSchema = {
 
 export default function FaqPage() {
   return (
-    <>
-      <SiteHeader />
-      <main className="min-h-screen bg-white text-slate-950">
-        <section className="border-b border-slate-200 bg-gradient-to-b from-white via-red-50/30 to-white px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-4xl text-center">
-            <p className="inline-flex rounded-full border border-red-100 bg-white px-4 py-2 text-sm font-black text-[#FF2D2D] shadow-sm">
-              <BrandText /> Help
+    <InfoPageLayout
+      eyebrow={<><BrandText styled /> Help</>}
+      title="Frequently Asked Questions"
+      subtitle={<>Simple answers about <BrandText styled /> tools, file safety, government form helpers, mobile use, and support.</>}
+    >
+      <section className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+        {faqs.map((faq) => (
+          <details key={faq.question} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left text-base font-semibold text-foreground sm:px-6">
+              <span className="min-w-0"><BrandPhrase text={faq.question} styled /></span>
+              <ArrowRight className="h-5 w-5 shrink-0 text-primary transition group-open:rotate-90" aria-hidden="true" />
+            </summary>
+            <p className="px-5 pb-5 text-sm leading-relaxed text-muted-foreground sm:px-6">
+              <BrandPhrase text={faq.answer} styled />
             </p>
-            <h1 className="mx-auto mt-5 max-w-3xl text-balance font-black tracking-tight text-slate-950">
-              Frequently Asked Questions
-            </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              Simple answers about <BrandText /> tools, file safety, government form helpers, mobile use, and support.
-            </p>
-          </div>
-        </section>
+          </details>
+        ))}
+      </section>
 
-        <section className="px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-5xl">
-            <div className="divide-y divide-slate-200 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-              {faqs.map((faq) => (
-                <details key={faq.question} className="group p-6 open:bg-red-50/40">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-base font-black text-slate-950">
-                    <BrandPhrase text={faq.question} />
-                    <ArrowRight className="h-5 w-5 shrink-0 text-[#FF2D2D] transition group-open:rotate-90" aria-hidden="true" />
-                  </summary>
-                  <p className="mt-4 leading-7 text-slate-600">
-                    <BrandPhrase text={faq.answer} />
-                  </p>
-                </details>
-              ))}
-            </div>
+      <InfoCta>
+        <h2 className="text-3xl font-bold text-primary-foreground">Still need help?</h2>
+        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/80">
+          Contact <BrandText /> support for questions about PDF tools, image tools, government form files, or upload issues.
+        </p>
+        <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-lg bg-background px-7 py-4 text-base font-medium text-foreground transition hover:-translate-y-0.5">
+          Contact Support
+          <ArrowRight className="h-5 w-5 text-primary" aria-hidden="true" />
+        </Link>
+      </InfoCta>
 
-            <div className="mt-10 rounded-3xl bg-[#FF2D2D] p-8 text-center text-white shadow-[0_24px_70px_rgba(255,45,45,0.22)] sm:p-10">
-              <h2 className="text-3xl font-black text-white">Still need help?</h2>
-              <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-red-50">
-                Contact <BrandText /> support for questions about PDF tools, image tools, government form files, or upload issues.
-              </p>
-              <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-4 text-base font-black text-slate-950 transition hover:-translate-y-0.5">
-                Contact Support
-                <ArrowRight className="h-5 w-5 text-[#FF2D2D]" aria-hidden="true" />
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(faqSchema),
         }}
       />
-    </>
+    </InfoPageLayout>
   );
 }

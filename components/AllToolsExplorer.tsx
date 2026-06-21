@@ -2,7 +2,6 @@
 
 import { ChangeEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { BrandText } from "@/components/Brand";
 import { ToolCard } from "@/components/ToolCard";
 import { pdfTools, imageTools, tools } from "@/lib/tools";
 
@@ -57,20 +56,20 @@ export function AllToolsExplorer() {
   return (
     <section className="px-5 py-12 sm:px-6 sm:py-14 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] sm:p-5">
+        <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-h-[58px] flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4">
-              <Search className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
+            <div className="flex min-h-[58px] flex-1 items-center gap-3 rounded-xl border border-border bg-background px-4">
+              <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <div className="relative min-w-0 flex-1">
                 {!query ? (
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-sm font-semibold text-slate-400">
-                    Search all <BrandText /> tools
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-sm font-medium text-muted-foreground">
+                    Search all PDFRoot tools
                   </span>
                 ) : null}
                 <input
                   value={query}
                   onChange={onSearchChange}
-                  className="relative z-10 w-full bg-transparent py-4 text-sm font-semibold text-slate-900 outline-none"
+                  className="relative z-10 w-full bg-transparent py-4 text-sm font-medium text-foreground outline-none"
                   aria-label="Search all PDFRoot tools"
                 />
               </div>
@@ -81,10 +80,10 @@ export function AllToolsExplorer() {
                   key={filter}
                   type="button"
                   onClick={() => setActiveFilter(filter)}
-                  className={`rounded-full border px-4 py-2.5 text-sm font-black transition ${
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
                     activeFilter === filter
-                      ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_12px_28px_rgba(255,45,45,0.22)]"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:text-[#FF2D2D]"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {filter}
@@ -93,12 +92,12 @@ export function AllToolsExplorer() {
             </div>
           </div>
           {hasSearchQuery && (
-            <div className="mt-6 border-t border-slate-100 pt-5">
+            <div className="mt-6 border-t border-border pt-5">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-sm font-semibold uppercase tracking-wider text-primary">
                   {filteredTools.length} {filteredTools.length === 1 ? "tool" : "tools"} found
                 </p>
-                <p className="hidden text-sm font-semibold text-slate-500 sm:block">Click any tool card to open it.</p>
+                <p className="hidden text-sm font-medium text-muted-foreground sm:block">Click any tool card to open it.</p>
               </div>
               {filteredTools.length > 0 ? (
                 <div className={`mt-4 grid gap-4 ${filteredTools.length === 1 ? "max-w-sm grid-cols-1" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-6"}`}>
@@ -107,9 +106,9 @@ export function AllToolsExplorer() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-4 rounded-[2rem] border border-slate-200 bg-slate-50 px-6 py-10 text-center">
-                  <p className="text-lg font-black text-slate-950">No tool found</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-500">Try searching by tool name, file type, or government form keyword.</p>
+                <div className="mt-4 rounded-2xl border border-border bg-muted/40 px-6 py-10 text-center">
+                  <p className="text-lg font-semibold text-foreground">No tool found</p>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Try searching by tool name, file type, or government form keyword.</p>
                 </div>
               )}
             </div>
@@ -118,10 +117,10 @@ export function AllToolsExplorer() {
 
         {!hasSearchQuery && (
           <div className="relative z-10 mt-8 flex items-center justify-between gap-4">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
+            <p className="text-sm font-semibold uppercase tracking-wider text-primary">
               {filteredTools.length} {filteredTools.length === 1 ? "tool" : "tools"} found
             </p>
-            <p className="hidden text-sm font-semibold text-slate-500 sm:block">Click any tool card to open it.</p>
+            <p className="hidden text-sm font-medium text-muted-foreground sm:block">Click any tool card to open it.</p>
           </div>
         )}
 
@@ -132,9 +131,9 @@ export function AllToolsExplorer() {
             ))}
           </div>
         ) : !hasSearchQuery ? (
-          <div className="mt-6 rounded-[2rem] border border-slate-200 bg-slate-50 px-6 py-14 text-center">
-            <p className="text-lg font-black text-slate-950">No tool found</p>
-            <p className="mt-2 text-sm font-semibold text-slate-500">Try searching by tool name, file type, or government form keyword.</p>
+          <div className="mt-6 rounded-2xl border border-border bg-muted/40 px-6 py-14 text-center">
+            <p className="text-lg font-semibold text-foreground">No tool found</p>
+            <p className="mt-2 text-sm font-medium text-muted-foreground">Try searching by tool name, file type, or government form keyword.</p>
           </div>
         ) : null}
       </div>

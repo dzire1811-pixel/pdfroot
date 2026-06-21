@@ -8,16 +8,20 @@ export function ToolCard({ tool, compact = false }: { tool: Tool; compact?: bool
   return (
     <Link
       href={`/${tool.slug}`}
-      className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.06)] transition duration-300 hover:-translate-y-1 hover:border-red-200 hover:shadow-[0_18px_45px_rgba(255,45,45,0.11)]"
+      className="group relative flex h-full min-h-[112px] flex-col rounded-lg border border-border bg-card p-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md hover:shadow-foreground/5"
     >
-      <div className="flex items-start justify-between gap-4">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D] transition duration-300 group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-          <Icon className="h-5 w-5" aria-hidden="true" />
+      <div className="flex items-start justify-between gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+          <Icon className="h-4 w-4" aria-hidden="true" />
         </span>
-        <ArrowRight className="mt-2 h-4 w-4 text-slate-300 transition duration-300 group-hover:translate-x-1 group-hover:text-[#FF2D2D]" aria-hidden="true" />
+        <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition duration-300 group-hover:translate-x-1 group-hover:text-primary" aria-hidden="true" />
       </div>
-      <h3 className="mt-4 text-base font-black text-slate-950">{tool.name}</h3>
-      {!compact && <p className="mt-2 text-sm leading-6 text-slate-600">{tool.description}</p>}
+      <h3 className="mt-2.5 line-clamp-2 min-h-[2.25rem] text-[13px] font-semibold leading-[1.125rem] text-foreground">{tool.name}</h3>
+      {!compact && <p className="mt-1 line-clamp-2 min-h-8 text-[11px] leading-4 text-muted-foreground">{tool.description}</p>}
+      <span className="mt-auto inline-flex items-center gap-1 pt-2 text-[11px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
+        Open tool
+        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+      </span>
     </Link>
   );
 }

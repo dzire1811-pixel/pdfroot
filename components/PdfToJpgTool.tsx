@@ -52,6 +52,7 @@ function cleanFileName(name: string) {
 }
 
 export function PdfToJpgTool() {
+  const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [originalSize, setOriginalSize] = useState(0);
   const [pages, setPages] = useState<JpgPage[]>([]);
@@ -68,6 +69,7 @@ export function PdfToJpgTool() {
 
   function resetTool() {
     clearPages();
+    setFile(null);
     setFileName("");
     setOriginalSize(0);
     setError(null);
@@ -76,9 +78,27 @@ export function PdfToJpgTool() {
     setIsProcessing(false);
   }
 
-  async function convertPdf(file: File) {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+  function handleFile(nextFile: File | undefined) {
+    setError(null);
+    clearPages();
+    setProgress(0);
+
+    if (!nextFile) return;
+
+    if (nextFile.type !== "application/pdf" && !nextFile.name.toLowerCase().endsWith(".pdf")) {
       setError("Please upload a valid PDF file.");
+      return;
+    }
+
+    setFile(nextFile);
+    setFileName(nextFile.name);
+    setOriginalSize(nextFile.size);
+    setStatus("PDF loaded. Click Convert PDF to JPG to start processing.");
+  }
+
+  async function convertPdf() {
+    if (!file) {
+      setError("Please upload a PDF first.");
       return;
     }
 
@@ -86,8 +106,6 @@ export function PdfToJpgTool() {
     setError(null);
     setIsProcessing(true);
     setProgress(0);
-    setFileName(file.name);
-    setOriginalSize(file.size);
     setStatus("Reading PDF file...");
 
     try {
@@ -148,20 +166,14 @@ export function PdfToJpgTool() {
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (file) {
-      void convertPdf(file);
-    }
+    handleFile(event.target.files?.[0]);
     event.target.value = "";
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
-    const file = event.dataTransfer.files[0];
-    if (file) {
-      void convertPdf(file);
-    }
+    handleFile(event.dataTransfer.files[0]);
   }
 
   async function downloadAllZip() {
@@ -248,11 +260,11 @@ export function PdfToJpgTool() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => void downloadAllZip()}
+              onClick={() => (pages.length ? void downloadAllZip() : void convertPdf())}
               disabled={isProcessing}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(15,23,42,0.16)] transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
             >
-              Download ZIP
+              {pages.length ? "Download ZIP" : isProcessing ? "Converting..." : "Convert PDF to JPG"}
               <FileArchive className="h-5 w-5" aria-hidden="true" />
             </button>
             <button
