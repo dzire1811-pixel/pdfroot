@@ -64,15 +64,15 @@ function normalizeUploadButton(uploadScreen: HTMLElement | null) {
 }
 
 function setupWorkflowSection(section: HTMLElement) {
-  if (section.dataset.v0WorkflowSetup === "true") return;
+  if (section.dataset.v0WorkflowSetup === "true") return true;
 
   const input = section.querySelector<HTMLInputElement>('input[type="file"]');
-  if (!input) return;
+  if (!input) return false;
 
   const owningToolSection = findToolSection(input);
-  if (owningToolSection !== section) return;
+  if (owningToolSection !== section) return false;
   const ownedFileInputCount = Array.from(section.querySelectorAll<HTMLInputElement>('input[type="file"]')).filter((fileInput) => findToolSection(fileInput) === section).length;
-  if (ownedFileInputCount > 1) return;
+  if (ownedFileInputCount > 1) return false;
 
   const uploadScreen = findUploadScreen(section, input);
   const settingsScreen = uploadScreen?.parentElement
@@ -83,6 +83,10 @@ function setupWorkflowSection(section: HTMLElement) {
   section.classList.add("v0-upload-workflow");
   uploadScreen?.setAttribute("data-v0-upload-screen", "true");
   uploadScreen?.parentElement?.setAttribute("data-v0-flow-shell", "true");
+  if (uploadScreen) {
+    closestWorkflowChild(section, uploadScreen)?.setAttribute("data-v0-flow-shell", "true");
+  }
+  markFlowExtras(section);
   normalizeUploadButton(uploadScreen);
 
   if (settingsScreen instanceof HTMLElement) {
@@ -90,6 +94,15 @@ function setupWorkflowSection(section: HTMLElement) {
   }
 
   ensureWorkflowPanel(section);
+  return true;
+}
+
+function markFlowExtras(section: HTMLElement) {
+  Array.from(section.children).forEach((child) => {
+    if (child instanceof HTMLElement && !child.classList.contains("v0-workflow-panel") && !child.hasAttribute("data-v0-flow-shell")) {
+      child.setAttribute("data-v0-flow-extra", "true");
+    }
+  });
 }
 
 function ensureWorkflowPanel(section: HTMLElement) {
@@ -148,12 +161,13 @@ function updateWorkflowPanel(section: HTMLElement, file?: WorkflowFile) {
 
 function markReady(section: HTMLElement | null, file?: WorkflowFile) {
   if (!section) return;
-  setupWorkflowSection(section);
+  if (!setupWorkflowSection(section)) return;
   section.classList.add("v0-upload-ready");
   section.classList.remove("v0-upload-result");
   section.setAttribute("data-upload-status", "File uploaded successfully");
   section.setAttribute("data-process-status", "Ready to process");
   updateWorkflowPanel(section, file);
+  [0, 100, 500, 1200].forEach((delay) => window.setTimeout(() => markFlowExtras(section), delay));
 }
 
 function markResult(section: HTMLElement | null) {
@@ -195,7 +209,13 @@ function scheduleResultCheck(section: HTMLElement | null) {
   checkDelays.forEach((delay) => {
     window.setTimeout(() => {
       if (!section.isConnected || !section.classList.contains("v0-upload-ready")) return;
-      const hasDownload = Boolean(section.querySelector('a[download][href^="blob:"], a[download][href^="data:"], a[download]:not([href=""])'));
+      const hasDownloadLink = Boolean(section.querySelector('a[download][href^="blob:"], a[download][href^="data:"], a[download]:not([href=""])'));
+      const hasDownloadButton = Array.from(section.querySelectorAll<HTMLButtonElement>("button")).some((button) => {
+        const label = button.textContent?.toLowerCase() ?? "";
+        const style = window.getComputedStyle(button);
+        return /download/.test(label) && style.display !== "none" && style.visibility !== "hidden";
+      });
+      const hasDownload = hasDownloadLink || hasDownloadButton;
       if (hasDownload) {
         markResult(section);
       }

@@ -442,7 +442,7 @@ section[id$="-tool"] label {
   --workflow-ring: color-mix(in oklch, var(--primary) 26%, var(--border));
 }
 
-.v0-tool-page section[id$="-tool"].v0-upload-workflow .v0-workflow-panel {
+.v0-tool-page section[id$="-tool"].v0-upload-workflow > .v0-workflow-panel {
   display: none;
 }
 
@@ -530,7 +530,7 @@ section[id$="-tool"] label {
   display: none !important;
 }
 
-.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready:not(.v0-upload-result) > :not(.v0-workflow-panel):not([data-v0-flow-shell]) {
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready:not(.v0-upload-result) > :not(.v0-workflow-panel):not([data-v0-flow-shell]):not([data-v0-flow-extra]) {
   display: none !important;
 }
 
@@ -549,7 +549,7 @@ section[id$="-tool"] label {
   width: 100%;
 }
 
-.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready .v0-workflow-panel {
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > .v0-workflow-panel {
   display: block;
   margin: 0 0 1rem;
   border: 1px solid var(--workflow-ring);

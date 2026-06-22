@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, CloudUpload, FileType, ImageIcon, ImageUp, SlidersHorizontal, UploadCloud } from "lucide-react";
+import { ArrowRight, Check, FileType, ImageIcon, ImageUp, SlidersHorizontal, UploadCloud } from "lucide-react";
 import { ToolSearch } from "@/components/ToolSearch";
 
 const HOMEPAGE_UPLOAD_KEY = "pdfroot-homepage-upload";
@@ -77,10 +77,6 @@ export function Hero() {
           <ToolSearch />
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Link href="/resize-image-to-exact-kb" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-primary px-6 text-base font-medium text-primary-foreground transition hover:bg-primary/90">
-              <CloudUpload className="h-5 w-5" aria-hidden="true" />
-              Select File
-            </Link>
             <a href="#tools" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-border bg-background px-6 text-base font-medium text-foreground transition hover:bg-muted">
               Explore All Tools
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

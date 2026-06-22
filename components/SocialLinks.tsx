@@ -51,19 +51,32 @@ export function SocialLinks({ className = "", linkClassName = "" }: { className?
   return (
     <div className={`flex items-center justify-center gap-4 ${className}`} aria-label="Social media links">
       {socialLinks.map((social) => (
-        <a
-          key={social.label}
-          href={social.href}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={social.label}
-          className={`inline-flex h-5 w-5 items-center justify-center transition-colors ${linkClassName}`}
-        >
+        social.href === "#" ? (
+          <span
+            key={social.label}
+            aria-label={`${social.label} coming soon`}
+            className={`inline-flex h-5 w-5 items-center justify-center opacity-60 ${linkClassName}`}
+          >
+            <span className="sr-only">{social.label}</span>
+            <span className="h-5 w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:stroke-2 [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&_path]:fill-current [&_path]:stroke-none">
+              {social.icon}
+            </span>
+          </span>
+        ) : (
+          <a
+            key={social.label}
+            href={social.href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={social.label}
+            className={`inline-flex h-5 w-5 items-center justify-center transition-colors ${linkClassName}`}
+          >
           <span className="sr-only">{social.label}</span>
           <span className="h-5 w-5 [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:stroke-2 [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&_path]:fill-current [&_path]:stroke-none">
             {social.icon}
           </span>
-        </a>
+          </a>
+        )
       ))}
     </div>
   );
