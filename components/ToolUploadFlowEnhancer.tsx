@@ -2,6 +2,9 @@
 
 import { useEffect } from "react";
 
+const HOMEPAGE_UPLOAD_KEY = "pdfroot-homepage-upload";
+const HOMEPAGE_UPLOAD_STORE = "homepage-uploads";
+
 type WorkflowFile = {
   name: string;
   size: number;
@@ -204,6 +207,78 @@ function looksLikeProcessButton(label: string) {
   return /(process|convert|compress|resize|merge|split|rotate|protect|unlock|watermark|delete|organize|crop|create|download zip|save)/.test(label);
 }
 
+function readPendingHomepageUpload() {
+  try {
+    const raw = window.sessionStorage.getItem(HOMEPAGE_UPLOAD_KEY);
+    return raw ? (JSON.parse(raw) as { route?: string; updatedAt?: number }) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingHomepageUpload() {
+  window.sessionStorage.removeItem(HOMEPAGE_UPLOAD_KEY);
+
+  const request = window.indexedDB.open(HOMEPAGE_UPLOAD_STORE, 1);
+  request.onsuccess = () => {
+    const db = request.result;
+    if (!db.objectStoreNames.contains("files")) {
+      db.close();
+      return;
+    }
+
+    const transaction = db.transaction("files", "readwrite");
+    transaction.objectStore("files").delete(HOMEPAGE_UPLOAD_KEY);
+    transaction.oncomplete = () => db.close();
+    transaction.onerror = () => db.close();
+  };
+}
+
+function getPendingHomepageFile() {
+  return new Promise<File | null>((resolve) => {
+    const request = window.indexedDB.open(HOMEPAGE_UPLOAD_STORE, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore("files");
+    };
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction("files", "readonly");
+      const getRequest = transaction.objectStore("files").get(HOMEPAGE_UPLOAD_KEY);
+      getRequest.onsuccess = () => resolve(getRequest.result instanceof File ? getRequest.result : null);
+      getRequest.onerror = () => resolve(null);
+      transaction.oncomplete = () => db.close();
+      transaction.onerror = () => db.close();
+    };
+  });
+}
+
+async function applyPendingHomepageUpload() {
+  const pending = readPendingHomepageUpload();
+  if (!pending?.route || pending.route !== window.location.pathname) return false;
+  if (pending.updatedAt && Date.now() - pending.updatedAt > 5 * 60 * 1000) {
+    clearPendingHomepageUpload();
+    return false;
+  }
+
+  const input = document.querySelector<HTMLInputElement>('section[id$="-tool"] input[type="file"]');
+  if (!input) return false;
+
+  const file = await getPendingHomepageFile();
+  if (!file) {
+    clearPendingHomepageUpload();
+    return false;
+  }
+
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  markReady(findToolSection(input), { name: file.name, size: file.size, type: file.type || file.name.split(".").pop()?.toUpperCase() || "File" });
+  clearPendingHomepageUpload();
+  return true;
+}
+
 export function ToolUploadFlowEnhancer() {
   useEffect(() => {
     const setupAllSections = () => {
@@ -246,6 +321,12 @@ export function ToolUploadFlowEnhancer() {
     }
 
     setupAllSections();
+    const homepageUploadTimers = [0, 250, 750, 1500, 3000].map((delay) =>
+      window.setTimeout(() => {
+        setupAllSections();
+        void applyPendingHomepageUpload();
+      }, delay),
+    );
 
     document.addEventListener("change", onChange, true);
     document.addEventListener("drop", onDrop, true);
@@ -255,6 +336,7 @@ export function ToolUploadFlowEnhancer() {
       document.removeEventListener("change", onChange, true);
       document.removeEventListener("drop", onDrop, true);
       document.removeEventListener("click", onClick, true);
+      homepageUploadTimers.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
 

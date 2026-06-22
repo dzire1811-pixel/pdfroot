@@ -10,6 +10,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
       title: "Company",
       links: [
         { label: "About Us", href: "/about" },
+        { label: "Blog", href: "/blog" },
         { label: "Contact Us", href: "/contact" },
         { label: "FAQ", href: "/faq" },
       ],
@@ -64,7 +65,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
           <p className="text-sm text-muted-foreground">
             Copyright 2026 <BrandText styled />. All rights reserved.
           </p>
-          <p className="text-sm text-muted-foreground">Made for students &amp; cyber cafes across India.</p>
+          <p className="text-sm text-muted-foreground">Fast, secure PDF and image tools trusted worldwide.</p>
         </div>
       </div>
     </footer>

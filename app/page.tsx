@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BlogSection } from "@/components/homepage/blog-section";
 import { Faq } from "@/components/homepage/faq";
 import { GovFormTools } from "@/components/homepage/gov-form-tools";
 import { Hero } from "@/components/homepage/hero";
@@ -136,6 +137,7 @@ export default function Home() {
         <PopularTools tools={popularTools} />
         <GovFormTools tools={governmentTools} />
         <ProductShowcase />
+        <BlogSection />
         <WhyChoose />
         <Stats />
         <Faq items={faqs} />

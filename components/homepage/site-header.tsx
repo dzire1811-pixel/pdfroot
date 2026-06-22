@@ -9,6 +9,7 @@ const nav = [
   { label: "Tools", href: "/tools" },
   { label: "Government Forms", href: "/#gov-tools" },
   { label: "Showcase", href: "/#showcase" },
+  { label: "Blog", href: "/blog" },
   { label: "FAQ", href: "/faq" },
 ];
 
