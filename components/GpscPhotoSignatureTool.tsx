@@ -1,9 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, Download, ImageUp, PenLine, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
+import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
 
 type DateFormat = "slash" | "dash";
 type DateMode = "without" | "with";
@@ -180,6 +181,8 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
   const [dateMode, setDateMode] = useState<DateMode>("without");
   const [dateFormat, setDateFormat] = useState<DateFormat>("slash");
   const [dateValue, setDateValue] = useState(getTodayForInput);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
 
   const photoSize = useMemo(() => (photo.file ? `${formatKb(photo.file.size)} KB` : "No file selected"), [photo.file]);
   const signatureSize = useMemo(() => (signature.file ? `${formatKb(signature.file.size)} KB` : "No file selected"), [signature.file]);
@@ -225,6 +228,13 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
     const setter = type === "photo" ? setPhoto : setSignature;
     setter((state) => ({ ...state, isDragging: false }));
     handleFile(type, event.dataTransfer.files?.[0]);
+  }
+
+  function changeFile(type: "photo" | "signature") {
+    clearOutput(type);
+    const setter = type === "photo" ? setPhoto : setSignature;
+    setter((state) => ({ ...state, error: null, progress: 0 }));
+    (type === "photo" ? photoInputRef : signatureInputRef).current?.click();
   }
 
   async function processImage(type: "photo" | "signature") {
@@ -305,6 +315,27 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
     clearOutput("signature");
   }
 
+  const completedType = photo.output ? "photo" : signature.output ? "signature" : null;
+  const completedState = completedType === "photo" ? photo : completedType === "signature" ? signature : null;
+  const completedOriginalSize = completedType === "photo" ? photoSize : signatureSize;
+
+  if (completedType && completedState?.output) {
+    return (
+      <section id={`${config.slug}-photo-signature-tool`} className="mx-auto mt-6 max-w-6xl text-left">
+        <input ref={photoInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("photo", event)} />
+        <input ref={signatureInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("signature", event)} />
+        <ImageResizeResultCard
+          title="Image Ready"
+          originalSize={completedOriginalSize}
+          newSize={`${completedState.output.sizeKb.toFixed(1)} KB`}
+          downloadUrl={completedState.output.url}
+          fileName={completedState.output.fileName}
+          onChangeFile={() => changeFile(completedType)}
+        />
+      </section>
+    );
+  }
+
   return (
     <section id={`${config.slug}-photo-signature-tool`} className="mx-auto mt-6 max-w-6xl text-left">
       <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-[0_24px_70px_rgba(245,158,11,0.08)] sm:p-6">
@@ -335,7 +366,7 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
               photo.isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
             }`}
           >
-            <input id={`${config.slug}-photo-upload`} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("photo", event)} />
+            <input id={`${config.slug}-photo-upload`} ref={photoInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("photo", event)} />
             <ImageUp className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
             <span className="mt-5 text-xl font-black text-slate-950">Upload {config.examName} Photo</span>
             <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Auto crop face, resize pixels, add optional date stamp, and compress to exact KB.</span>
@@ -401,7 +432,7 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
             )}
           </div>
 
-          <ProcessFooter state={photo} targetKb={photoTargetKb} buttonLabel={`Create ${config.examName} Photo`} onProcess={() => void processImage("photo")} />
+          <ProcessFooter state={photo} buttonLabel={`Create ${config.examName} Photo`} onProcess={() => void processImage("photo")} />
           <PreviewPanel state={photo} title={`${config.examName} Photo Preview`} targetKb={photoTargetKb} extra={dateMode === "with" ? `Date stamp: ${previewDate}` : "Date stamp: Without Date"} />
         </div>
 
@@ -418,7 +449,7 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
               signature.isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
             }`}
           >
-            <input id={`${config.slug}-signature-upload`} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("signature", event)} />
+            <input id={`${config.slug}-signature-upload`} ref={signatureInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("signature", event)} />
             <PenLine className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
             <span className="mt-5 text-xl font-black text-slate-950">Upload {config.examName} Signature</span>
             <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Resize signature by width, height, and exact KB. JPG, JPEG, and PNG supported.</span>
@@ -453,7 +484,7 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
           </div>
           <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{config.signaturePresetNote}</p>
 
-          <ProcessFooter state={signature} targetKb={signatureTargetKb} buttonLabel={`Create ${config.examName} Signature`} onProcess={() => void processImage("signature")} />
+          <ProcessFooter state={signature} buttonLabel={`Create ${config.examName} Signature`} onProcess={() => void processImage("signature")} />
           <PreviewPanel state={signature} title={`${config.examName} Signature Preview`} targetKb={signatureTargetKb} />
         </div>
       </div>
@@ -517,7 +548,7 @@ function OptionCard({ label, selected, onClick }: { label: string; selected: boo
   );
 }
 
-function ProcessFooter({ state, targetKb, buttonLabel, onProcess }: { state: WorkspaceState; targetKb: number; buttonLabel: string; onProcess: () => void }) {
+function ProcessFooter({ state, buttonLabel, onProcess }: { state: WorkspaceState; buttonLabel: string; onProcess: () => void }) {
   return (
     <>
       <p className="mt-5 text-sm font-bold text-slate-600">{state.status}</p>
@@ -525,12 +556,6 @@ function ProcessFooter({ state, targetKb, buttonLabel, onProcess }: { state: Wor
         <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${state.progress}%` }} />
       </div>
       {state.error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{state.error}</p>}
-      {state.output && (
-        <p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
-          Output: {state.output.sizeKb.toFixed(1)}KB / {targetKb}KB
-          <span className="ml-2 text-emerald-800">Difference: {(state.output.sizeKb - targetKb).toFixed(1)}KB</span>
-        </p>
-      )}
       <button
         type="button"
         onClick={onProcess}
@@ -566,10 +591,6 @@ function PreviewPanel({ state, title, targetKb, extra }: { state: WorkspaceState
           <p className="mt-1 text-sm font-semibold text-slate-500">Difference: {(state.output.sizeKb - targetKb).toFixed(1)}KB</p>
           {extra && <p className="mt-1 text-sm font-semibold text-slate-500">{extra}</p>}
           {state.output.isClosest && <p className="mt-2 text-sm font-bold text-amber-700">Image is simple, closest possible file generated.</p>}
-          <a href={state.output.url} download={state.output.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-            Download
-            <Download className="h-5 w-5" aria-hidden="true" />
-          </a>
         </div>
       )}
     </div>

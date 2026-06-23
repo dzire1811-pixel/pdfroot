@@ -1,8 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
-import { Download, ImageUp, PenLine, RotateCcw, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ImageUp, PenLine, RotateCcw, UploadCloud } from "lucide-react";
+import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -155,6 +156,7 @@ export function SignatureResizeTool() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload a signature image to resize.");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
 
@@ -208,6 +210,13 @@ export function SignatureResizeTool() {
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFile(event.target.files?.[0]);
     event.target.value = "";
+  }
+
+  function changeFile() {
+    clearOutput();
+    setError(null);
+    setProgress(0);
+    fileInputRef.current?.click();
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -282,6 +291,22 @@ export function SignatureResizeTool() {
     }
   }
 
+  if (output) {
+    return (
+      <section id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
+        <ImageResizeResultCard
+          title="Image Ready"
+          originalSize={sourceSize}
+          newSize={`${output.sizeKb.toFixed(1)} KB`}
+          downloadUrl={output.url}
+          fileName={output.fileName}
+          onChangeFile={changeFile}
+        />
+      </section>
+    );
+  }
+
   return (
     <section id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
@@ -298,7 +323,7 @@ export function SignatureResizeTool() {
               isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
             }`}
           >
-            <input id="signature-upload" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
+            <input id="signature-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
             <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
               <PenLine className="h-9 w-9" aria-hidden="true" />
             </span>
@@ -446,56 +471,13 @@ export function SignatureResizeTool() {
         </div>
       </div>
 
-      {(sourceUrl || output) && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
+      {sourceUrl && (
+        <div className="mt-6">
           <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-base font-black text-slate-950">Original Preview</h3>
             <div className="mt-3 grid min-h-48 place-items-center overflow-hidden rounded-2xl bg-white p-4">
               {sourceUrl ? <img src={sourceUrl} alt="Original signature preview" className="max-h-64 max-w-full object-contain" /> : null}
             </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">Resized Signature Preview</h3>
-            <div className="mt-3 grid min-h-48 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-              {output ? (
-                <img src={output.url} alt="Resized signature preview" className="max-h-64 max-w-full object-contain" />
-              ) : (
-                <p className="px-6 text-center text-sm font-semibold text-slate-500">Preview will appear after resizing.</p>
-              )}
-            </div>
-            {output && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-black text-slate-950">
-                  Target: {targetKb}KB
-                </p>
-                <p className="mt-1 text-sm font-black text-slate-950">
-                  Output: {output.sizeKb.toFixed(1)}KB / {targetKb}KB
-                  <span className="ml-2 text-slate-500">
-                    ({output.width} x {output.height}px)
-                  </span>
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Difference: {(output.sizeKb - targetKb).toFixed(1)}KB
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Auto crop: {output.cropped ? "Applied" : "No visible blank crop needed"}
-                </p>
-                {output.isClosest && (
-                  <p className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold leading-6 text-amber-800">
-                    Image is already very simple, so exact KB may not be possible. Generated closest possible file.
-                  </p>
-                )}
-                <a
-                  href={output.url}
-                  download={output.fileName}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
-                >
-                  Download Resized Signature
-                  <Download className="h-5 w-5" aria-hidden="true" />
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}

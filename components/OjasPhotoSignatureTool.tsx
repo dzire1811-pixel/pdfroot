@@ -1,9 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, Download, ImageUp, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
+import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
 import { SignatureResizeTool } from "@/components/SignatureResizeTool";
 
 type DateFormat = "slash" | "dash";
@@ -141,6 +142,7 @@ export function OjasPhotoSignatureTool() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload photo to resize for OJAS/Gujarat government forms.");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
   const previewDate = dateMode === "with" ? formatDisplayDate(dateValue, dateFormat) : "";
@@ -172,6 +174,13 @@ export function OjasPhotoSignatureTool() {
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFile(event.target.files?.[0]);
     event.target.value = "";
+  }
+
+  function changeFile() {
+    clearOutput();
+    setError(null);
+    setProgress(0);
+    fileInputRef.current?.click();
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -232,6 +241,22 @@ export function OjasPhotoSignatureTool() {
     }
   }
 
+  if (output) {
+    return (
+      <section id="ojas-photo-signature-tool" className="mx-auto mt-6 max-w-6xl text-left">
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
+        <ImageResizeResultCard
+          title="Image Ready"
+          originalSize={sourceSize}
+          newSize={`${output.sizeKb.toFixed(1)} KB`}
+          downloadUrl={output.url}
+          fileName={output.fileName}
+          onChangeFile={changeFile}
+        />
+      </section>
+    );
+  }
+
   return (
     <section id="ojas-photo-signature-tool" className="mx-auto mt-6 max-w-6xl text-left">
       <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-[0_24px_70px_rgba(245,158,11,0.08)] sm:p-6">
@@ -263,7 +288,7 @@ export function OjasPhotoSignatureTool() {
                 isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
               }`}
             >
-              <input id="ojas-photo-upload" className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
+              <input id="ojas-photo-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
               <ImageUp className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
               <span className="mt-5 text-xl font-black text-slate-950">Upload OJAS Photo</span>
               <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Crop, resize, add optional date stamp, compress to exact KB, and download JPG.</span>
@@ -352,31 +377,13 @@ export function OjasPhotoSignatureTool() {
           </div>
         </div>
 
-        {(sourceUrl || output) && (
-          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+        {sourceUrl && (
+          <div className="mt-6">
             <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
               <h3 className="text-base font-black text-slate-950">Original Preview</h3>
               <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
                 {sourceUrl && <img src={sourceUrl} alt="Original OJAS photo preview" className="max-h-96 max-w-full object-contain" />}
               </div>
-            </div>
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-base font-black text-slate-950">Final Photo Preview</h3>
-              <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-                {output ? <img src={output.url} alt="Final OJAS photo preview" className="max-h-96 max-w-full object-contain" /> : <p className="px-6 text-center text-sm font-semibold text-slate-500">Preview will appear after processing.</p>}
-              </div>
-              {output && (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-black text-slate-950">Output: {output.width} x {output.height}px - {output.sizeKb.toFixed(1)}KB / {targetKb}KB</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Difference: {(output.sizeKb - targetKb).toFixed(1)}KB</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">Date stamp: {dateMode === "with" ? previewDate : "Without Date"}</p>
-                  {output.isClosest && <p className="mt-2 text-sm font-bold text-amber-700">Image is simple, closest possible file generated.</p>}
-                  <a href={output.url} download={output.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-                    Download OJAS Photo
-                    <Download className="h-5 w-5" aria-hidden="true" />
-                  </a>
-                </div>
-              )}
             </div>
           </div>
         )}

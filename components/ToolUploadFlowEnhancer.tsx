@@ -9,6 +9,7 @@ type WorkflowFile = {
   name: string;
   size: number;
   type: string;
+  file?: File;
 };
 
 function findToolSection(target: EventTarget | null) {
@@ -64,6 +65,7 @@ function normalizeUploadButton(uploadScreen: HTMLElement | null) {
 }
 
 function setupWorkflowSection(section: HTMLElement) {
+  if (section.dataset.v0ManagedFlow === "true") return false;
   if (section.dataset.v0WorkflowSetup === "true") return true;
 
   const input = section.querySelector<HTMLInputElement>('input[type="file"]');
@@ -112,14 +114,8 @@ function ensureWorkflowPanel(section: HTMLElement) {
   panel = document.createElement("div");
   panel.className = "v0-workflow-panel";
   panel.innerHTML = `
-    <div class="v0-workflow-kicker">Step <span data-v0-step-number>2</span> of 3</div>
     <div class="v0-workflow-row">
-      <div class="v0-workflow-copy">
-        <p class="v0-workflow-title" data-v0-workflow-title>File ready</p>
-        <p class="v0-workflow-meta"><span data-v0-file-name>Uploaded file</span><span data-v0-file-size></span><span data-v0-file-type></span></p>
-      </div>
       <button type="button" class="v0-workflow-change" data-v0-change-file>Change file</button>
-      <button type="button" class="v0-workflow-change" data-v0-process-another>Process another file</button>
     </div>
   `;
   section.prepend(panel);
@@ -128,16 +124,110 @@ function ensureWorkflowPanel(section: HTMLElement) {
     section.querySelector<HTMLInputElement>('input[type="file"]')?.click();
   });
 
-  panel.querySelector<HTMLButtonElement>("[data-v0-process-another]")?.addEventListener("click", () => {
-    resetWorkflow(section, true);
-  });
-
   return panel;
 }
 
+function ensureWorkspacePreview(section: HTMLElement) {
+  let preview = section.querySelector<HTMLElement>(":scope > .v0-workspace-preview");
+  if (preview) return preview;
+
+  preview = document.createElement("div");
+  preview.className = "v0-workspace-preview";
+  preview.innerHTML = `
+    <div class="v0-workspace-stage" data-v0-preview-stage>
+      <div class="v0-document-card">
+        <div class="v0-document-icon">FILE</div>
+        <div>
+          <p class="v0-document-name" data-v0-preview-name>Uploaded file</p>
+          <p class="v0-document-meta" data-v0-preview-meta>Ready to process</p>
+        </div>
+      </div>
+    </div>
+    <div class="v0-workspace-details">
+      <div>
+        <span>Original file</span>
+        <strong data-v0-detail-name>Uploaded file</strong>
+      </div>
+      <div>
+        <span>Size</span>
+        <strong data-v0-detail-size>Ready</strong>
+      </div>
+      <div>
+        <span>Dimensions</span>
+        <strong data-v0-detail-dimensions>Detecting...</strong>
+      </div>
+    </div>
+  `;
+  const panel = section.querySelector(":scope > .v0-workflow-panel");
+  panel?.insertAdjacentElement("afterend", preview);
+  return preview;
+}
+
+function isImageWorkflowFile(file?: WorkflowFile) {
+  const type = file?.type.toLowerCase() ?? "";
+  const name = file?.name.toLowerCase() ?? "";
+  return type.startsWith("image/") || /\.(jpe?g|png|webp|gif|bmp)$/i.test(name);
+}
+
+function isPdfWorkflowFile(file?: WorkflowFile) {
+  const type = file?.type.toLowerCase() ?? "";
+  const name = file?.name.toLowerCase() ?? "";
+  return type === "application/pdf" || name.endsWith(".pdf");
+}
+
+function revokePreviewUrl(section: HTMLElement) {
+  const url = section.dataset.v0PreviewUrl;
+  if (url) {
+    URL.revokeObjectURL(url);
+    delete section.dataset.v0PreviewUrl;
+  }
+}
+
+function updateWorkspacePreview(section: HTMLElement, file?: WorkflowFile) {
+  const preview = ensureWorkspacePreview(section);
+  const stage = preview.querySelector<HTMLElement>("[data-v0-preview-stage]");
+  const name = file?.name ?? section.dataset.v0FileName ?? "Uploaded file";
+  const size = file?.size ? formatFileSize(file.size) : section.dataset.v0FileSize ?? "Ready";
+
+  preview.querySelector<HTMLElement>("[data-v0-preview-name]")?.replaceChildren(document.createTextNode(name));
+  preview.querySelector<HTMLElement>("[data-v0-preview-meta]")?.replaceChildren(document.createTextNode(size));
+  preview.querySelector<HTMLElement>("[data-v0-detail-name]")?.replaceChildren(document.createTextNode(name));
+  preview.querySelector<HTMLElement>("[data-v0-detail-size]")?.replaceChildren(document.createTextNode(size));
+
+  const dimensions = preview.querySelector<HTMLElement>("[data-v0-detail-dimensions]");
+  if (dimensions) dimensions.textContent = isImageWorkflowFile(file) ? "Detecting..." : isPdfWorkflowFile(file) ? "PDF document" : "Document";
+
+  if (!stage) return;
+  revokePreviewUrl(section);
+
+  if (isImageWorkflowFile(file) && file?.file) {
+    const url = URL.createObjectURL(file.file);
+    section.dataset.v0PreviewUrl = url;
+    stage.innerHTML = `<img class="v0-preview-image" alt="Uploaded image preview" src="${url}" />`;
+    const image = stage.querySelector<HTMLImageElement>("img");
+    image?.addEventListener("load", () => {
+      if (dimensions) dimensions.textContent = `${image.naturalWidth} x ${image.naturalHeight}px`;
+    });
+    return;
+  }
+
+  stage.innerHTML = `
+    <div class="v0-document-card">
+      <div class="v0-document-icon">${isPdfWorkflowFile(file) ? "PDF" : "FILE"}</div>
+      <div>
+        <p class="v0-document-name" data-v0-card-name></p>
+        <p class="v0-document-meta" data-v0-card-meta></p>
+        <p class="v0-document-note" data-v0-card-note></p>
+      </div>
+    </div>
+  `;
+  stage.querySelector<HTMLElement>("[data-v0-card-name]")?.replaceChildren(document.createTextNode(name));
+  stage.querySelector<HTMLElement>("[data-v0-card-meta]")?.replaceChildren(document.createTextNode(size));
+  stage.querySelector<HTMLElement>("[data-v0-card-note]")?.replaceChildren(document.createTextNode(isPdfWorkflowFile(file) ? "PDF preview will appear where supported by the tool." : "File is ready for this tool workflow."));
+}
+
 function updateWorkflowPanel(section: HTMLElement, file?: WorkflowFile) {
-  const panel = ensureWorkflowPanel(section);
-  const isResult = section.classList.contains("v0-upload-result");
+  ensureWorkflowPanel(section);
   const name = file?.name ?? section.dataset.v0FileName ?? "Uploaded file";
   const size = file?.size ? formatFileSize(file.size) : section.dataset.v0FileSize ?? "";
   const type = file?.type || section.dataset.v0FileType || "";
@@ -145,32 +235,23 @@ function updateWorkflowPanel(section: HTMLElement, file?: WorkflowFile) {
   section.dataset.v0FileName = name;
   section.dataset.v0FileSize = size;
   section.dataset.v0FileType = type;
-
-  const title = panel.querySelector<HTMLElement>("[data-v0-workflow-title]");
-  const step = panel.querySelector<HTMLElement>("[data-v0-step-number]");
-  const fileName = panel.querySelector<HTMLElement>("[data-v0-file-name]");
-  const fileSize = panel.querySelector<HTMLElement>("[data-v0-file-size]");
-  const fileType = panel.querySelector<HTMLElement>("[data-v0-file-type]");
-
-  if (title) title.textContent = isResult ? "Your file is ready to download" : "File ready";
-  if (step) step.textContent = isResult ? "3" : "2";
-  if (fileName) fileName.textContent = name;
-  if (fileSize) fileSize.textContent = size ? ` - ${size}` : "";
-  if (fileType) fileType.textContent = type ? ` - ${type}` : "";
 }
 
 function markReady(section: HTMLElement | null, file?: WorkflowFile) {
   if (!section) return;
+  if (section.dataset.v0ManagedFlow === "true") return;
   if (!setupWorkflowSection(section)) return;
   section.classList.add("v0-upload-ready");
   section.classList.remove("v0-upload-result");
   section.setAttribute("data-upload-status", "File uploaded successfully");
   section.setAttribute("data-process-status", "Ready to process");
   updateWorkflowPanel(section, file);
+  updateWorkspacePreview(section, file);
   [0, 100, 500, 1200].forEach((delay) => window.setTimeout(() => markFlowExtras(section), delay));
 }
 
 function markResult(section: HTMLElement | null) {
+  if (section?.dataset.v0ManagedFlow === "true") return;
   if (!section || !section.classList.contains("v0-upload-ready")) return;
   section.classList.add("v0-upload-result");
   section.setAttribute("data-upload-status", "Processing complete");
@@ -180,11 +261,12 @@ function markResult(section: HTMLElement | null) {
 
 function resetWorkflow(section: HTMLElement | null, clickExistingReset = false) {
   if (!section) return;
+  if (section.dataset.v0ManagedFlow === "true") return;
 
   if (clickExistingReset) {
     const resetButton = Array.from(section.querySelectorAll<HTMLButtonElement>("button")).find((button) => {
       const label = button.textContent?.toLowerCase() ?? "";
-      return !button.hasAttribute("data-v0-process-another") && /(remove|clear|change|reset|start over)/.test(label);
+      return !button.hasAttribute("data-v0-process-another") && /(remove|clear|change|reset|start over|resize another|another image)/.test(label);
     });
 
     resetButton?.click();
@@ -192,6 +274,8 @@ function resetWorkflow(section: HTMLElement | null, clickExistingReset = false) 
   section.classList.remove("v0-upload-ready", "v0-upload-result");
   section.removeAttribute("data-upload-status");
   section.removeAttribute("data-process-status");
+  revokePreviewUrl(section);
+  section.querySelector<HTMLElement>(":scope > .v0-workspace-preview")?.remove();
   delete section.dataset.v0FileName;
   delete section.dataset.v0FileSize;
   delete section.dataset.v0FileType;
@@ -199,7 +283,7 @@ function resetWorkflow(section: HTMLElement | null, clickExistingReset = false) 
 
 function getFirstFile(files: FileList | null | undefined): WorkflowFile | undefined {
   const file = files?.[0];
-  return file ? { name: file.name, size: file.size, type: file.type || file.name.split(".").pop()?.toUpperCase() || "File" } : undefined;
+  return file ? { name: file.name, size: file.size, type: file.type || file.name.split(".").pop()?.toUpperCase() || "File", file } : undefined;
 }
 
 function scheduleResultCheck(section: HTMLElement | null) {
@@ -294,7 +378,7 @@ async function applyPendingHomepageUpload() {
   transfer.items.add(file);
   input.files = transfer.files;
   input.dispatchEvent(new Event("change", { bubbles: true }));
-  markReady(findToolSection(input), { name: file.name, size: file.size, type: file.type || file.name.split(".").pop()?.toUpperCase() || "File" });
+  markReady(findToolSection(input), { name: file.name, size: file.size, type: file.type || file.name.split(".").pop()?.toUpperCase() || "File", file });
   clearPendingHomepageUpload();
   return true;
 }
@@ -330,7 +414,7 @@ export function ToolUploadFlowEnhancer() {
       if (!button) return;
 
       const label = button.textContent?.toLowerCase() ?? "";
-      if (/(remove|clear|change|reset|start over)/.test(label)) {
+      if (/(remove|clear|change|reset|start over|resize another|another image)/.test(label)) {
         resetWorkflow(findToolSection(button));
         return;
       }

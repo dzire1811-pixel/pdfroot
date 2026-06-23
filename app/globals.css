@@ -446,6 +446,10 @@ section[id$="-tool"] label {
   display: none;
 }
 
+.v0-tool-page section[id$="-tool"].v0-upload-workflow > .v0-workspace-preview {
+  display: none;
+}
+
 .v0-tool-page section[id$="-tool"].v0-upload-workflow:not(.v0-upload-ready) [data-v0-settings-screen="true"] {
   display: none !important;
 }
@@ -534,14 +538,27 @@ section[id$="-tool"] label {
   display: none !important;
 }
 
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.42fr);
+  gap: 1rem;
+  align-items: start;
+}
+
 .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready [data-v0-flow-shell] {
   display: block !important;
   width: 100% !important;
 }
 
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > [data-v0-flow-shell] {
+  grid-column: 2;
+}
+
 .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready [data-v0-settings-screen="true"] {
-  width: min(100%, 44rem) !important;
-  margin: 0 auto !important;
+  position: sticky;
+  top: 1rem;
+  width: 100% !important;
+  margin: 0 !important;
 }
 
 .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready [data-v0-settings-screen="true"] > div,
@@ -551,16 +568,74 @@ section[id$="-tool"] label {
 
 .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > .v0-workflow-panel {
   display: block;
-  margin: 0 0 1rem;
-  border: 1px solid var(--workflow-ring);
+  grid-column: 1 / -1;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > .v0-workspace-preview {
+  display: flex;
+  min-height: clamp(24rem, 48vw, 36rem);
+  flex-direction: column;
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
-  background: color-mix(in oklch, var(--primary) 4%, var(--card));
+  background: color-mix(in oklch, var(--muted) 24%, var(--card));
   padding: 1rem !important;
 }
 
-.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-result .v0-workflow-panel {
+.v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-result > .v0-workflow-panel {
   border-color: color-mix(in oklch, var(--success) 34%, var(--border));
   background: color-mix(in oklch, var(--success) 8%, var(--card));
+}
+
+.v0-tool-page section[id$="-tool"].v0-upload-workflow:has([data-v0-result-screen="true"]) > .v0-workflow-panel,
+.v0-tool-page section[id$="-tool"].v0-upload-workflow:has([data-v0-result-screen="true"]) > .v0-workspace-preview {
+  display: none !important;
+}
+
+.v0-tool-page section[id$="-tool"]:has([data-v0-result-screen="true"]) {
+  border-color: transparent !important;
+  background: transparent !important;
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"] {
+  border-color: color-mix(in oklch, var(--primary-foreground) 70%, transparent) !important;
+  background: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  min-height: clamp(13rem, 24vw, 17rem) !important;
+}
+
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"] span[class*="bg-white"] {
+  background: var(--primary-foreground) !important;
+  color: var(--foreground) !important;
+}
+
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"]::after {
+  content: "or drop files here";
+  display: block;
+  margin-top: 1rem;
+  color: var(--primary-foreground);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.v0-tool-page section[data-v0-managed-flow="true"] img[data-exact-kb-preview-image="true"] {
+  position: absolute !important;
+  inset: 1rem !important;
+  display: block !important;
+  width: calc(100% - 2rem) !important;
+  height: calc(100% - 2rem) !important;
+  max-width: calc(100% - 2rem) !important;
+  max-height: calc(100% - 2rem) !important;
+  object-fit: contain !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-exact-kb-workspace="true"]) {
+  max-width: min(calc(100vw - 3rem), 82rem) !important;
 }
 
 .v0-workflow-kicker {
@@ -579,9 +654,9 @@ section[id$="-tool"] label {
 .v0-workflow-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.75rem;
-  margin-top: 0.5rem;
+  margin-top: 0;
 }
 
 .v0-workflow-copy {
@@ -621,8 +696,141 @@ section[id$="-tool"] label {
   white-space: nowrap;
 }
 
-.v0-upload-workflow:not(.v0-upload-result) [data-v0-process-another],
-.v0-upload-workflow.v0-upload-result [data-v0-change-file] {
+.v0-workspace-preview-head {
+  display: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.v0-workspace-kicker {
+  color: var(--success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.v0-workspace-title {
+  margin: 0.2rem 0 0;
+  color: var(--foreground);
+  font-size: 1rem !important;
+  font-weight: 700;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+}
+
+.v0-workspace-type {
+  flex: none;
+  border: 1px solid color-mix(in oklch, var(--primary) 24%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--primary) 7%, var(--card));
+  padding: 0.35rem 0.7rem;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.v0-workspace-stage {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1rem;
+}
+
+.v0-preview-image {
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.v0-document-card {
+  display: flex;
+  width: min(100%, 30rem);
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 1rem;
+}
+
+.v0-document-icon {
+  display: grid;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex: none;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.v0-document-name {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.v0-document-meta,
+.v0-document-note {
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.v0-workspace-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.v0-workspace-details > div {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  padding: 0.75rem !important;
+}
+
+.v0-workspace-details span {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.v0-workspace-details strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--foreground);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v0-upload-workflow [data-v0-process-another] {
   display: none;
 }
 
@@ -681,6 +889,31 @@ section[id$="-tool"] label {
 
   .v0-workflow-change {
     width: 100%;
+  }
+
+  .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready {
+    grid-template-columns: 1fr;
+  }
+
+  .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > [data-v0-flow-shell] {
+    grid-column: 1;
+  }
+
+  .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready [data-v0-settings-screen="true"] {
+    position: static;
+  }
+
+  .v0-tool-page section[id$="-tool"].v0-upload-workflow.v0-upload-ready > .v0-workspace-preview {
+    min-height: 22rem;
+  }
+
+  .v0-workspace-details {
+    grid-template-columns: 1fr;
+  }
+
+  .v0-document-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileImage, Fingerprint, ImageUp, PenLine, ScrollText, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
+import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
 
 type HelperItem = {
   id: string;
@@ -132,6 +133,7 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState("Upload image to resize.");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
 
@@ -159,6 +161,12 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFile(event.target.files?.[0]);
     event.target.value = "";
+  }
+
+  function changeFile() {
+    clearOutput();
+    setError(null);
+    fileInputRef.current?.click();
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -209,6 +217,22 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
     }
   }
 
+  if (output) {
+    return (
+      <article id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
+        <ImageResizeResultCard
+          title="Image Ready"
+          originalSize={sourceSize}
+          newSize={`${output.sizeKb.toFixed(1)} KB`}
+          downloadUrl={output.url}
+          fileName={output.fileName}
+          onChangeFile={changeFile}
+        />
+      </article>
+    );
+  }
+
   return (
     <article id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="flex items-start gap-3">
@@ -235,7 +259,7 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
               isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
             }`}
           >
-            <input id={`ibps-upload-${item.id}`} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
+            <input id={`ibps-upload-${item.id}`} ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
             <ImageUp className="h-9 w-9 text-[#FF2D2D]" aria-hidden="true" />
             <span className="mt-4 text-sm font-black text-slate-950">Choose {item.title}</span>
             <span className="mt-2 text-xs font-semibold leading-5 text-slate-600">JPG, JPEG, or PNG</span>
@@ -282,32 +306,13 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
         </div>
       </div>
 
-      {(sourceUrl || output) && (
-        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      {sourceUrl && (
+        <div className="mt-5">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-black text-slate-950">Preview</p>
             <div className="mt-3 grid min-h-44 place-items-center rounded-2xl bg-white p-4">
               {sourceUrl && <img src={sourceUrl} alt={`${item.title} original preview`} className="max-h-64 max-w-full object-contain" />}
             </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-950">Resized Output</p>
-            <div className="mt-3 grid min-h-44 place-items-center rounded-2xl bg-white p-4">
-              {output ? <img src={output.url} alt={`${item.title} resized preview`} className="max-h-64 max-w-full object-contain" /> : <p className="text-center text-sm font-semibold text-slate-500">Output preview appears here.</p>}
-            </div>
-            {output && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-black text-slate-950">
-                  Output: {output.width} x {output.height}px - {output.sizeKb.toFixed(1)}KB / {targetKb}KB
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">Difference: {(output.sizeKb - targetKb).toFixed(1)}KB</p>
-                {output.isClosest && <p className="mt-2 text-sm font-bold text-amber-700">Image is simple, closest possible file generated.</p>}
-                <a href={output.url} download={output.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-                  Download {item.title}
-                  <Download className="h-5 w-5" aria-hidden="true" />
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}
