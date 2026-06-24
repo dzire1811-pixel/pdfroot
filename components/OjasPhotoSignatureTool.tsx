@@ -2,9 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, Download, ImageUp, UploadCloud } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
-import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { SignatureResizeTool } from "@/components/SignatureResizeTool";
 
 type DateFormat = "slash" | "dash";
@@ -143,15 +143,53 @@ export function OjasPhotoSignatureTool() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload photo to resize for OJAS/Gujarat government forms.");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
   const previewDate = dateMode === "with" ? formatDisplayDate(dateValue, dateFormat) : "";
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(output),
+  });
 
   function clearOutput() {
     if (output?.url) {
       URL.revokeObjectURL(output.url);
     }
     setOutput(null);
+  }
+
+  function clearSource() {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    setSourceUrl(null);
+  }
+
+  function resetTool() {
+    clearOutput();
+    clearSource();
+    setFile(null);
+    setWidth(300);
+    setHeight(400);
+    setTargetKb(50);
+    setDateMode("with");
+    setDateFormat("slash");
+    setDateValue(getTodayForInput());
+    setError(null);
+    setIsDragging(false);
+    setIsProcessing(false);
+    setProgress(0);
+    setStatus("Upload photo to resize for OJAS/Gujarat government forms.");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -174,13 +212,6 @@ export function OjasPhotoSignatureTool() {
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFile(event.target.files?.[0]);
     event.target.value = "";
-  }
-
-  function changeFile() {
-    clearOutput();
-    setError(null);
-    setProgress(0);
-    fileInputRef.current?.click();
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -207,6 +238,7 @@ export function OjasPhotoSignatureTool() {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearOutput();
@@ -243,22 +275,36 @@ export function OjasPhotoSignatureTool() {
 
   if (output) {
     return (
-      <section id="ojas-photo-signature-tool" className="mx-auto mt-6 max-w-6xl text-left">
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
-        <ImageResizeResultCard
-          title="Image Ready"
-          originalSize={sourceSize}
-          newSize={`${output.sizeKb.toFixed(1)} KB`}
-          downloadUrl={output.url}
-          fileName={output.fileName}
-          onChangeFile={changeFile}
-        />
-      </section>
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Resize Complete"
+        subtitle={`OJAS photo resized to ${output.sizeKb.toFixed(1)} KB`}
+        downloadUrl={output.url}
+        fileName={output.fileName}
+        downloadLabel="Download OJAS Photo"
+        onReset={resetTool}
+      />
+    );
+  }
+
+  if (isProcessing) {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text="Preparing your OJAS photo..."
+        detail="Please wait, your file is being prepared"
+      />
     );
   }
 
   return (
-    <section id="ojas-photo-signature-tool" className="mx-auto mt-6 max-w-6xl text-left">
+    <section ref={toolSectionRef} id="ojas-photo-signature-tool" className="mx-auto mt-6 max-w-6xl text-left">
       <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-[0_24px_70px_rgba(245,158,11,0.08)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-white text-amber-700 shadow-sm">
@@ -276,27 +322,22 @@ export function OjasPhotoSignatureTool() {
       <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
           <div>
-            <label
-              htmlFor="ojas-photo-upload"
+            <ImageUploadBox
+              id="ojas-photo-upload"
+              inputRef={fileInputRef}
+              accept="image/jpeg,image/png"
+              isDragging={isDragging}
+              title="Upload OJAS Photo"
+              description="Crop, resize, add optional date stamp, compress to exact KB, and download JPG."
+              buttonText="Choose Photo"
+              onChange={onInputChange}
               onDragOver={(event) => {
                 event.preventDefault();
                 setIsDragging(true);
               }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={onDrop}
-              className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-                isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-              }`}
-            >
-              <input id="ojas-photo-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
-              <ImageUp className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
-              <span className="mt-5 text-xl font-black text-slate-950">Upload OJAS Photo</span>
-              <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Crop, resize, add optional date stamp, compress to exact KB, and download JPG.</span>
-              <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-                Choose Photo
-                <UploadCloud className="h-5 w-5" aria-hidden="true" />
-              </span>
-            </label>
+            />
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected file</p>
               <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No photo uploaded"}</p>

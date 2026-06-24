@@ -2,9 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Download, FileImage, Fingerprint, ImageUp, PenLine, ScrollText, UploadCloud } from "lucide-react";
+import { AlertTriangle, Download, FileImage, Fingerprint, PenLine, ScrollText } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
-import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type HelperItem = {
   id: string;
@@ -134,12 +134,46 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState("Upload image to resize.");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(output),
+  });
 
   function clearOutput() {
     if (output?.url) URL.revokeObjectURL(output.url);
     setOutput(null);
+  }
+
+  function clearSource() {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    setSourceUrl(null);
+  }
+
+  function resetTool() {
+    clearOutput();
+    clearSource();
+    setFile(null);
+    setWidth(item.width);
+    setHeight(item.height);
+    setTargetKb(item.targetKb);
+    setError(null);
+    setIsDragging(false);
+    setIsProcessing(false);
+    setStatus("Upload image to resize.");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -163,12 +197,6 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
     event.target.value = "";
   }
 
-  function changeFile() {
-    clearOutput();
-    setError(null);
-    fileInputRef.current?.click();
-  }
-
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
@@ -189,6 +217,7 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearOutput();
@@ -219,22 +248,36 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
 
   if (output) {
     return (
-      <article id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
-        <ImageResizeResultCard
-          title="Image Ready"
-          originalSize={sourceSize}
-          newSize={`${output.sizeKb.toFixed(1)} KB`}
-          downloadUrl={output.url}
-          fileName={output.fileName}
-          onChangeFile={changeFile}
-        />
-      </article>
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Resize Complete"
+        subtitle={`${item.title} resized to ${output.sizeKb.toFixed(1)} KB`}
+        downloadUrl={output.url}
+        fileName={output.fileName}
+        downloadLabel={`Download ${item.title}`}
+        onReset={resetTool}
+      />
+    );
+  }
+
+  if (isProcessing) {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text={`Resizing your ${item.title.toLowerCase()}...`}
+        detail="Please wait, your file is being prepared"
+      />
     );
   }
 
   return (
-    <article id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <article ref={toolSectionRef} id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="flex items-start gap-3">
         <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
           <ToolIcon icon={item.icon} />
@@ -247,27 +290,22 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <label
-            htmlFor={`ibps-upload-${item.id}`}
+          <ImageUploadBox
+            id={`ibps-upload-${item.id}`}
+            inputRef={fileInputRef}
+            accept="image/jpeg,image/png"
+            isDragging={isDragging}
+            title={`Choose ${item.title}`}
+            description="Upload JPG, JPEG, or PNG and prepare it for IBPS upload."
+            buttonText="Upload"
+            onChange={onInputChange}
             onDragOver={(event) => {
               event.preventDefault();
               setIsDragging(true);
             }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
-            className={`group flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-6 text-center transition ${
-              isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id={`ibps-upload-${item.id}`} ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={onInputChange} />
-            <ImageUp className="h-9 w-9 text-[#FF2D2D]" aria-hidden="true" />
-            <span className="mt-4 text-sm font-black text-slate-950">Choose {item.title}</span>
-            <span className="mt-2 text-xs font-semibold leading-5 text-slate-600">JPG, JPEG, or PNG</span>
-            <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-5 py-2.5 text-xs font-black text-white">
-              Upload
-              <UploadCloud className="h-4 w-4" aria-hidden="true" />
-            </span>
-          </label>
+          />
           <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected file</p>
             <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No image uploaded"}</p>

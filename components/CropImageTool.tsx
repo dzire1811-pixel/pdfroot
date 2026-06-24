@@ -2,7 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, MouseEvent, useMemo, useRef, useState } from "react";
-import { Crop, Download, ImageUp, RefreshCw, UploadCloud } from "lucide-react";
+import { Crop, RefreshCw } from "lucide-react";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type CropPreset = "free" | "passport" | "signature" | "square";
 type DragMode = "move" | "resize-se" | "resize-sw" | "resize-ne" | "resize-nw";
@@ -103,6 +104,11 @@ function presetCrop(preset: CropPreset) {
 
 export function CropImageTool() {
   const cropFrameRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
   const [file, setFile] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [cropBox, setCropBox] = useState<CropBox>(defaultCropBox);
@@ -115,6 +121,16 @@ export function CropImageTool() {
   const [status, setStatus] = useState("Upload an image to crop.");
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : result ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(result),
+  });
 
   function clearResult() {
     if (result?.url) URL.revokeObjectURL(result.url);
@@ -124,6 +140,21 @@ export function CropImageTool() {
   function clearSource() {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     setSourceUrl(null);
+  }
+
+  function resetTool() {
+    clearResult();
+    clearSource();
+    setFile(null);
+    setCropBox(defaultCropBox);
+    setPreset("free");
+    setDragState(null);
+    setError(null);
+    setIsDraggingUpload(false);
+    setIsProcessing(false);
+    setStatus("Upload an image to crop.");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -254,6 +285,7 @@ export function CropImageTool() {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearResult();
@@ -301,33 +333,55 @@ export function CropImageTool() {
     }
   }
 
+  if (stage === "processing") {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text="Cropping your image..."
+        detail="Please wait, your file is being prepared"
+      />
+    );
+  }
+
+  if (stage === "success" && result) {
+    return (
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Crop Complete"
+        subtitle={`${result.width} x ${result.height}px - ${result.sizeKb.toFixed(1)} KB`}
+        downloadUrl={result.url}
+        fileName={result.fileName}
+        downloadLabel="Download Cropped Image"
+        onReset={resetTool}
+      />
+    );
+  }
+
   return (
-    <section id="crop-image-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <section ref={toolSectionRef} id="crop-image-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
         <div>
-          <label
-            htmlFor="crop-image-upload"
+          <ImageUploadBox
+            id="crop-image-upload"
+            inputRef={fileInputRef}
+            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+            isDragging={isDraggingUpload}
+            description="Upload JPG, JPEG, PNG, or WEBP and crop it in your browser."
+            buttonText="Choose Image"
+            onChange={onInputChange}
             onDragOver={(event) => {
               event.preventDefault();
               setIsDraggingUpload(true);
             }}
             onDragLeave={() => setIsDraggingUpload(false)}
             onDrop={onDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              isDraggingUpload ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id="crop-image-upload" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-              <ImageUp className="h-9 w-9" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop Image</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload JPG, JPEG, PNG, or WEBP and crop it in your browser.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose Image
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+          />
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {["Secure Files", "Fast Processing", "Instant Download"].map((label) => (
@@ -395,12 +449,6 @@ export function CropImageTool() {
             <Crop className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          {result && (
-            <a href={result.url} download={result.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-              Download Cropped Image ({result.sizeKb.toFixed(1)} KB)
-              <Download className="h-5 w-5" aria-hidden="true" />
-            </a>
-          )}
         </div>
       </div>
 

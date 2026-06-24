@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ImageUp, PenLine, RotateCcw, UploadCloud } from "lucide-react";
-import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -157,8 +157,22 @@ export function SignatureResizeTool() {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload a signature image to resize.");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(output),
+  });
 
   function clearOutput() {
     if (output?.url) {
@@ -182,6 +196,8 @@ export function SignatureResizeTool() {
     setProgress(0);
     setStatus("Upload a signature image to resize.");
     setIsProcessing(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -210,13 +226,6 @@ export function SignatureResizeTool() {
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFile(event.target.files?.[0]);
     event.target.value = "";
-  }
-
-  function changeFile() {
-    clearOutput();
-    setError(null);
-    setProgress(0);
-    fileInputRef.current?.click();
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -255,6 +264,7 @@ export function SignatureResizeTool() {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearOutput();
@@ -291,24 +301,38 @@ export function SignatureResizeTool() {
     }
   }
 
+  if (isProcessing) {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text="Resizing your signature..."
+        detail="Please wait, your file is being prepared"
+      />
+    );
+  }
+
   if (output) {
     return (
-      <section id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
-        <ImageResizeResultCard
-          title="Image Ready"
-          originalSize={sourceSize}
-          newSize={`${output.sizeKb.toFixed(1)} KB`}
-          downloadUrl={output.url}
-          fileName={output.fileName}
-          onChangeFile={changeFile}
-        />
-      </section>
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Resize Complete"
+        subtitle={`Signature resized to ${output.sizeKb.toFixed(1)} KB`}
+        downloadUrl={output.url}
+        fileName={output.fileName}
+        downloadLabel="Download Signature"
+        onReset={resetTool}
+      />
     );
   }
 
   return (
-    <section id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <section ref={toolSectionRef} id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
         <div>
           <label

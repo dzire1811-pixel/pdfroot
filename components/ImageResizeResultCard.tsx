@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { CheckCircle2, Download } from "lucide-react";
 
 type ImageResizeResultCardProps = {
@@ -18,8 +19,48 @@ export function ImageResizeResultCard({
   fileName,
   onChangeFile,
 }: ImageResizeResultCardProps) {
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      resultRef.current?.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+
+    const resultElement = resultRef.current;
+    const toolSection = resultElement?.closest("section");
+    if (!toolSection) return undefined;
+
+    const hiddenElements: Array<{ element: HTMLElement; display: string }> = [];
+    const hideElement = (element: Element | null) => {
+      if (!(element instanceof HTMLElement) || element === toolSection) return;
+      hiddenElements.push({ element, display: element.style.display });
+      element.style.display = "none";
+    };
+
+    const toolShell = toolSection.parentElement;
+    if (toolShell) {
+      Array.from(toolShell.children).forEach((child) => {
+        if (child !== toolSection) hideElement(child);
+      });
+    }
+
+    const heroSection = toolSection.parentElement?.closest("section");
+    let sibling = heroSection?.nextElementSibling ?? null;
+    while (sibling) {
+      hideElement(sibling);
+      sibling = sibling.nextElementSibling;
+    }
+
+    return () => {
+      hiddenElements.forEach(({ element, display }) => {
+        element.style.display = display;
+      });
+    };
+  }, []);
+
   return (
-    <div data-v0-flow-extra="true" data-v0-result-screen="true" className="col-span-full flex min-h-[14rem] items-start justify-center px-3 pb-6 pt-3 sm:min-h-[17rem] sm:pb-8 sm:pt-5">
+    <div ref={resultRef} data-v0-flow-extra="true" data-v0-result-screen="true" className="col-span-full grid min-h-[calc(100vh-120px)] place-items-center px-3 py-8 lg:min-h-[calc(100vh-140px)]">
       <div className="w-full max-w-[620px] text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
           <CheckCircle2 className="h-8 w-8" aria-hidden="true" />

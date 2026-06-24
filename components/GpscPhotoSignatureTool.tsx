@@ -2,9 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, Download, ImageUp, PenLine, UploadCloud } from "lucide-react";
+import { AlertTriangle, CalendarDays, Download } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
-import { ImageResizeResultCard } from "@/components/ImageResizeResultCard";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type DateFormat = "slash" | "dash";
 type DateMode = "without" | "with";
@@ -183,16 +183,59 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
   const [dateValue, setDateValue] = useState(getTodayForInput);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const signatureInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const photoSize = useMemo(() => (photo.file ? `${formatKb(photo.file.size)} KB` : "No file selected"), [photo.file]);
   const signatureSize = useMemo(() => (signature.file ? `${formatKb(signature.file.size)} KB` : "No file selected"), [signature.file]);
   const previewDate = dateMode === "with" ? formatDisplayDate(dateValue, dateFormat) : "";
+  const processingType = photo.isProcessing ? "photo" : signature.isProcessing ? "signature" : null;
+  const completedType = photo.output ? "photo" : signature.output ? "signature" : null;
+  const completedState = completedType === "photo" ? photo : completedType === "signature" ? signature : null;
+  const stage: ImageWorkflowStage = processingType ? "processing" : completedType ? "success" : photo.file || signature.file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(completedState?.output),
+  });
 
   function clearOutput(type: "photo" | "signature") {
     const current = type === "photo" ? photo : signature;
     if (current.output?.url) URL.revokeObjectURL(current.output.url);
     const setter = type === "photo" ? setPhoto : setSignature;
     setter((state) => ({ ...state, output: null }));
+  }
+
+  function resetTool() {
+    setPhoto((state) => {
+      if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
+      if (state.output?.url) URL.revokeObjectURL(state.output.url);
+      return makeInitialWorkspace(config.photoStatus);
+    });
+    setSignature((state) => {
+      if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
+      if (state.output?.url) URL.revokeObjectURL(state.output.url);
+      return makeInitialWorkspace(config.signatureStatus);
+    });
+    setPhotoWidth(300);
+    setPhotoHeight(400);
+    setPhotoTargetKb(50);
+    setSignatureWidth(300);
+    setSignatureHeight(80);
+    setSignatureTargetKb(30);
+    setBackground("white");
+    setDateMode("without");
+    setDateFormat("slash");
+    setDateValue(getTodayForInput());
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    if (signatureInputRef.current) signatureInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(type: "photo" | "signature", nextFile: File | undefined) {
@@ -230,13 +273,6 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
     handleFile(type, event.dataTransfer.files?.[0]);
   }
 
-  function changeFile(type: "photo" | "signature") {
-    clearOutput(type);
-    const setter = type === "photo" ? setPhoto : setSignature;
-    setter((state) => ({ ...state, error: null, progress: 0 }));
-    (type === "photo" ? photoInputRef : signatureInputRef).current?.click();
-  }
-
   async function processImage(type: "photo" | "signature") {
     const state = type === "photo" ? photo : signature;
     const setter = type === "photo" ? setPhoto : setSignature;
@@ -261,6 +297,7 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setter((current) => ({ ...current, isProcessing: true, error: null, output: null, progress: 20, status: "Resizing image..." }));
 
     try {
@@ -315,29 +352,38 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
     clearOutput("signature");
   }
 
-  const completedType = photo.output ? "photo" : signature.output ? "signature" : null;
-  const completedState = completedType === "photo" ? photo : completedType === "signature" ? signature : null;
-  const completedOriginalSize = completedType === "photo" ? photoSize : signatureSize;
-
   if (completedType && completedState?.output) {
     return (
-      <section id={`${config.slug}-photo-signature-tool`} className="mx-auto mt-6 max-w-6xl text-left">
-        <input ref={photoInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("photo", event)} />
-        <input ref={signatureInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("signature", event)} />
-        <ImageResizeResultCard
-          title="Image Ready"
-          originalSize={completedOriginalSize}
-          newSize={`${completedState.output.sizeKb.toFixed(1)} KB`}
-          downloadUrl={completedState.output.url}
-          fileName={completedState.output.fileName}
-          onChangeFile={() => changeFile(completedType)}
-        />
-      </section>
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Resize Complete"
+        subtitle={`${completedType === "photo" ? "Photo" : "Signature"} resized to ${completedState.output.sizeKb.toFixed(1)} KB`}
+        downloadUrl={completedState.output.url}
+        fileName={completedState.output.fileName}
+        downloadLabel={`Download ${completedType === "photo" ? "Photo" : "Signature"}`}
+        onReset={resetTool}
+      />
+    );
+  }
+
+  if (processingType) {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text={`Resizing your ${processingType}...`}
+        detail="Please wait, your file is being prepared"
+      />
     );
   }
 
   return (
-    <section id={`${config.slug}-photo-signature-tool`} className="mx-auto mt-6 max-w-6xl text-left">
+    <section ref={toolSectionRef} id={`${config.slug}-photo-signature-tool`} className="mx-auto mt-6 max-w-6xl text-left">
       <div className="rounded-[2rem] border border-amber-200 bg-amber-50 p-5 shadow-[0_24px_70px_rgba(245,158,11,0.08)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-white text-amber-700 shadow-sm">
@@ -354,27 +400,22 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-          <label
-            htmlFor={`${config.slug}-photo-upload`}
+          <ImageUploadBox
+            id={`${config.slug}-photo-upload`}
+            inputRef={photoInputRef}
+            accept="image/jpeg,image/png"
+            isDragging={photo.isDragging}
+            title={`Upload ${config.examName} Photo`}
+            description="Auto crop face, resize pixels, add optional date stamp, and compress to exact KB."
+            buttonText="Choose Photo"
+            onChange={(event) => onInputChange("photo", event)}
             onDragOver={(event) => {
               event.preventDefault();
               setPhoto((state) => ({ ...state, isDragging: true }));
             }}
             onDragLeave={() => setPhoto((state) => ({ ...state, isDragging: false }))}
             onDrop={(event) => onDrop("photo", event)}
-            className={`group flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              photo.isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id={`${config.slug}-photo-upload`} ref={photoInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("photo", event)} />
-            <ImageUp className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
-            <span className="mt-5 text-xl font-black text-slate-950">Upload {config.examName} Photo</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Auto crop face, resize pixels, add optional date stamp, and compress to exact KB.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose Photo
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+          />
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected photo</p>
@@ -437,27 +478,22 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
         </div>
 
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-          <label
-            htmlFor={`${config.slug}-signature-upload`}
+          <ImageUploadBox
+            id={`${config.slug}-signature-upload`}
+            inputRef={signatureInputRef}
+            accept="image/jpeg,image/png"
+            isDragging={signature.isDragging}
+            title={`Upload ${config.examName} Signature`}
+            description="Resize signature by width, height, and exact KB. JPG, JPEG, and PNG supported."
+            buttonText="Choose Signature"
+            onChange={(event) => onInputChange("signature", event)}
             onDragOver={(event) => {
               event.preventDefault();
               setSignature((state) => ({ ...state, isDragging: true }));
             }}
             onDragLeave={() => setSignature((state) => ({ ...state, isDragging: false }))}
             onDrop={(event) => onDrop("signature", event)}
-            className={`group flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              signature.isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id={`${config.slug}-signature-upload`} ref={signatureInputRef} className="sr-only" type="file" accept="image/jpeg,image/png" onChange={(event) => onInputChange("signature", event)} />
-            <PenLine className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
-            <span className="mt-5 text-xl font-black text-slate-950">Upload {config.examName} Signature</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Resize signature by width, height, and exact KB. JPG, JPEG, and PNG supported.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose Signature
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+          />
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected signature</p>

@@ -1,8 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
-import { Download, IdCard, ImageUp, Sparkles, RotateCcw, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { IdCard, ImageUp, Sparkles, RotateCcw } from "lucide-react";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -166,8 +167,23 @@ export function PassportPhotoMakerTool() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload a photo to create passport size image.");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(output),
+  });
 
   function clearOutput() {
     if (output?.url) {
@@ -193,6 +209,8 @@ export function PassportPhotoMakerTool() {
     setProgress(0);
     setStatus("Upload a photo to create passport size image.");
     setIsProcessing(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -260,6 +278,7 @@ export function PassportPhotoMakerTool() {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearOutput();
@@ -316,33 +335,56 @@ export function PassportPhotoMakerTool() {
     }
   }
 
+  if (isProcessing) {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text="Creating your passport photo..."
+        detail="Please wait, your file is being prepared"
+      />
+    );
+  }
+
+  if (output) {
+    return (
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Passport Photo Ready"
+        subtitle={`${output.width} x ${output.height}px - ${output.sizeKb.toFixed(1)} KB`}
+        downloadUrl={output.url}
+        fileName={output.fileName}
+        downloadLabel="Download Passport Photo"
+        onReset={resetTool}
+      />
+    );
+  }
+
   return (
-    <section id="passport-photo-maker-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <section ref={toolSectionRef} id="passport-photo-maker-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
         <div>
-          <label
-            htmlFor="passport-photo-upload"
+          <ImageUploadBox
+            id="passport-photo-upload"
+            inputRef={fileInputRef}
+            accept="image/jpeg,image/png,image/webp"
+            isDragging={isDragging}
+            title="Drag & Drop Photo"
+            description="Upload JPG, JPEG, or PNG photo and create passport-size image for forms."
+            buttonText="Choose Photo"
+            onChange={onInputChange}
             onDragOver={(event) => {
               event.preventDefault();
               setIsDragging(true);
             }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id="passport-photo-upload" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-              <IdCard className="h-9 w-9" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop Photo</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload JPG, JPEG, or PNG photo and create passport-size image for forms.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose Photo
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+          />
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {["Passport Crop", "Background", "Target KB"].map((label) => (
@@ -541,7 +583,7 @@ export function PassportPhotoMakerTool() {
         </div>
       </div>
 
-      {(sourceUrl || output) && (
+      {sourceUrl && (
         <div className="mt-6 grid gap-5 lg:grid-cols-2">
           <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-base font-black text-slate-950">Original Preview</h3>
@@ -553,38 +595,8 @@ export function PassportPhotoMakerTool() {
           <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-base font-black text-slate-950">Passport Photo Preview</h3>
             <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-              {output ? (
-                <img src={output.url} alt="Passport photo output preview" className="max-h-96 max-w-full object-contain" />
-              ) : (
-                <p className="px-6 text-center text-sm font-semibold text-slate-500">Preview will appear after creating passport photo.</p>
-              )}
+              <p className="px-6 text-center text-sm font-semibold text-slate-500">Preview will appear after creating passport photo.</p>
             </div>
-            {output && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-black text-slate-950">
-                  Output: {output.width} x {output.height}px - {output.sizeKb.toFixed(1)}KB / {targetKb}KB
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Difference: {(output.sizeKb - targetKb).toFixed(1)}KB
-                </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Basic Enhance: {output.enhanced ? "Applied" : "Off"}
-                </p>
-                {output.isClosest && (
-                  <p className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold leading-6 text-amber-800">
-                    Photo is already very simple, so exact KB may not be possible. Generated closest possible file.
-                  </p>
-                )}
-                <a
-                  href={output.url}
-                  download={output.fileName}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
-                >
-                  Download Passport Photo
-                  <Download className="h-5 w-5" aria-hidden="true" />
-                </a>
-              </div>
-            )}
           </div>
         </div>
       )}

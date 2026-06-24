@@ -88,6 +88,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   }
 
   const Icon = tool.icon;
+  const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const categoryTools = tool.category === "PDF Tools" ? pdfTools : imageTools;
   const pageSchema = {
@@ -127,8 +128,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
     <div className="v0-homepage v0-tool-page min-h-screen bg-background text-foreground">
       <ToolUploadFlowEnhancer />
       <HomepageSiteHeader />
-      <main className="overflow-hidden">
-        <section className="relative overflow-hidden border-b border-border bg-background px-5 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-8">
+      <main className={supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}>
+        <section className={`relative border-b border-border bg-background px-5 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"

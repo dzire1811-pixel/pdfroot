@@ -1,8 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useState } from "react";
-import { Download, ImageUp, RefreshCw, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type ConvertResult = {
   url: string;
@@ -54,8 +55,23 @@ export function PngToJpgTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState("Upload a PNG image to convert.");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
 
   const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : result ? "success" : file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(result),
+  });
 
   function clearResult() {
     if (result?.url) URL.revokeObjectURL(result.url);
@@ -65,6 +81,18 @@ export function PngToJpgTool() {
   function clearSource() {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     setSourceUrl(null);
+  }
+
+  function resetTool() {
+    clearResult();
+    clearSource();
+    setFile(null);
+    setError(null);
+    setIsDragging(false);
+    setIsProcessing(false);
+    setStatus("Upload a PNG image to convert.");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(nextFile: File | undefined) {
@@ -103,6 +131,7 @@ export function PngToJpgTool() {
       return;
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setError(null);
     clearResult();
@@ -138,32 +167,53 @@ export function PngToJpgTool() {
   }
 
   return (
-    <section id="png-to-jpg-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <>
+      {stage === "processing" && (
+        <ImageProcessingScreen
+          sectionRef={(node) => {
+            toolSectionRef.current = node;
+            processingSectionRef.current = node;
+          }}
+          text="Converting your image..."
+          detail="Please wait, your file is being prepared"
+        />
+      )}
+
+      {stage === "success" && result && (
+        <ImageSuccessScreen
+          sectionRef={(node) => {
+            toolSectionRef.current = node;
+            successSectionRef.current = node;
+          }}
+          title="Conversion Complete"
+          subtitle={`JPG ready - ${result.sizeKb.toFixed(1)} KB`}
+          downloadUrl={result.url}
+          fileName={result.fileName}
+          downloadLabel="Download JPG"
+          onReset={resetTool}
+        />
+      )}
+
+      {stage !== "processing" && stage !== "success" && (
+    <section ref={toolSectionRef} id="png-to-jpg-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
       <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
         <div>
-          <label
-            htmlFor="png-to-jpg-upload"
+          <ImageUploadBox
+            id="png-to-jpg-upload"
+            inputRef={fileInputRef}
+            accept="image/png,.png"
+            isDragging={isDragging}
+            title="Drag & Drop PNG"
+            description="Upload PNG and convert it to JPG in your browser with a white background."
+            buttonText="Choose PNG"
+            onChange={onInputChange}
             onDragOver={(event) => {
               event.preventDefault();
               setIsDragging(true);
             }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id="png-to-jpg-upload" className="sr-only" type="file" accept="image/png,.png" onChange={onInputChange} />
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-              <ImageUp className="h-9 w-9" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop PNG</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload PNG and convert it to JPG in your browser with a white background.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose PNG
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+          />
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {["Secure Files", "Fast Processing", "Instant Download"].map((label) => (
@@ -238,5 +288,7 @@ export function PngToJpgTool() {
         </div>
       )}
     </section>
+      )}
+    </>
   );
 }

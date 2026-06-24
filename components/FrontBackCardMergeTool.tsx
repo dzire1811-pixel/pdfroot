@@ -1,8 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, Dispatch, DragEvent, SetStateAction, useEffect, useMemo, useState } from "react";
-import { Download, FileImage, FileText, ImagePlus, RotateCw, ShieldCheck, UploadCloud } from "lucide-react";
+import { ChangeEvent, Dispatch, DragEvent, RefObject, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { Download, FileImage, FileText, RotateCw, ShieldCheck } from "lucide-react";
+import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Side = "front" | "back";
@@ -165,6 +166,12 @@ function containRect(sourceWidth: number, sourceHeight: number, boxWidth: number
 }
 
 export function FrontBackCardMergeTool() {
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
   const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false });
   const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false });
   const [layout, setLayout] = useState<LayoutMode>("horizontal");
@@ -178,6 +185,16 @@ export function FrontBackCardMergeTool() {
   const [status, setStatus] = useState("Upload front and back side images to create a printable page.");
   const [progress, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : front.file || back.file ? "workspace" : "upload";
+
+  useImageToolStageEffects({
+    stage,
+    toolRef: toolSectionRef,
+    processingRef: processingSectionRef,
+    successRef: successSectionRef,
+    shouldScrollToUploadRef,
+    resultReady: Boolean(output),
+  });
 
   const selectedSummary = useMemo(
     () => [
@@ -190,6 +207,31 @@ export function FrontBackCardMergeTool() {
   function clearOutput() {
     if (output?.url) URL.revokeObjectURL(output.url);
     setOutput(null);
+  }
+
+  function resetTool() {
+    clearOutput();
+    setFront((state) => {
+      if (state.url) URL.revokeObjectURL(state.url);
+      return { file: null, url: null, rotation: 0, isDragging: false };
+    });
+    setBack((state) => {
+      if (state.url) URL.revokeObjectURL(state.url);
+      return { file: null, url: null, rotation: 0, isDragging: false };
+    });
+    setLayout("horizontal");
+    setOutputFormat("jpg");
+    setTitle("");
+    setAddBorder(true);
+    setAutoCrop(true);
+    setSpacing(48);
+    setError(null);
+    setStatus("Upload front and back side images to create a printable page.");
+    setProgress(0);
+    setIsProcessing(false);
+    if (frontInputRef.current) frontInputRef.current.value = "";
+    if (backInputRef.current) backInputRef.current.value = "";
+    shouldScrollToUploadRef.current = true;
   }
 
   function handleFile(side: Side, file: File | undefined) {
@@ -317,6 +359,7 @@ export function FrontBackCardMergeTool() {
   async function createOutput() {
     setError(null);
     clearOutput();
+    window.scrollTo({ top: 0, behavior: "auto" });
     setIsProcessing(true);
     setProgress(20);
     setStatus("Reading and aligning images...");
@@ -356,8 +399,38 @@ export function FrontBackCardMergeTool() {
     }
   }
 
+  if (stage === "processing") {
+    return (
+      <ImageProcessingScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        text="Merging your images..."
+        detail="Please wait, your file is being prepared"
+      />
+    );
+  }
+
+  if (stage === "success" && output) {
+    return (
+      <ImageSuccessScreen
+        sectionRef={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        title="Merge Complete"
+        subtitle={`${output.width} x ${output.height}px`}
+        downloadUrl={output.url}
+        fileName={output.fileName}
+        downloadLabel={`Download ${outputFormat.toUpperCase()}`}
+        onReset={resetTool}
+      />
+    );
+  }
+
   return (
-    <section id="front-back-card-merge-tool" className="mx-auto mt-6 max-w-6xl text-left">
+    <section ref={toolSectionRef} id="front-back-card-merge-tool" className="mx-auto mt-6 max-w-6xl text-left">
       <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -382,8 +455,8 @@ export function FrontBackCardMergeTool() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <UploadSideCard side="front" title="Front Side Image" state={front} onInputChange={onInputChange} onDrop={onDrop} setDragging={setFront} onRotate={rotate} />
-        <UploadSideCard side="back" title="Back Side Image" state={back} onInputChange={onInputChange} onDrop={onDrop} setDragging={setBack} onRotate={rotate} />
+        <UploadSideCard side="front" title="Front Side Image" state={front} inputRef={frontInputRef} onInputChange={onInputChange} onDrop={onDrop} setDragging={setFront} onRotate={rotate} />
+        <UploadSideCard side="back" title="Back Side Image" state={back} inputRef={backInputRef} onInputChange={onInputChange} onDrop={onDrop} setDragging={setBack} onRotate={rotate} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -476,6 +549,7 @@ function UploadSideCard({
   side,
   title,
   state,
+  inputRef,
   onInputChange,
   onDrop,
   setDragging,
@@ -484,6 +558,7 @@ function UploadSideCard({
   side: Side;
   title: string;
   state: SideState;
+  inputRef: RefObject<HTMLInputElement | null>;
   onInputChange: (side: Side, event: ChangeEvent<HTMLInputElement>) => void;
   onDrop: (side: Side, event: DragEvent<HTMLLabelElement>) => void;
   setDragging: Dispatch<SetStateAction<SideState>>;
@@ -491,27 +566,22 @@ function UploadSideCard({
 }) {
   return (
     <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-      <label
-        htmlFor={`card-${side}-upload`}
+      <ImageUploadBox
+        id={`card-${side}-upload`}
+        inputRef={inputRef}
+        accept="image/jpeg,image/png,image/webp"
+        isDragging={state.isDragging}
+        title={title}
+        description="Upload JPG, JPEG, or PNG. Drag & drop is supported."
+        buttonText="Choose Image"
+        onChange={(event) => onInputChange(side, event)}
         onDragOver={(event) => {
           event.preventDefault();
           setDragging((current) => ({ ...current, isDragging: true }));
         }}
         onDragLeave={() => setDragging((current) => ({ ...current, isDragging: false }))}
         onDrop={(event) => onDrop(side, event)}
-        className={`flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-          state.isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-        }`}
-      >
-        <input id={`card-${side}-upload`} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onInputChange(side, event)} />
-        <ImagePlus className="h-10 w-10 text-[#FF2D2D]" aria-hidden="true" />
-        <span className="mt-5 text-xl font-black text-slate-950">{title}</span>
-        <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload JPG, JPEG, or PNG. Drag & drop is supported.</span>
-        <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-          Choose Image
-          <UploadCloud className="h-5 w-5" aria-hidden="true" />
-        </span>
-      </label>
+      />
       <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{side} side</p>
         <p className="mt-2 truncate text-sm font-black text-slate-950">{state.file?.name ?? "No image uploaded"}</p>

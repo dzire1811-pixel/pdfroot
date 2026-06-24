@@ -164,12 +164,15 @@ export function ResizeImageExactKbTool() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
+  const toolSectionRef = useRef<HTMLElement | null>(null);
+  const processingSectionRef = useRef<HTMLElement | null>(null);
+  const successSectionRef = useRef<HTMLElement | null>(null);
+  const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resizedFilesRef = useRef<OutputState[]>([]);
   const zipUrlRef = useRef<string | null>(null);
 
   const firstImage = selectedImages[0];
-  const closestCount = resizedFiles.filter((file) => file.isClosest).length;
 
   function clearNativeFileInput() {
     if (fileInputRef.current) {
@@ -210,6 +213,7 @@ export function ResizeImageExactKbTool() {
     setDpi(300);
     setMaintainAspectRatio(true);
     clearNativeFileInput();
+    shouldScrollToUploadRef.current = true;
   }
 
   async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
@@ -337,6 +341,7 @@ export function ResizeImageExactKbTool() {
       URL.revokeObjectURL(zipUrl);
     }
 
+    window.scrollTo({ top: 0, behavior: "auto" });
     setStage("processing");
     setError(null);
     setResizedFiles([]);
@@ -380,6 +385,7 @@ export function ResizeImageExactKbTool() {
       }
 
       setResizedFiles(results);
+      window.scrollTo({ top: 0, behavior: "auto" });
       setStage("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -412,6 +418,84 @@ export function ResizeImageExactKbTool() {
   useEffect(() => {
     zipUrlRef.current = zipUrl;
   }, [zipUrl]);
+
+  useEffect(() => {
+    if (stage !== "success" || !resizedFiles.length) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const successSection = successSectionRef.current;
+      if (!successSection) return;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      successSection.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+  }, [stage, resizedFiles.length]);
+
+  useEffect(() => {
+    if (stage !== "processing") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      const processingSection = processingSectionRef.current;
+      if (!processingSection) return;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      processingSection.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "upload" || !shouldScrollToUploadRef.current) {
+      return;
+    }
+
+    shouldScrollToUploadRef.current = false;
+    window.requestAnimationFrame(() => {
+      const uploadSection = toolSectionRef.current;
+      if (!uploadSection) return;
+      const pageHero = uploadSection.parentElement?.closest<HTMLElement>("section");
+      const target = pageHero ?? uploadSection;
+      const y = target.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    const toolSection = toolSectionRef.current;
+    if (!toolSection || (stage !== "processing" && stage !== "success")) {
+      return;
+    }
+
+    const hiddenElements: Array<{ element: HTMLElement; display: string }> = [];
+    const hideElement = (element: Element | null) => {
+      if (!(element instanceof HTMLElement) || element === toolSection) return;
+      hiddenElements.push({ element, display: element.style.display });
+      element.style.display = "none";
+    };
+
+    const toolShell = toolSection.parentElement;
+    if (toolShell) {
+      Array.from(toolShell.children).forEach((child) => {
+        if (child !== toolSection) {
+          hideElement(child);
+        }
+      });
+    }
+
+    const heroSection = toolSection.parentElement?.closest("section");
+    let sibling = heroSection?.nextElementSibling ?? null;
+    while (sibling) {
+      hideElement(sibling);
+      sibling = sibling.nextElementSibling;
+    }
+
+    return () => {
+      hiddenElements.forEach(({ element, display }) => {
+        element.style.display = display;
+      });
+    };
+  }, [stage]);
 
   useEffect(() => {
     return () => {
@@ -572,6 +656,23 @@ export function ResizeImageExactKbTool() {
     );
   }
 
+  function renderAddMoreButton(className = "") {
+    return (
+      <button
+        type="button"
+        aria-label="Add more images"
+        onClick={() => addMoreInputRef.current?.click()}
+        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 ${className}`}
+      >
+        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+          {selectedImages.length}
+        </span>
+        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function renderImageList() {
     return (
       <div className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
@@ -584,8 +685,8 @@ export function ResizeImageExactKbTool() {
         <div className="mt-3 grid gap-2">
           {selectedImages.map((image) => (
             <div key={image.id} className="grid grid-cols-[3.5rem_minmax(0,1fr)] gap-3 rounded-xl border border-slate-200 bg-white p-2.5">
-              <div className="relative overflow-hidden rounded-lg bg-slate-100">
-                <img src={image.previewUrl} alt="" className="h-14 w-14 object-cover" />
+              <div className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-lg border border-slate-100 bg-white">
+                <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-1" />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
@@ -606,23 +707,13 @@ export function ResizeImageExactKbTool() {
     return (
       <div className="relative min-w-0 overflow-visible rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
         <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3 pr-0 sm:pr-14">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-black text-slate-950">
             {selectedImages.length} selected {selectedImages.length === 1 ? "image" : "images"}
           </p>
           <div className="flex items-center gap-3">
             <p className="shrink-0 text-xs font-bold text-slate-500">Settings apply to all</p>
-            <button
-              type="button"
-              aria-label="Add more images"
-              onClick={() => addMoreInputRef.current?.click()}
-              className="relative inline-grid h-12 w-12 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:absolute sm:-right-5 sm:top-12"
-            >
-              <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
-                {selectedImages.length}
-              </span>
-              <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-            </button>
+            {renderAddMoreButton("lg:hidden")}
           </div>
         </div>
 
@@ -639,10 +730,10 @@ export function ResizeImageExactKbTool() {
             </div>
           </>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {selectedImages.map((image) => (
-              <div key={image.id} className="min-w-0 rounded-xl border border-slate-200 bg-white p-2.5">
-                <div className="relative grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-slate-100">
+              <div key={image.id} className="flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-2.5">
+                <div className="relative grid h-44 place-items-center overflow-hidden rounded-lg border border-slate-100 bg-white sm:h-52 lg:h-56">
                   <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-2" />
                 </div>
                 <div className="mt-2 min-w-0">
@@ -661,7 +752,15 @@ export function ResizeImageExactKbTool() {
 
   if (stage === "success" && resizedFiles.length) {
     return (
-      <section data-v0-managed-flow="true" id="resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        id="resize-tool"
+        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-4 pt-12 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6 sm:pt-14 lg:min-h-[calc(100vh-140px)]"
+      >
         <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
         <div data-v0-flow-extra="true" data-v0-result-screen="true" className="mx-auto w-full max-w-[720px] py-4 text-center">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
@@ -671,8 +770,6 @@ export function ResizeImageExactKbTool() {
           <p className="mt-1 text-sm font-semibold text-slate-500">
             {resizedFiles.length === 1 ? `Resized to ${resizedFiles[0].sizeKb.toFixed(1)} KB` : `${resizedFiles.length} images resized`}
           </p>
-          {closestCount > 0 && <p className="mt-2 rounded-full bg-amber-50 px-4 py-2 text-sm font-black text-amber-700">Closest possible size generated.</p>}
-
           {zipUrl ? (
             <a href={zipUrl} download="PDFRoot-resized-images.zip" className="mt-5 inline-flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-[#FF2D2D] px-8 text-lg font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
               Download All
@@ -685,7 +782,7 @@ export function ResizeImageExactKbTool() {
             </a>
           )}
 
-          {resizedFiles.length > 1 && (
+          {!zipUrl && resizedFiles.length > 1 && (
             <div className="mt-4 grid gap-2 text-left">
               {resizedFiles.map((result) => (
                 <div key={result.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -713,10 +810,19 @@ export function ResizeImageExactKbTool() {
 
   if (stage === "processing") {
     return (
-      <section data-v0-managed-flow="true" id="resize-tool" className="mx-auto mt-6 grid min-h-72 w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)]">
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        id="resize-tool"
+        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
+      >
         <div>
           <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
-          <p className="mt-4 text-base font-black text-slate-950">Resizing image...</p>
+          <p className="mt-4 text-base font-black text-slate-950">Resizing your images...</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Please wait, your files are being prepared</p>
         </div>
       </section>
     );
@@ -724,17 +830,20 @@ export function ResizeImageExactKbTool() {
 
   if (stage === "workspace" && selectedImages.length) {
     return (
-      <section data-v0-managed-flow="true" data-exact-kb-workspace="true" id="resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),82rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),82rem)]">
-        <div className="grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_clamp(20rem,28vw,23.75rem)]">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-exact-kb-workspace="true" id="resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),82rem)] max-w-full overflow-visible rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),82rem)]">
+        <div className="grid min-w-0 items-start gap-5 overflow-visible lg:grid-cols-[minmax(0,1fr)_3rem_clamp(20rem,28vw,23.75rem)]">
           {renderWorkspacePreview()}
-          <aside className="grid w-full content-start lg:sticky lg:top-4 lg:justify-self-end">{renderControls()}</aside>
+          <div className="hidden h-fit self-start justify-self-center overflow-visible lg:sticky lg:top-[90px] lg:grid lg:[align-self:flex-start] lg:[height:fit-content]">
+            {renderAddMoreButton()}
+          </div>
+          <aside className="static grid h-auto w-full content-start self-start justify-self-stretch lg:sticky lg:top-[90px] lg:h-fit lg:justify-self-end lg:[align-self:flex-start] lg:[height:fit-content]">{renderControls()}</aside>
         </div>
       </section>
     );
   }
 
   return (
-    <section data-v0-managed-flow="true" id="resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+    <section ref={toolSectionRef} data-v0-managed-flow="true" id="resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
       {renderUploadBox()}
       {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
     </section>
