@@ -54,48 +54,49 @@ function saveHomepageUpload(file: File, route: string) {
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden border-b border-border">
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
-      />
-      <div className="relative mx-auto grid max-w-7xl -translate-y-8 items-center gap-12 px-4 pb-16 pt-20 sm:px-6 sm:pt-24 lg:grid-cols-2 lg:gap-8 lg:px-8 lg:pb-24 lg:pt-32">
-        <div className="max-w-xl">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-            <span className="flex h-1.5 w-1.5 rounded-full bg-primary" />
-            PDF &amp; Government Form Tools
+    <section className="relative overflow-hidden border-b bg-white">
+      {/* PDFRoot homepage hero alignment fixed */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:80px_80px] opacity-60" />
+
+      <div className="relative mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-24">
+        <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="w-full">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-primary" />
+              PDF &amp; Government Form Tools
+            </div>
+
+            <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+              Convert PDFs &amp; Resize Images for Government Forms in Seconds
+            </h1>
+
+            <p className="mt-5 text-pretty text-lg leading-relaxed text-muted-foreground">
+              Convert, compress, merge and split PDFs. Resize photos and signatures for SSC, RRB, UPSC, IBPS, GPSC and OJAS applications.
+            </p>
+
+            <ToolSearch />
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a href="#tools" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-border bg-background px-6 text-base font-medium text-foreground transition hover:bg-muted">
+                Explore All Tools
+                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
+
+            <ul className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-foreground sm:max-w-md">
+              {["No Registration Required", "Secure Processing", "Mobile Friendly", "Free Online Tools"].map((item) => (
+                <li key={item} className="flex items-center gap-2">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <h1 className="mt-6 text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Convert PDFs &amp; Resize Images for Government Forms in Seconds
-          </h1>
-
-          <p className="mt-5 text-pretty text-lg leading-relaxed text-muted-foreground">
-            Convert, compress, merge and split PDFs. Resize photos and signatures for SSC, RRB, UPSC, IBPS, GPSC and OJAS applications.
-          </p>
-
-          <ToolSearch />
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a href="#tools" className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-border bg-background px-6 text-base font-medium text-foreground transition hover:bg-muted">
-              Explore All Tools
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </a>
-          </div>
-
-          <ul className="mt-8 grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-foreground sm:max-w-md">
-            {["No Registration Required", "Secure Processing", "Mobile Friendly", "Free Online Tools"].map((item) => (
-              <li key={item} className="flex items-center gap-2">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                </span>
-                {item}
-              </li>
-            ))}
-          </ul>
+          <HeroPreview />
         </div>
-
-        <HeroPreview />
       </div>
     </section>
   );
@@ -144,45 +145,42 @@ function HeroPreview() {
   }, []);
 
   return (
-    <div className="relative lg:self-start lg:pt-6">
-      <div className="absolute -inset-4 -z-10 rounded-3xl bg-muted/60 [mask-image:linear-gradient(to_bottom,black,transparent)] lg:-inset-6" />
-      <div className="space-y-4">
-        <div className="-translate-y-[30px] rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
-          <label
-            htmlFor="homepage-upload"
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border-2 border-dotted px-5 py-9 text-center transition sm:px-7 ${
-              isDragging ? "border-white bg-[#e92f2f]" : "border-red-200 bg-[#ef3030] hover:bg-[#e92f2f]"
-            }`}
-          >
-            <input id="homepage-upload" type="file" className="sr-only" accept="image/*,.pdf,application/pdf" onChange={(event) => void handleFiles(event.currentTarget.files)} />
-            <span className="sr-only">Drag &amp; Drop Files</span>
-            <span className="grid h-20 w-20 place-items-center text-white transition group-hover:scale-105">
-              <ImageUp className="h-16 w-16 stroke-[1.8]" aria-hidden="true" />
-            </span>
-            <span className="mt-6 inline-flex items-center gap-3 rounded-lg bg-white px-7 py-4 text-sm font-black uppercase tracking-wide text-slate-950 shadow-[0_16px_35px_rgba(15,23,42,0.16)] transition group-hover:-translate-y-0.5">
-              Choose Files
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <span className="mt-6 text-xl font-bold text-white">or drop files here</span>
-          </label>
-        </div>
-
-        <div className="space-y-2.5">
-          <WorkflowRow icon={<ImageIcon className="h-4 w-4" />} name="Image resize" detail="Target KB and dimensions" progress={progress} done={done} />
-          <WorkflowRow icon={<FileType className="h-4 w-4" />} name="PDF conversion" detail="Convert, merge or compress" progress={Math.min(100, progress + 18)} done={done} />
-        </div>
-
-        <Link href="/tools" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
-          <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
-          Browse tools
-        </Link>
+    <div className="w-full space-y-4">
+      <div className="w-full rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
+        <label
+          htmlFor="homepage-upload"
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.25rem] border-2 border-dotted px-5 py-9 text-center transition sm:px-7 ${
+            isDragging ? "border-white bg-[#e92f2f]" : "border-red-200 bg-[#ef3030] hover:bg-[#e92f2f]"
+          }`}
+        >
+          <input id="homepage-upload" type="file" className="sr-only" accept="image/*,.pdf,application/pdf" onChange={(event) => void handleFiles(event.currentTarget.files)} />
+          <span className="sr-only">Drag &amp; Drop Files</span>
+          <span className="grid h-20 w-20 place-items-center text-white transition group-hover:scale-105">
+            <ImageUp className="h-16 w-16 stroke-[1.8]" aria-hidden="true" />
+          </span>
+          <span className="mt-6 inline-flex items-center gap-3 rounded-lg bg-white px-7 py-4 text-sm font-black uppercase tracking-wide text-slate-950 shadow-[0_16px_35px_rgba(15,23,42,0.16)] transition group-hover:-translate-y-0.5">
+            Choose Files
+            <UploadCloud className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="mt-6 text-xl font-bold text-white">or drop files here</span>
+        </label>
       </div>
+
+      <div className="w-full space-y-2.5">
+        <WorkflowRow icon={<ImageIcon className="h-4 w-4" />} name="Image resize" detail="Target KB and dimensions" progress={progress} done={done} />
+        <WorkflowRow icon={<FileType className="h-4 w-4" />} name="PDF conversion" detail="Convert, merge or compress" progress={Math.min(100, progress + 18)} done={done} />
+      </div>
+
+      <Link href="/tools" className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+        <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+        Browse tools
+      </Link>
     </div>
   );
 }
@@ -201,7 +199,7 @@ function WorkflowRow({
   done: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
+    <div className="flex w-full items-center gap-3 rounded-xl border border-border bg-background px-3 py-2.5">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">{icon}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">

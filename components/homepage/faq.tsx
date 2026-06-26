@@ -14,7 +14,7 @@ export function Faq({ items }: { items: HomepageFaqItem[] }) {
 
   return (
     <section id="faq" className="border-b border-border bg-muted/40">
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-24">
         <div className="text-center">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">FAQ</p>
           <h2 className="mt-2 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Frequently asked questions</h2>

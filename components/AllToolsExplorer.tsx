@@ -54,8 +54,8 @@ export function AllToolsExplorer() {
   }
 
   return (
-    <section className="px-5 py-12 sm:px-6 sm:py-14 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <section className="px-6 py-12 sm:py-14 lg:px-8">
+      <div className="mx-auto max-w-[1800px]">
         <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-h-[58px] flex-1 items-center gap-3 rounded-xl border border-border bg-background px-4">

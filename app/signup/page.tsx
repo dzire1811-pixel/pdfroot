@@ -8,7 +8,7 @@ export const metadata = {
 
 export default function SignupPage() {
   return (
-    <main className="min-h-screen bg-slate-50 px-5 py-10 text-slate-950">
+    <main className="min-h-screen bg-slate-50 px-6 py-10 text-slate-950 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md flex-col justify-center">
         <Link href="/" className="mx-auto mb-8 inline-flex rounded-md p-1" aria-label="PDFRoot home">
           <LogoMark />

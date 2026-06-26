@@ -16,8 +16,8 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-950">
-      <header className="border-b border-slate-200 bg-white px-5 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between">
+      <header className="border-b border-slate-200 bg-white px-6 py-4 lg:px-8">
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between">
           <Link href="/" className="inline-flex rounded-md p-1" aria-label="PDFRoot home">
             <LogoMark />
           </Link>
@@ -26,7 +26,7 @@ export default function DashboardPage() {
           </Link>
         </div>
       </header>
-      <section className="mx-auto max-w-7xl px-5 py-12">
+      <section className="mx-auto max-w-[1800px] px-6 py-12 lg:px-8">
         <h1 className="text-4xl font-black tracking-tight text-slate-950"><BrandText styled /> Dashboard</h1>
         <p className="mt-3 max-w-2xl leading-7 text-slate-600">Choose a PDF or image workflow and continue with the same clean <BrandText styled /> experience.</p>
         <div className="mt-8 grid gap-4 md:grid-cols-3">

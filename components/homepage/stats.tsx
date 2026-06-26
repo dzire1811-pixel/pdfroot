@@ -10,7 +10,7 @@ const points = [
 export function Stats() {
   return (
     <section className="border-b border-border bg-foreground text-background">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1800px] px-6 py-14 lg:px-8">
         <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {points.map((point) => (
             <div key={point.title} className="flex items-start gap-3">

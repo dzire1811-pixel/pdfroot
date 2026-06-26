@@ -27,8 +27,8 @@ const features = [
 
 export function WhyChoosePdfRoot() {
   return (
-    <section className="border-t border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <section className="border-t border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+      <div className="mx-auto max-w-[1800px]">
         <SectionHeading
           eyebrow="Why Choose PDFRoot?"
           title="Built for everyday PDF and image work"

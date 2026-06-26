@@ -25,12 +25,12 @@ export function ToolsDirectoryPage() {
     <div className="v0-homepage min-h-screen bg-background text-foreground">
       <HomepageSiteHeader />
       <main>
-        <section className="relative overflow-hidden border-b border-border bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <section className="relative overflow-hidden border-b border-border bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
           />
-          <div className="mx-auto max-w-4xl text-center">
+          <div className="mx-auto max-w-[1800px] text-center">
             <div className="relative inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
               <Search className="h-4 w-4" aria-hidden="true" />
               <BrandText styled /> Tools Directory
@@ -56,29 +56,29 @@ export function ToolsDirectoryPage() {
 
         <AllToolsExplorer />
 
-        <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="Popular Tools" title="Most used PDFRoot tools" description="Quick access to everyday PDF, image, and form-ready document tools." />
             <PreviewGrid items={popularTools} />
           </div>
         </section>
 
-        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="PDF Tools" title="Convert, compress, merge, and organize PDFs" description="Use PDFRoot tools for common PDF workflows across office, school, and upload portals." />
             <PreviewGrid items={pdfTools} />
           </div>
         </section>
 
-        <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="Image Tools" title="Resize, compress, convert, and prepare images" description="Image utilities for photos, signatures, scans, cards, and online forms." />
             <PreviewGrid items={imageTools} />
           </div>
         </section>
 
-        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="Government Form Tools" title="Tools for recruitment and official forms" description="Prepare exact KB photos, signatures, passport photos, and document card layouts." />
             <PreviewGrid items={governmentTools} />
           </div>

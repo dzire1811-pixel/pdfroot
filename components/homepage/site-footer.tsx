@@ -35,12 +35,12 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
 
   return (
     <footer className="bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1800px] px-6 py-14 lg:px-8">
         <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
           <div className="max-w-xs">
             <Logo />
             <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Every PDF &amp; image tool you need - fast, private and built for government form applications.
+              PDF and image tools for conversion, compression, resizing, and government form file preparation.
             </p>
             <SocialLinks className="mt-5" linkClassName="text-muted-foreground hover:text-foreground" />
           </div>
@@ -65,7 +65,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
           <p className="text-sm text-muted-foreground">
             Copyright 2026 <BrandText styled />. All rights reserved.
           </p>
-          <p className="text-sm text-muted-foreground">Fast, secure PDF and image tools trusted worldwide.</p>
+          <p className="text-sm text-muted-foreground">PDF and image tools for everyday file preparation.</p>
         </div>
       </div>
     </footer>

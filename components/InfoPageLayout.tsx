@@ -19,12 +19,12 @@ export function InfoPageLayout({
     <div className="v0-homepage min-h-screen bg-background text-foreground">
       <HomepageSiteHeader />
       <main>
-        <section className="relative overflow-hidden border-b border-border bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
+        <section className="relative overflow-hidden border-b border-border bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
           />
-          <div className="relative mx-auto max-w-4xl text-center">
+          <div className="relative mx-auto max-w-[1800px] text-center">
             <p className="inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
               {typeof eyebrow === "string" ? <BrandPhrase text={eyebrow} styled /> : eyebrow}
             </p>
@@ -39,8 +39,10 @@ export function InfoPageLayout({
           </div>
         </section>
 
-        <section className="px-5 py-16 sm:px-6 sm:py-20 lg:px-8">
-          <div className="mx-auto max-w-4xl space-y-8">{children}</div>
+        <section className="px-6 py-16 sm:py-20 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
+            <div className="mx-auto max-w-4xl space-y-8">{children}</div>
+          </div>
         </section>
       </main>
       <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((tool) => tool.government)} />

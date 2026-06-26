@@ -6,7 +6,7 @@ import type { Tool } from "@/lib/tools";
 export function PopularTools({ tools }: { tools: Tool[] }) {
   return (
     <section id="tools" className="border-b border-border bg-background">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-24">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
             <p className="text-sm font-semibold uppercase tracking-wider text-primary">Popular Tools</p>

@@ -129,7 +129,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
       <ToolUploadFlowEnhancer />
       <HomepageSiteHeader />
       <main className={supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}>
-        <section className={`relative border-b border-border bg-background px-5 pb-12 pt-10 sm:px-6 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
+        <section className={`relative border-b border-border bg-background px-6 pb-12 pt-10 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
@@ -150,8 +150,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="border-b border-border bg-background px-5 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto flex max-w-7xl flex-wrap justify-center gap-3">
+        <section className="border-b border-border bg-background px-6 py-5 lg:px-8">
+          <div className="mx-auto flex max-w-[1800px] flex-wrap justify-center gap-3">
             {["Secure Files", "Fast Processing", "Instant Download"].map((item) => (
               <div key={item} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
@@ -163,8 +163,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading
               eyebrow="How It Works"
               title={`Use ${tool.name} in three steps`}
@@ -197,8 +197,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
         </section>
 
         {tool.government && (
-          <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-            <div className="mx-auto max-w-7xl">
+          <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+            <div className="mx-auto max-w-[1800px]">
               <SectionHeading
                 eyebrow="Government Recruitment Support"
                 title={`${tool.name} for SSC, RRB, IBPS, OJAS, UPSC and GPSC`}
@@ -215,8 +215,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </section>
         )}
 
-        <section className="border-y border-border bg-muted/40 px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto grid max-w-[1800px] gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-2xl border border-border bg-card p-7">
               <p className="text-sm font-semibold uppercase tracking-wider text-primary">SEO Tool Page</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Why use <BrandText styled /> {tool.name}?</h2>
@@ -252,8 +252,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="bg-background px-5 py-14 sm:px-6 sm:py-16 lg:px-8">
-          <div className="mx-auto max-w-7xl">
+        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+          <div className="mx-auto max-w-[1800px]">
             <SectionHeading
               eyebrow="Related Tools"
               title={`More ${tool.category}`}
