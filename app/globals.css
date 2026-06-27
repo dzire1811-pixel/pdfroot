@@ -649,13 +649,13 @@ section[id$="-tool"] label {
 .v0-tool-page section[data-merge-pdf-workspace="true"] {
   width: 100vw !important;
   max-width: 100vw !important;
-  margin-left: 50% !important;
+  margin-left: calc(50% - 50vw) !important;
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   padding: 0 !important;
   box-shadow: none !important;
-  transform: translateX(-50%) !important;
+  transform: none !important;
 }
 
 .v0-tool-page section[data-merge-pdf-workspace="true"] > div {
@@ -666,8 +666,30 @@ section[id$="-tool"] label {
   padding: clamp(1rem, 2vw, 1.5rem) !important;
 }
 
+.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="arrange"] {
+  padding-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="merge"],
+.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="download"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="arrange"] {
+    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+
+  .v0-tool-page section[data-merge-pdf-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
 .v0-tool-page section[data-merge-pdf-workspace="true"] article {
   padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
 }
 
 .v0-tool-page section[data-merge-pdf-workspace="true"] article [class*="p-3"] {

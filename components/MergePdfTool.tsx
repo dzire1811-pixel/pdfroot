@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FilePlus2, FileText, GripVertical, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, FilePlus2, FileText, GripVertical, Loader2, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 
 type PdfItem = {
   id: string;
@@ -77,8 +77,25 @@ export function MergePdfTool() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<PdfItem[]>([]);
   const resultRef = useRef<MergeResult | null>(null);
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+
+  function scrollToolStageIntoView() {
+    window.requestAnimationFrame(() => {
+      const toolSection = document.getElementById("merge-pdf-tool");
+      const headingBlock = toolSection?.closest(".max-w-4xl");
+      const target = headingBlock ?? workAreaRef.current;
+      if (!target) return;
+
+      const headerHeight = document.querySelector("header")?.getBoundingClientRect().height ?? 0;
+      const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    });
+  }
 
   function clearResult() {
     if (result?.url) {
@@ -211,9 +228,11 @@ export function MergePdfTool() {
       return;
     }
 
+    setIsActionBarVisible(false);
     setWorkflowStep("merge");
-    setStatus("Preparing your merged PDF...");
+    setStatus("Please wait while we prepare your file.");
     setProgress(0);
+    scrollToolStageIntoView();
     void mergePdfs();
   }
 
@@ -282,6 +301,56 @@ export function MergePdfTool() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!items.length || workflowStep !== "arrange") {
+      setIsActionBarVisible(false);
+      return;
+    }
+
+    let frame = 0;
+
+    const updateActionBarVisibility = () => {
+      const workspace = workspaceRef.current;
+      const workArea = workAreaRef.current;
+
+      if (!workspace || !workArea) {
+        setIsActionBarVisible(false);
+        return;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const workAreaRect = workArea.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
+      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
+
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActionBarVisibility);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [items.length, workflowStep]);
+
+  useEffect(() => {
+    if (workflowStep === "merge" || workflowStep === "download") {
+      scrollToolStageIntoView();
+    }
+  }, [workflowStep]);
+
   function renderUploadBox() {
     return (
       <label
@@ -311,17 +380,21 @@ export function MergePdfTool() {
     );
   }
 
-  function renderAddMoreButton(className = "") {
+  function renderAddMoreButton(className = "", disabled = false) {
     return (
       <button
         type="button"
         aria-label="Add more PDFs"
+        title="Add more files"
         onClick={() => addMoreInputRef.current?.click()}
-        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 ${className}`}
+        disabled={disabled}
+        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:h-14 sm:w-14 ${className}`}
       >
-        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
-          {items.length}
-        </span>
+        {items.length > 0 && (
+          <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+            {items.length}
+          </span>
+        )}
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
       </button>
     );
@@ -342,45 +415,16 @@ export function MergePdfTool() {
     );
   }
 
-  function renderStepIndicator() {
-    const steps: Array<{ id: WorkflowStep; label: string; number: number }> = [
-      { id: "arrange", label: "Arrange", number: 1 },
-      { id: "merge", label: "Merge", number: 2 },
-      { id: "download", label: "Download", number: 3 },
-    ];
-    const activeIndex = steps.findIndex((step) => step.id === workflowStep);
-
-    return (
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
-        {steps.map((step, index) => {
-          const isActive = workflowStep === step.id;
-          const isComplete = activeIndex > index;
-
-          return (
-            <div key={step.id} className="contents">
-              <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 transition ${isActive ? "border-red-200 bg-red-50 text-[#FF2D2D]" : isComplete ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-500"}`}>
-                <span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-black ${isActive ? "bg-[#FF2D2D] text-white" : isComplete ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}>
-                  {isComplete ? "✓" : step.number}
-                </span>
-                <span className="text-sm font-black">{step.label}</span>
-              </div>
-              {index < steps.length - 1 && <div className={`hidden h-0.5 w-10 sm:block ${activeIndex > index ? "bg-emerald-500" : "bg-slate-200"}`} aria-hidden="true" />}
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   function renderProcessingCard() {
     return (
-      <div className="grid min-h-[24rem] place-items-center rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm transition">
-        <div className="w-full max-w-xl">
+      <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
-            <FileText className="h-8 w-8" aria-hidden="true" />
+            <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
           </div>
-          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Preparing your merged PDF...</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">{status}</p>
+          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Merging your PDFs...</h3>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Please wait while we prepare your file.</p>
+          <p className="mt-2 truncate text-xs font-bold text-slate-400">{status}</p>
           <div className="mt-6 h-4 overflow-hidden rounded-full bg-slate-200">
             <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
@@ -392,8 +436,8 @@ export function MergePdfTool() {
 
   function renderSuccessCard() {
     return (
-      <div className="grid min-h-[24rem] place-items-center rounded-2xl border border-emerald-200 bg-white p-6 text-center shadow-sm transition">
-        <div className="w-full max-w-xl">
+      <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
@@ -403,7 +447,7 @@ export function MergePdfTool() {
             <a
               href={result.url}
               download="PDFRoot-merged.pdf"
-              className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600"
+              className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
             >
               Download PDF
               <Download className="h-5 w-5" aria-hidden="true" />
@@ -412,7 +456,7 @@ export function MergePdfTool() {
           <button
             type="button"
             onClick={clearAll}
-            className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+            className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"
           >
             Merge Another PDF
             <RotateCcw className="h-5 w-5" aria-hidden="true" />
@@ -424,23 +468,8 @@ export function MergePdfTool() {
 
   function renderWorkspacePreview() {
     return (
-      <div data-merge-preview-area="true" className="relative min-w-0 bg-slate-100 p-4 pb-28 text-left sm:p-6 sm:pb-28 lg:min-h-[calc(100vh-9rem)]">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
         <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onAddMoreInputChange} />
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-black tracking-tight text-slate-950">Merge PDF</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-600">
-                {workflowStep === "arrange" ? "Drag cards to arrange PDF order." : workflowStep === "merge" ? "Arrange complete. Merging your PDFs now." : "Your merged PDF is ready to download."}
-              </p>
-            </div>
-            <div className="inline-flex w-fit items-center rounded-full bg-red-50 px-3 py-1 text-xs font-black text-[#FF2D2D]">
-              {items.length} {items.length === 1 ? "file" : "files"} selected
-            </div>
-          </div>
-          <div className="mt-4">{renderStepIndicator()}</div>
-        </div>
-
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
             <div className="grid grid-cols-2 items-start gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-8">
@@ -492,33 +521,36 @@ export function MergePdfTool() {
   }
 
   function renderBottomActionBar() {
+    const isMerging = workflowStep === "merge";
+
     return (
-      <div data-merge-action-bar="true" className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 lg:max-w-md">
             <p className="truncate text-sm font-black text-slate-950">{items.length} {items.length === 1 ? "PDF" : "PDFs"} ready</p>
-            <p className="text-xs font-semibold text-slate-500">Arrange files above, then continue.</p>
           </div>
 
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
 
-          <div className="grid grid-cols-[3.25rem_minmax(0,1fr)_auto] gap-2 sm:grid-cols-[3.25rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-            {renderAddMoreButton("h-14 w-14")}
+          <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+            {renderAddMoreButton("", isMerging)}
             <button
               type="button"
               onClick={continueToMerge}
-              className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
+              disabled={isMerging}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
             >
-              Merge PDF
+              {isMerging ? "Merging..." : "Merge PDF"}
               <FileText className="h-5 w-5" aria-hidden="true" />
             </button>
 
             <button
               type="button"
               onClick={clearAll}
-              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+              disabled={isMerging}
+              className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
             >
-              Clear
+              Clear all
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
@@ -531,9 +563,9 @@ export function MergePdfTool() {
   return (
     <section data-v0-managed-flow="true" data-merge-pdf-workspace={items.length ? "true" : undefined} id="merge-pdf-tool" className={`mx-auto mt-6 max-w-full text-left ${items.length ? "w-screen border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"}`}>
       {items.length ? (
-        <div className="relative min-w-0 overflow-visible bg-slate-100">
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
           {renderWorkspacePreview()}
-          {workflowStep === "arrange" && renderBottomActionBar()}
+          {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>
       ) : (
         <>
