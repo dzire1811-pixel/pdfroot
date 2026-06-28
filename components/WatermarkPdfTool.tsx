@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useState } from "react";
 import { Download, FileImage, FileText, RefreshCcw, Stamp, UploadCloud } from "lucide-react";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type WatermarkType = "text" | "image";
 type WatermarkPosition = "center" | "top" | "bottom" | "left" | "right";
@@ -143,8 +144,7 @@ export function WatermarkPdfTool() {
 
   async function renderFirstPagePreview(pdfBytes: Uint8Array) {
     try {
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+      const pdfjsLib = await loadPdfJs();
       const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice().buffer });
       const pdf = await loadingTask.promise;
       const page = await pdf.getPage(1);

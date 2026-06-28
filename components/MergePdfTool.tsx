@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FilePlus2, FileText, GripVertical, Loader2, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type PdfItem = {
   id: string;
@@ -36,8 +37,7 @@ function isPdf(file: File) {
 }
 
 async function renderFirstPageThumbnail(file: File) {
-  const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const pdfjsLib = await loadPdfJs();
 
   const bytes = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;

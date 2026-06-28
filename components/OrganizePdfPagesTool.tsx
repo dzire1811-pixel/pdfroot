@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useState } from "react";
 import { Download, FileText, Image as ImageIcon, RefreshCcw, RotateCcw, RotateCw, Rows3, Trash2, UploadCloud } from "lucide-react";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type PageItem = {
   id: number;
@@ -64,8 +65,7 @@ export function OrganizePdfPagesTool() {
   }
 
   async function renderPageItems(nextFile: File, totalPages: number) {
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+    const pdfjsLib = await loadPdfJs();
 
     const bytes = await nextFile.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;

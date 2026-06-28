@@ -3,6 +3,7 @@
 import { ChangeEvent, DragEvent, useState } from "react";
 import { Download, FileText, PanelTop, RotateCcw, UploadCloud } from "lucide-react";
 import JSZip from "jszip";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type PowerPointResult = {
   blob: Blob;
@@ -200,11 +201,7 @@ export function PdfToPowerPointTool() {
 
     try {
       setStatus("Reading PDF pages...");
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/build/pdf.worker.min.mjs",
-        import.meta.url,
-      ).toString();
+      const pdfjsLib = await loadPdfJs();
 
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
       const slideImages: string[] = [];

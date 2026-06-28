@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, MouseEvent, useState } from "react";
 import { Crop, Download, FileText, RefreshCcw, UploadCloud } from "lucide-react";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type CropMode = "all" | "selected" | "range";
 
@@ -136,8 +137,7 @@ export function CropPdfTool() {
     setStatus(`Creating preview for page ${pageNumber}...`);
 
     try {
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+      const pdfjsLib = await loadPdfJs();
       const bytes = await nextFile.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
       const safePageNumber = clamp(pageNumber, 1, pdf.numPages);

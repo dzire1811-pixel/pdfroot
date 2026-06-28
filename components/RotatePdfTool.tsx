@@ -4,6 +4,7 @@
 import { ChangeEvent, DragEvent, useState } from "react";
 import { Download, FileText, RotateCcw, RotateCw, UploadCloud } from "lucide-react";
 import { degrees } from "pdf-lib";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type PagePreview = {
   pageNumber: number;
@@ -63,8 +64,7 @@ export function RotatePdfTool() {
   }
 
   async function renderPreviews(nextFile: File) {
-    const pdfjsLib = await import("pdfjs-dist");
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+    const pdfjsLib = await loadPdfJs();
     const bytes = await nextFile.arrayBuffer();
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bytes) });
     const pdf = await loadingTask.promise;
