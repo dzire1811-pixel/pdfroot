@@ -184,7 +184,6 @@ export function JpgToPdfTool() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [result, setResult] = useState<PdfResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const addMoreInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
@@ -200,7 +199,7 @@ export function JpgToPdfTool() {
       if (!target) return;
 
       const headerHeight = document.querySelector("header")?.getBoundingClientRect().height ?? 0;
-      const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - 12;
+      const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - 28;
       window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     });
   }
@@ -243,13 +242,6 @@ export function JpgToPdfTool() {
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) {
-      void addFiles(event.target.files);
-    }
-    event.target.value = "";
-  }
-
-  function onAddMoreInputChange(event: ChangeEvent<HTMLInputElement>) {
     if (event.target.files?.length) {
       void addFiles(event.target.files);
     }
@@ -309,19 +301,6 @@ export function JpgToPdfTool() {
     setProgress(0);
     setWorkflowStep("arrange");
     setStatus("Order updated. Convert when ready.");
-  }
-
-  function continueToConvert() {
-    if (!items.length) {
-      setError("Please upload at least one image first.");
-      return;
-    }
-
-    setWorkflowStep("convert");
-    setStatus("Please wait while we prepare your PDF.");
-    setProgress(0);
-    scrollToolStageIntoView();
-    void convertToPdf();
   }
 
   async function convertToPdf() {
@@ -416,14 +395,11 @@ export function JpgToPdfTool() {
       const workAreaRect = workArea.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillActive = workspaceRect.bottom > 8 && workspaceRect.top < viewportHeight;
-      const seoIntroVisible = Array.from(document.querySelectorAll("p")).some((paragraph) => {
-        if (!paragraph.textContent?.includes("Use PDFRoot JPG to PDF to turn photos")) return false;
-        const rect = paragraph.getBoundingClientRect();
-        return rect.bottom > 0 && rect.top < viewportHeight;
-      });
+      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
 
-      setIsActionBarVisible(workAreaInView && workspaceStillActive && !seoIntroVisible);
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
     };
 
     const scheduleUpdate = () => {
@@ -473,13 +449,13 @@ export function JpgToPdfTool() {
 
   function renderAddMoreButton(disabled = false) {
     return (
-      <button
-        type="button"
+      <label
+        htmlFor="jpg-pdf-workspace-upload"
         aria-label="Add more images"
         title="Add more images"
-        onClick={() => addMoreInputRef.current?.click()}
-        disabled={disabled}
-        className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 sm:h-14 sm:w-14"
+        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14 ${
+          disabled ? "pointer-events-none cursor-not-allowed opacity-60 hover:translate-y-0" : "cursor-pointer"
+        }`}
       >
         {items.length > 0 && (
           <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
@@ -487,7 +463,7 @@ export function JpgToPdfTool() {
           </span>
         )}
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-      </button>
+      </label>
     );
   }
 
@@ -550,13 +526,12 @@ export function JpgToPdfTool() {
     );
   }
 
-  function renderWorkspacePreview() {
+  function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-0 flex-1 min-w-0 bg-slate-100 p-4 pb-6 text-left sm:p-6">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid grid-cols-2 items-start gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-8">
+            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
               {items.map((item, index) => (
                 <article
                   key={item.id}
@@ -609,8 +584,8 @@ export function JpgToPdfTool() {
 
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1 lg:max-w-md">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
             <p className="truncate text-sm font-black text-slate-950">
               {items.length} {items.length === 1 ? "image" : "images"} ready
             </p>
@@ -618,27 +593,29 @@ export function JpgToPdfTool() {
 
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
 
-          <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-            {renderAddMoreButton(isConverting)}
-            <button
-              type="button"
-              onClick={continueToConvert}
-              disabled={isConverting}
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
-            >
-              {isConverting ? "Converting..." : "Convert to PDF"}
-              <FileText className="h-5 w-5" aria-hidden="true" />
-            </button>
+          <div className="min-w-0 xl:ml-auto">
+            <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+              {renderAddMoreButton(isConverting)}
+              <button
+                type="button"
+                onClick={() => void convertToPdf()}
+                disabled={isConverting}
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
+              >
+                {isConverting ? "Converting..." : "Convert to PDF"}
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              </button>
 
-            <button
-              type="button"
-              onClick={clearAll}
-              disabled={isConverting}
-              className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
-            >
-              Clear all
-              <RotateCcw className="h-5 w-5" aria-hidden="true" />
-            </button>
+              <button
+                type="button"
+                onClick={clearAll}
+                disabled={isConverting}
+                className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
+              >
+                Clear all
+                <RotateCcw className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -651,12 +628,13 @@ export function JpgToPdfTool() {
       data-merge-pdf-workspace={items.length ? "true" : undefined}
       id="jpg-to-pdf-tool"
       className={`mx-auto mt-6 max-w-full text-left ${
-        items.length ? "w-screen border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+        items.length ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}
     >
       {items.length ? (
-        <div ref={workspaceRef} className="relative flex min-h-[calc(100vh-9rem)] min-w-0 flex-col overflow-visible bg-slate-100">
-          {renderWorkspacePreview()}
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+          <input id="jpg-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
+          {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>
       ) : (

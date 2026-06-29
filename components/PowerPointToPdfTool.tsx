@@ -1,7 +1,7 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useState } from "react";
-import { Download, FileText, PanelTop, RotateCcw, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileText, GripVertical, Loader2, PanelTop, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 import JSZip from "jszip";
 
 type PdfResult = {
@@ -9,6 +9,8 @@ type PdfResult = {
   url: string;
   sizeKb: number;
   slideCount: number;
+  fileCount: number;
+  isZip: boolean;
 };
 
 type SlideText = {
@@ -45,7 +47,10 @@ type SlideData = {
   images: SlideImage[];
 };
 
+type WorkflowStep = "arrange" | "convert" | "download";
+
 const EMU_PER_POINT = 12700;
+const POWERPOINT_ACCEPT = ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
@@ -53,16 +58,11 @@ function formatKb(bytes: number) {
 
 function isPowerPointFile(file: File) {
   const name = file.name.toLowerCase();
-  return (
-    name.endsWith(".pptx") ||
-    name.endsWith(".ppt") ||
-    file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
-    file.type === "application/vnd.ms-powerpoint"
-  );
+  return name.endsWith(".pptx") || name.endsWith(".ppt") || file.type === "application/vnd.openxmlformats-officedocument.presentationml.presentation" || file.type === "application/vnd.ms-powerpoint";
 }
 
 function cleanFileName(name: string) {
-  return name.replace(/\.(pptx?|PPTX?)$/i, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot";
+  return name.replace(/\.pptx?$/i, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot";
 }
 
 function textContent(element: Element, selector: string) {
@@ -143,7 +143,9 @@ async function parseSlide(zip: JSZip, slidePath: string, pageScale: number): Pro
     const paragraphs = Array.from(shape.querySelectorAll("a\\:p, p"));
     const textLines = paragraphs
       .map((paragraph) =>
-        Array.from(paragraph.querySelectorAll("a\\:r, r")).map((run) => textContent(run, "a\\:t, t")).join(""),
+        Array.from(paragraph.querySelectorAll("a\\:r, r"))
+          .map((run) => textContent(run, "a\\:t, t"))
+          .join(""),
       )
       .filter((line) => line.trim().length > 0);
 
@@ -172,20 +174,14 @@ async function parseSlide(zip: JSZip, slidePath: string, pageScale: number): Pro
     const embedId = picture.querySelector("a\\:blip, blip")?.getAttribute("r:embed");
     const target = embedId ? rels.get(embedId) : null;
 
-    if (!target) {
-      continue;
-    }
+    if (!target) continue;
 
     const imagePath = escapeXmlName(target.startsWith("../") ? `ppt/${target.replace("../", "")}` : `ppt/slides/${target}`);
     const imageFile = zip.file(imagePath);
-    if (!imageFile) {
-      continue;
-    }
+    if (!imageFile) continue;
 
     const lower = imagePath.toLowerCase();
-    if (!lower.endsWith(".png") && !lower.endsWith(".jpg") && !lower.endsWith(".jpeg")) {
-      continue;
-    }
+    if (!lower.endsWith(".png") && !lower.endsWith(".jpg") && !lower.endsWith(".jpeg")) continue;
 
     const blob = await imageFile.async("blob");
     images.push({
@@ -207,273 +203,485 @@ async function parseSlide(zip: JSZip, slidePath: string, pageScale: number): Pro
 }
 
 export function PowerPointToPdfTool() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [result, setResult] = useState<PdfResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("Upload a PPTX file to convert slides into PDF.");
+  const [status, setStatus] = useState("Upload a PowerPoint file to convert into PDF.");
+  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<PdfResult | null>(null);
+  const fileCount = files.length;
+  const readyLabel = `${fileCount} ${fileCount === 1 ? "PowerPoint file" : "PowerPoint files"} ready`;
+
+  function scrollToolStageIntoView() {
+    window.requestAnimationFrame(() => {
+      const toolSection = document.getElementById("powerpoint-to-pdf-tool");
+      const headingBlock = toolSection?.closest(".max-w-4xl");
+      const target = headingBlock ?? workAreaRef.current;
+      if (!target) return;
+
+      const headerHeight = document.querySelector("header")?.getBoundingClientRect().height ?? 0;
+      const top = target.getBoundingClientRect().top + window.scrollY - headerHeight - 28;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    });
+  }
 
   function clearResult() {
-    if (result?.url) {
-      URL.revokeObjectURL(result.url);
-    }
+    if (result?.url) URL.revokeObjectURL(result.url);
     setResult(null);
   }
 
   function resetTool() {
     clearResult();
-    setFile(null);
+    setFiles([]);
     setError(null);
     setProgress(0);
-    setStatus("Upload a PPTX file to convert slides into PDF.");
+    setStatus("Upload a PowerPoint file to convert into PDF.");
     setIsProcessing(false);
+    setWorkflowStep("arrange");
+    setDraggedIndex(null);
   }
 
-  function selectFile(nextFile: File) {
-    if (!isPowerPointFile(nextFile)) {
+  function removeFile(indexToRemove: number) {
+    clearResult();
+    setFiles((current) => current.filter((_, index) => index !== indexToRemove));
+    setError(null);
+    setProgress(0);
+    setWorkflowStep("arrange");
+    setStatus(files.length <= 1 ? "Upload a PowerPoint file to convert into PDF." : "PowerPoint file removed. Convert when ready.");
+  }
+
+  function selectFiles(nextFiles: File[]) {
+    setError(null);
+    clearResult();
+    setProgress(0);
+
+    if (nextFiles.length === 0) return;
+
+    if (nextFiles.some((nextFile) => !isPowerPointFile(nextFile))) {
       setError("Please upload a valid PPT or PPTX PowerPoint file.");
       return;
     }
 
-    clearResult();
-    setFile(nextFile);
-    setError(null);
-    setProgress(0);
-    setStatus("PowerPoint file selected. Click Convert to PDF.");
+    setFiles((current) => [...current, ...nextFiles]);
+    setWorkflowStep("arrange");
+    setStatus("PowerPoint file loaded. Convert when ready.");
+    scrollToolStageIntoView();
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextFile = event.target.files?.[0];
-    if (nextFile) {
-      selectFile(nextFile);
-    }
+    selectFiles(Array.from(event.target.files ?? []));
     event.target.value = "";
   }
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
-    const nextFile = event.dataTransfer.files[0];
-    if (nextFile) {
-      selectFile(nextFile);
-    }
+    selectFiles(Array.from(event.dataTransfer.files));
   }
 
   async function convertToPdf() {
-    if (!file) {
-      setError("Please upload a PPTX file first.");
+    if (files.length === 0) {
+      setError("Please upload a PowerPoint file first.");
       return;
     }
 
-    if (file.name.toLowerCase().endsWith(".ppt")) {
-      setError("Legacy .ppt files cannot be converted fully in this browser tool. Please save the file as .pptx and upload again.");
+    const legacyFile = files.find((file) => file.name.toLowerCase().endsWith(".ppt"));
+    if (legacyFile) {
+      setError(`${legacyFile.name} is a legacy .ppt file. Please save it as .pptx and upload again.`);
       return;
     }
 
     clearResult();
     setError(null);
     setIsProcessing(true);
+    setWorkflowStep("convert");
     setProgress(0);
+    scrollToolStageIntoView();
 
     try {
-      setStatus("Reading PowerPoint slides...");
       const { jsPDF } = await import("jspdf");
-      const zip = await JSZip.loadAsync(await file.arrayBuffer());
-      const slidePaths = Object.keys(zip.files)
-        .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-        .sort((a, b) => slideSortKey(a) - slideSortKey(b));
+      const convertedFiles: Array<{ fileName: string; blob: Blob }> = [];
+      let totalSlides = 0;
 
-      if (!slidePaths.length) {
-        throw new Error("No slides found in this PowerPoint file.");
-      }
+      for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+        const currentFile = files[fileIndex];
+        setStatus(`Reading ${currentFile.name}...`);
+        const zip = await JSZip.loadAsync(await currentFile.arrayBuffer());
+        const slidePaths = Object.keys(zip.files)
+          .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+          .sort((a, b) => slideSortKey(a) - slideSortKey(b));
 
-      const firstSlideXml = await zip.file(slidePaths[0])?.async("string");
-      if (!firstSlideXml) {
-        throw new Error("Could not read the first slide.");
-      }
-
-      const presentationXml = await zip.file("ppt/presentation.xml")?.async("string");
-      const presentationDoc = presentationXml ? parseXml(presentationXml) : null;
-      const sldSz = presentationDoc?.querySelector("p\\:sldSz, sldSz");
-      const slideWidthPt = (attrNumber(sldSz ?? null, "cx", 12192000) / EMU_PER_POINT);
-      const slideHeightPt = (attrNumber(sldSz ?? null, "cy", 6858000) / EMU_PER_POINT);
-      const pdf = new jsPDF({
-        unit: "pt",
-        format: [slideWidthPt, slideHeightPt],
-        orientation: slideWidthPt >= slideHeightPt ? "landscape" : "portrait",
-      });
-      const pageScale = 1;
-
-      for (let index = 0; index < slidePaths.length; index += 1) {
-        if (index > 0) {
-          pdf.addPage([slideWidthPt, slideHeightPt], slideWidthPt >= slideHeightPt ? "landscape" : "portrait");
+        if (!slidePaths.length) {
+          throw new Error(`${currentFile.name} has no readable slides.`);
         }
 
-        setStatus(`Converting slide ${index + 1} of ${slidePaths.length}...`);
-        const slide = await parseSlide(zip, slidePaths[index], pageScale);
-        pdf.setFillColor(255, 255, 255);
-        pdf.rect(0, 0, slideWidthPt, slideHeightPt, "F");
+        const presentationXml = await zip.file("ppt/presentation.xml")?.async("string");
+        const presentationDoc = presentationXml ? parseXml(presentationXml) : null;
+        const sldSz = presentationDoc?.querySelector("p\\:sldSz, sldSz");
+        const slideWidthPt = attrNumber(sldSz ?? null, "cx", 12192000) / EMU_PER_POINT;
+        const slideHeightPt = attrNumber(sldSz ?? null, "cy", 6858000) / EMU_PER_POINT;
+        const orientation = slideWidthPt >= slideHeightPt ? "landscape" : "portrait";
+        const pdf = new jsPDF({
+          unit: "pt",
+          format: [slideWidthPt, slideHeightPt],
+          orientation,
+        });
+        const pageScale = 1;
 
-        slide.shapes.forEach((shape) => {
-          if (shape.fill) {
-            const color = hexToRgb(shape.fill);
-            pdf.setFillColor(color.r, color.g, color.b);
-            pdf.rect(shape.x, shape.y, shape.w, shape.h, "F");
+        for (let index = 0; index < slidePaths.length; index += 1) {
+          if (index > 0) {
+            pdf.addPage([slideWidthPt, slideHeightPt], orientation);
           }
-        });
 
-        slide.images.forEach((image) => {
-          try {
-            pdf.addImage(image.dataUrl, image.format, image.x, image.y, image.w, image.h);
-          } catch {
-            // Some PowerPoint image formats may not be supported by jsPDF.
-          }
-        });
+          setStatus(`Converting ${currentFile.name} slide ${index + 1} of ${slidePaths.length}...`);
+          const slide = await parseSlide(zip, slidePaths[index], pageScale);
+          pdf.setFillColor(255, 255, 255);
+          pdf.rect(0, 0, slideWidthPt, slideHeightPt, "F");
 
-        slide.texts.forEach((textBox, textIndex) => {
-          const isTitle = textIndex === 0 || textBox.h > 300000 / EMU_PER_POINT;
-          const fontSize = isTitle ? 24 : 13;
-          const style = textBox.bold && textBox.italic ? "bolditalic" : textBox.bold ? "bold" : textBox.italic ? "italic" : "normal";
-          pdf.setFont("helvetica", style);
-          pdf.setFontSize(fontSize);
-          pdf.setTextColor(15, 23, 42);
-          const lines = pdf.splitTextToSize(textBox.text, Math.max(40, textBox.w)) as string[];
-          pdf.text(lines, textBox.x, textBox.y + fontSize, { maxWidth: Math.max(40, textBox.w) });
-        });
+          slide.shapes.forEach((shape) => {
+            if (shape.fill) {
+              const color = hexToRgb(shape.fill);
+              pdf.setFillColor(color.r, color.g, color.b);
+              pdf.rect(shape.x, shape.y, shape.w, shape.h, "F");
+            }
+          });
 
-        setProgress(Math.round(((index + 1) / slidePaths.length) * 95));
+          slide.images.forEach((image) => {
+            try {
+              pdf.addImage(image.dataUrl, image.format, image.x, image.y, image.w, image.h);
+            } catch {
+              // Some PowerPoint image formats may not be supported by jsPDF.
+            }
+          });
+
+          slide.texts.forEach((textBox, textIndex) => {
+            const isTitle = textIndex === 0 || textBox.h > 300000 / EMU_PER_POINT;
+            const fontSize = isTitle ? 24 : 13;
+            const style = textBox.bold && textBox.italic ? "bolditalic" : textBox.bold ? "bold" : textBox.italic ? "italic" : "normal";
+            pdf.setFont("helvetica", style);
+            pdf.setFontSize(fontSize);
+            pdf.setTextColor(15, 23, 42);
+            const lines = pdf.splitTextToSize(textBox.text, Math.max(40, textBox.w)) as string[];
+            pdf.text(lines, textBox.x, textBox.y + fontSize, { maxWidth: Math.max(40, textBox.w) });
+          });
+
+          setProgress(Math.round(((fileIndex + (index + 1) / slidePaths.length) / files.length) * 85));
+        }
+
+        setStatus(`Creating PDF file for ${currentFile.name}...`);
+        const blob = pdf.output("blob");
+        convertedFiles.push({ fileName: `${cleanFileName(currentFile.name)}.pdf`, blob });
+        totalSlides += slidePaths.length;
       }
 
-      const blob = pdf.output("blob");
+      setStatus("Preparing PDF download...");
+      let blob: Blob;
+
+      if (convertedFiles.length === 1) {
+        blob = convertedFiles[0].blob;
+      } else {
+        const zip = new JSZip();
+        convertedFiles.forEach((item) => zip.file(item.fileName, item.blob));
+        blob = await zip.generateAsync({ type: "blob" });
+      }
+
       setResult({
         blob,
         url: URL.createObjectURL(blob),
         sizeKb: blob.size / 1024,
-        slideCount: slidePaths.length,
+        slideCount: totalSlides,
+        fileCount: convertedFiles.length,
+        isZip: convertedFiles.length > 1,
       });
       setProgress(100);
       setStatus("PowerPoint converted to PDF. Slide layout is preserved as much as possible.");
+      setWorkflowStep("download");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not convert this PowerPoint file to PDF. Please try another PPTX file.");
       setStatus("Conversion failed.");
       setProgress(0);
+      setWorkflowStep("arrange");
     } finally {
       setIsProcessing(false);
     }
   }
 
-  return (
-    <section id="powerpoint-to-pdf-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-        <div>
-          <label
-            htmlFor="powerpoint-pdf-upload"
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input
-              id="powerpoint-pdf-upload"
-              className="sr-only"
-              type="file"
-              accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-              onChange={onInputChange}
-            />
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-              <PanelTop className="h-9 w-9" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop PPTX</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload PowerPoint slides and convert them into a PDF document in your browser.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose PowerPoint
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result]);
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {["PPTX Slides", "Layout Aware", "No Login"].map((label) => (
-              <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
-                {label}
-              </div>
-            ))}
+  useEffect(() => {
+    return () => {
+      if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (files.length === 0 || workflowStep !== "arrange") {
+      setIsActionBarVisible(false);
+      return;
+    }
+
+    let frame = 0;
+
+    const updateActionBarVisibility = () => {
+      const workspace = workspaceRef.current;
+      const workArea = workAreaRef.current;
+
+      if (!workspace || !workArea) {
+        setIsActionBarVisible(false);
+        return;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const workAreaRect = workArea.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
+      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
+
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActionBarVisibility);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [files.length, workflowStep]);
+
+  function reorderByDragEnter(targetIndex: number) {
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    clearResult();
+    setFiles((current) => {
+      if (draggedIndex < 0 || targetIndex < 0 || draggedIndex >= current.length || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      const [draggedFile] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, draggedFile);
+      setDraggedIndex(targetIndex);
+      return next;
+    });
+    setProgress(0);
+    setWorkflowStep("arrange");
+    setStatus("Order updated. Convert when ready.");
+  }
+
+  function renderUploadBox() {
+    return (
+      <label
+        data-primary-upload="true"
+        htmlFor="powerpoint-pdf-upload"
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={onDrop}
+        className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
+          isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
+        }`}
+      >
+        <input id="powerpoint-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept={POWERPOINT_ACCEPT} multiple onChange={onInputChange} />
+        <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
+          <PanelTop className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
+        </span>
+        <span className="sr-only">Drag and drop PowerPoint</span>
+        <span className="sr-only">Upload PowerPoint files and convert slides into PDF.</span>
+        <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
+          Choose PowerPoint
+          <UploadCloud className="h-5 w-5" aria-hidden="true" />
+        </span>
+      </label>
+    );
+  }
+
+  function renderPowerPointCard(powerPointFile: File, index: number) {
+    return (
+      <article
+        draggable
+        onDragStart={() => setDraggedIndex(index)}
+        onDragOver={(event) => event.preventDefault()}
+        onDragEnter={() => reorderByDragEnter(index)}
+        onDrop={() => setDraggedIndex(null)}
+        onDragEnd={() => setDraggedIndex(null)}
+        className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-red-200 active:cursor-grabbing"
+      >
+        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+          <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
+          <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
+            <PanelTop className="h-16 w-16" aria-hidden="true" />
           </div>
         </div>
-
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">PPT to PDF</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Convert PPTX slides into PDF with basic layout preservation. No login required.</p>
-            </div>
-            <FileText className="h-6 w-6 text-[#FF2D2D]" aria-hidden="true" />
+        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black text-slate-950">{powerPointFile.name}</p>
+            <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(powerPointFile.size)} KB</p>
           </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              removeFile(index);
+            }}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
+            aria-label={`Remove ${powerPointFile.name}`}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </article>
+    );
+  }
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected file</p>
-            <p className="mt-2 break-words text-sm font-black text-slate-950">{file?.name || "No PowerPoint uploaded"}</p>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {file ? `${formatKb(file.size)} KB` : "No file selected"}</p>
+  function renderProcessingCard() {
+    return (
+      <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
+            <Loader2 className="h-8 w-8 animate-spin" aria-hidden="true" />
           </div>
-
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-            PPTX works best in-browser. Legacy .ppt files may need to be saved as .pptx first.
+          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Converting your PowerPoint...</h3>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Please wait while we create the PDF file.</p>
+          <p className="mt-2 truncate text-xs font-bold text-slate-400">{status}</p>
+          <div className="mt-6 h-4 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
-
-          <div className="mt-5">
-            <div className="flex items-center justify-between gap-3 text-sm font-bold text-slate-700">
-              <span>{status}</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => void convertToPdf()}
-              disabled={isProcessing}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
-            >
-              {isProcessing ? "Converting..." : "Convert to PDF"}
-              <PanelTop className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={resetTool}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
-            >
-              Clear
-              <RotateCcw className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
-
-          {result && (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-black text-slate-950">PDF ready: {result.sizeKb.toFixed(1)} KB</p>
-              <p className="mt-1 text-sm font-bold text-slate-500">Converted {result.slideCount} slide{result.slideCount === 1 ? "" : "s"}.</p>
-              <a
-                href={result.url}
-                download={`${cleanFileName(file?.name || "PDFRoot")}.pdf`}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
-              >
-                Download PDF
-                <Download className="h-5 w-5" aria-hidden="true" />
-              </a>
-            </div>
-          )}
+          <p className="mt-3 text-sm font-black text-slate-700">{progress}%</p>
         </div>
       </div>
+    );
+  }
+
+  function renderSuccessCard() {
+    const downloadName = result?.isZip ? "PDFRoot-pdf-files.zip" : `${cleanFileName(files[0]?.name || "PDFRoot")}.pdf`;
+
+    return (
+      <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+          </div>
+          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your PDF file is ready!</h3>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${result.sizeKb.toFixed(1)} KB - ${result.slideCount} slides` : "Ready"}
+          </p>
+          {result && (
+            <a href={result.url} download={downloadName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
+              {result.isZip ? "Download ZIP" : "Download PDF"}
+              <Download className="h-5 w-5" aria-hidden="true" />
+            </a>
+          )}
+          <button type="button" onClick={resetTool} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]">
+            Convert another PowerPoint
+            <RotateCcw className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderPowerPointNotice() {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-snug text-amber-800 xl:w-[24rem]">
+        PPTX works best in-browser. Legacy .ppt files may need to be saved as .pptx first.
+      </div>
+    );
+  }
+
+  function renderWorkspace() {
+    return (
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+        <div className="transition duration-300">
+          {workflowStep === "arrange" && (
+            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+              {files.map((powerPointFile, index) => (
+                <div key={`${powerPointFile.name}-${powerPointFile.size}-${powerPointFile.lastModified}-${index}`}>{renderPowerPointCard(powerPointFile, index)}</div>
+              ))}
+            </div>
+          )}
+          {workflowStep === "convert" && renderProcessingCard()}
+          {workflowStep === "download" && renderSuccessCard()}
+        </div>
+      </div>
+    );
+  }
+
+  function renderBottomActionBar() {
+    return (
+      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
+            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
+            {renderPowerPointNotice()}
+          </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
+          <div className="min-w-0 xl:ml-auto">
+            <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+              <label htmlFor="powerpoint-pdf-workspace-upload" aria-label="Add PowerPoint files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
+                <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
+                <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+              </label>
+              <button type="button" onClick={() => void convertToPdf()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
+                {isProcessing ? "Converting..." : "Convert to PDF"}
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+                Clear all
+                <RotateCcw className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      data-v0-managed-flow="true"
+      data-merge-pdf-workspace={files.length > 0 ? "true" : undefined}
+      id="powerpoint-to-pdf-tool"
+      className={`mx-auto mt-6 max-w-full text-left ${
+        files.length > 0 ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+      }`}
+    >
+      {files.length > 0 ? (
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+          <input id="powerpoint-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept={POWERPOINT_ACCEPT} multiple onChange={onInputChange} />
+          {renderWorkspace()}
+          {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+        </div>
+      ) : (
+        <>
+          {renderUploadBox()}
+          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+        </>
+      )}
     </section>
   );
 }

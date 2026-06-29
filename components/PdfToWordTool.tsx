@@ -528,10 +528,10 @@ export function PdfToWordTool() {
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-              <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
+              <label htmlFor="pdf-word-workspace-upload" aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
                 <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-              </button>
+              </label>
               <button type="button" onClick={() => void convertToWord()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
                 {isProcessing ? "Converting..." : "Convert to Word"}
                 <FileType2 className="h-5 w-5" aria-hidden="true" />
@@ -558,7 +558,7 @@ export function PdfToWordTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="pdf-word-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>

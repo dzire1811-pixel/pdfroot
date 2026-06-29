@@ -93,7 +93,7 @@ export function PdfToExcelTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("Upload a PDF file to extract tables into Excel.");
+  const [status, setStatus] = useState("Upload a PDF file to convert into editable Excel.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -133,7 +133,7 @@ export function PdfToExcelTool() {
     });
     setError(null);
     setProgress(0);
-    setStatus("Upload a PDF file to extract tables into Excel.");
+    setStatus("Upload a PDF file to convert into editable Excel.");
     setIsProcessing(false);
     setWorkflowStep("arrange");
     setDraggedIndex(null);
@@ -151,7 +151,7 @@ export function PdfToExcelTool() {
     setError(null);
     setProgress(0);
     setWorkflowStep("arrange");
-    setStatus(files.length <= 1 ? "Upload a PDF file to extract tables into Excel." : "PDF removed. Convert when ready.");
+    setStatus(files.length <= 1 ? "Upload a PDF file to convert into editable Excel." : "PDF removed. Convert when ready.");
   }
 
   function selectFiles(nextFiles: File[]) {
@@ -198,7 +198,6 @@ export function PdfToExcelTool() {
     scrollToolStageIntoView();
 
     try {
-      setStatus("Reading PDF tables...");
       const [pdfjsLib, xlsx] = await Promise.all([loadPdfJs(), import("xlsx")]);
       const convertedFiles: Array<{ fileName: string; blob: Blob }> = [];
       let totalTables = 0;
@@ -206,6 +205,7 @@ export function PdfToExcelTool() {
 
       for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
         const currentFile = files[fileIndex];
+        setStatus(`Reading ${currentFile.name}...`);
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await currentFile.arrayBuffer()) }).promise;
         const workbook = xlsx.utils.book_new();
         let tableCount = 0;
@@ -232,7 +232,7 @@ export function PdfToExcelTool() {
         }
 
         if (!tableCount) {
-          throw new Error(`${currentFile.name} has no readable table data. Scanned PDFs may need OCR first.`);
+          throw new Error(`${currentFile.name} has no readable text. Scanned image PDFs may need OCR.`);
         }
 
         setStatus(`Creating Excel file for ${currentFile.name}...`);
@@ -266,7 +266,7 @@ export function PdfToExcelTool() {
         isZip: convertedFiles.length > 1,
       });
       setProgress(100);
-      setStatus("Excel file generated. Complex layouts may need manual adjustment.");
+      setStatus("Basic editable Excel file generated. Complex layouts may not be fully preserved.");
       setWorkflowStep("download");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not convert this PDF to Excel. Please try another file.");
@@ -386,7 +386,7 @@ export function PdfToExcelTool() {
           <FileSpreadsheet className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
         <span className="sr-only">Drag and drop PDF</span>
-        <span className="sr-only">Upload PDF files and extract table-like data into XLSX sheets.</span>
+        <span className="sr-only">Upload PDF files and convert readable content into Excel.</span>
         <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
           Choose PDF
           <UploadCloud className="h-5 w-5" aria-hidden="true" />
@@ -496,7 +496,7 @@ export function PdfToExcelTool() {
   function renderExcelNotice() {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-snug text-amber-800 xl:w-[24rem]">
-        Excel file generated. Complex layouts may need manual adjustment.
+        Basic editable Excel file generated. Complex layouts may not be fully preserved.
       </div>
     );
   }
@@ -530,10 +530,10 @@ export function PdfToExcelTool() {
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-              <button type="button" onClick={() => fileInputRef.current?.click()} aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
+              <label htmlFor="pdf-excel-workspace-upload" aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
                 <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-              </button>
+              </label>
               <button type="button" onClick={() => void convertToExcel()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
                 {isProcessing ? "Converting..." : "Convert to Excel"}
                 <FileSpreadsheet className="h-5 w-5" aria-hidden="true" />
@@ -560,7 +560,7 @@ export function PdfToExcelTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="pdf-excel-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>
