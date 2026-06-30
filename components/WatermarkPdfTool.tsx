@@ -2,18 +2,18 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, CSSProperties, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, Image as ImageIcon, Loader2, Plus, RotateCcw, Stamp, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, RotateCcw, Stamp, Trash2, UploadCloud } from "lucide-react";
 import JSZip from "jszip";
-import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type WatermarkType = "text" | "image";
 type WatermarkPosition = "center" | "top" | "bottom" | "left" | "right";
 type WorkflowStep = "settings" | "process" | "download";
 
+const CARD_DRAG_TYPE = "application/x-pdfroot-watermark-card";
+
 type WatermarkResult = {
   url: string;
   sizeKb: number;
-  previewUrl: string | null;
   fileCount: number;
   downloadName: string;
   downloadLabel: string;
@@ -71,6 +71,7 @@ export function WatermarkPdfTool() {
   const [imageWatermarkPreviewUrl, setImageWatermarkPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload a PDF and choose watermark settings.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("settings");
@@ -84,6 +85,7 @@ export function WatermarkPdfTool() {
   const resultRef = useRef<WatermarkResult | null>(null);
   const sourcePreviewUrlsRef = useRef<string[]>([]);
   const imageWatermarkPreviewRef = useRef<string | null>(null);
+  const draggedIndexRef = useRef<number | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
@@ -102,7 +104,6 @@ export function WatermarkPdfTool() {
 
   function clearResult() {
     if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
-    if (resultRef.current?.previewUrl) URL.revokeObjectURL(resultRef.current.previewUrl);
     setResult(null);
     resultRef.current = null;
   }
@@ -121,6 +122,11 @@ export function WatermarkPdfTool() {
     setImageWatermarkPreviewUrl(null);
   }
 
+  function setActiveDraggedIndex(index: number | null) {
+    draggedIndexRef.current = index;
+    setDraggedIndex(index);
+  }
+
   function resetTool() {
     clearResult();
     clearSourcePreviews();
@@ -135,6 +141,7 @@ export function WatermarkPdfTool() {
     setImageFile(null);
     setError(null);
     setIsDragging(false);
+    setActiveDraggedIndex(null);
     setProgress(0);
     setWorkflowStep("settings");
     setStatus("Upload a PDF and choose watermark settings.");
@@ -145,6 +152,7 @@ export function WatermarkPdfTool() {
     clearResult();
     setProgress(0);
     setWorkflowStep("settings");
+    setActiveDraggedIndex(null);
     setFiles((current) => current.filter((_, index) => index !== indexToRemove));
     setSourcePreviewUrls((current) => {
       const next = [...current];
@@ -212,6 +220,10 @@ export function WatermarkPdfTool() {
     return Array.from(event.dataTransfer.types).includes("Files");
   }
 
+  function hasDraggedCard(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes(CARD_DRAG_TYPE);
+  }
+
   function onFileDragOver(event: DragEvent<HTMLElement>) {
     if (!hasDraggedFiles(event)) return;
     event.preventDefault();
@@ -240,29 +252,6 @@ export function WatermarkPdfTool() {
     return null;
   }
 
-  async function renderFirstPagePreview(pdfBytes: Uint8Array) {
-    try {
-      const pdfjsLib = await loadPdfJs();
-      const loadingTask = pdfjsLib.getDocument({ data: pdfBytes.slice().buffer });
-      const pdf = await loadingTask.promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 0.45 });
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d", { alpha: false });
-      if (!context) return null;
-
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      await page.render({ canvas, canvasContext: context, viewport }).promise;
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
-      return blob ? URL.createObjectURL(blob) : null;
-    } catch {
-      return null;
-    }
-  }
-
   async function addWatermark() {
     const validationError = validateForm();
     if (validationError) {
@@ -281,7 +270,6 @@ export function WatermarkPdfTool() {
     try {
       const { PDFDocument, StandardFonts, rgb, degrees } = await import("pdf-lib");
       const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
-      let firstPreviewUrl: string | null = null;
 
       for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
         const currentFile = files[fileIndex];
@@ -339,7 +327,6 @@ export function WatermarkPdfTool() {
           name: `${cleanFileName(currentFile.name)}-watermarked.pdf`,
           bytes: outputBytes,
         });
-        if (!firstPreviewUrl) firstPreviewUrl = await renderFirstPagePreview(outputBytes);
         setProgress(Math.min(90, 20 + Math.round(((fileIndex + 1) / files.length) * 65)));
       }
 
@@ -356,7 +343,6 @@ export function WatermarkPdfTool() {
       setResult({
         url: URL.createObjectURL(blob),
         sizeKb: blob.size / 1024,
-        previewUrl: firstPreviewUrl,
         fileCount: outputFiles.length,
         downloadName: outputFiles.length === 1 ? outputFiles[0].name : "PDFRoot-watermarked-pdfs.zip",
         downloadLabel: outputFiles.length === 1 ? "Download PDF" : "Download ZIP",
@@ -383,7 +369,6 @@ export function WatermarkPdfTool() {
   useEffect(() => {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
-      if (resultRef.current?.previewUrl) URL.revokeObjectURL(resultRef.current.previewUrl);
       sourcePreviewUrlsRef.current.forEach((url) => {
         if (url) URL.revokeObjectURL(url);
       });
@@ -439,6 +424,39 @@ export function WatermarkPdfTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [files.length, workflowStep]);
+
+  function reorderByDragEnter(targetIndex: number) {
+    const fromIndex = draggedIndexRef.current;
+    if (fromIndex === null || fromIndex === targetIndex) return;
+
+    setError(null);
+    clearResult();
+    setFiles((current) => {
+      if (fromIndex < 0 || targetIndex < 0 || fromIndex >= current.length || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      const [draggedFile] = next.splice(fromIndex, 1);
+      next.splice(targetIndex, 0, draggedFile);
+      setActiveDraggedIndex(targetIndex);
+      return next;
+    });
+    setSourcePreviewUrls((current) => {
+      if (fromIndex < 0 || targetIndex < 0 || fromIndex >= current.length || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      const [draggedUrl] = next.splice(fromIndex, 1);
+      next.splice(targetIndex, 0, draggedUrl);
+      sourcePreviewUrlsRef.current = next;
+      return next;
+    });
+    setProgress(0);
+    setWorkflowStep("settings");
+    setStatus("Order updated. Choose watermark settings and add watermark.");
+  }
 
   function renderUploadBox() {
     return (
@@ -538,13 +556,67 @@ export function WatermarkPdfTool() {
 
   function renderFileCard(pdfFile: File, index: number) {
     const sourcePreviewUrl = sourcePreviewUrls[index];
+    const isCardDragging = draggedIndex !== null;
+
+    function startCardDrag(event: DragEvent<HTMLElement>) {
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest("[data-no-card-drag='true']")) {
+        event.preventDefault();
+        return;
+      }
+
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(CARD_DRAG_TYPE, String(index));
+      setActiveDraggedIndex(index);
+    }
+
+    function onCardDragOver(event: DragEvent<HTMLElement>) {
+      if (hasDraggedFiles(event)) return;
+      if (!hasDraggedCard(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    }
+
+    function onCardDragEnter(event: DragEvent<HTMLElement>) {
+      if (hasDraggedFiles(event) || !hasDraggedCard(event)) return;
+      event.preventDefault();
+      reorderByDragEnter(index);
+    }
+
+    function onCardDrop(event: DragEvent<HTMLElement>) {
+      if (hasDraggedFiles(event)) return;
+      if (!hasDraggedCard(event)) return;
+      event.preventDefault();
+      setActiveDraggedIndex(null);
+    }
 
     return (
-      <article className="group relative flex w-full max-w-sm min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md">
+      <article
+        draggable
+        onDragStart={startCardDrag}
+        onDragEnd={() => setActiveDraggedIndex(null)}
+        onDragOver={onCardDragOver}
+        onDragEnter={onCardDragEnter}
+        onDrop={onCardDrop}
+        className={`group relative flex h-full w-full max-w-sm min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
+          draggedIndex === index ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
+        }`}
+      >
         <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
             {index + 1}
           </span>
+          <button
+            type="button"
+            draggable
+            onDragStart={startCardDrag}
+            onDragEnd={() => setActiveDraggedIndex(null)}
+            className="absolute right-2 top-2 z-30 grid h-8 w-8 cursor-grab place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm transition hover:text-[#FF2D2D] active:cursor-grabbing"
+            aria-label={`Drag ${pdfFile.name} to reorder`}
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </button>
           {sourcePreviewUrl ? (
             <div className="relative grid h-full w-full place-items-center overflow-hidden bg-white">
               <object data={`${sourcePreviewUrl}#toolbar=0&navpanes=0`} type="application/pdf" className="h-full w-full touch-pan-y overflow-auto bg-white">
@@ -572,6 +644,16 @@ export function WatermarkPdfTool() {
               {renderLiveWatermarkOverlay()}
             </div>
           )}
+          <div
+            className={`absolute inset-y-0 left-0 right-3 z-20 cursor-grab ${isCardDragging ? "" : "active:cursor-grabbing"}`}
+            draggable
+            onDragStart={startCardDrag}
+            onDragOver={onCardDragOver}
+            onDragEnter={onCardDragEnter}
+            onDrop={onCardDrop}
+            onDragEnd={() => setActiveDraggedIndex(null)}
+            aria-hidden="true"
+          />
         </div>
         <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0">
@@ -580,7 +662,13 @@ export function WatermarkPdfTool() {
           </div>
           <button
             type="button"
-            onClick={() => removeFile(index)}
+            draggable={false}
+            data-no-card-drag="true"
+            onDragStart={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.stopPropagation();
+              removeFile(index);
+            }}
             className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
             aria-label={`Remove ${pdfFile.name}`}
           >
@@ -621,11 +709,6 @@ export function WatermarkPdfTool() {
           <p className="mt-2 text-sm font-semibold text-slate-500">
             {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${formatResultSize(result.sizeKb)}` : "Ready"}
           </p>
-          {result?.previewUrl && (
-            <div className="mx-auto mt-5 grid max-h-80 max-w-xs place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <img src={result.previewUrl} alt="Watermarked PDF first page preview" className="max-h-72 max-w-full rounded-lg object-contain shadow-sm" />
-            </div>
-          )}
           {result && (
             <a
               href={result.url}
@@ -656,7 +739,7 @@ export function WatermarkPdfTool() {
           {workflowStep === "settings" && (
             <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {files.map((pdfFile, index) => (
-                <div key={`${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderFileCard(pdfFile, index)}</div>
+                <div key={sourcePreviewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderFileCard(pdfFile, index)}</div>
               ))}
             </div>
           )}
