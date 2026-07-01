@@ -159,10 +159,31 @@ export function PdfToJpgTool() {
     event.target.value = "";
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function onFileDragOver(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragging(true);
+  }
+
+  function onFileDragLeave(event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
     setIsDragging(false);
-    selectFiles(Array.from(event.dataTransfer.files));
+  }
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    if (event.dataTransfer.files.length) {
+      selectFiles(Array.from(event.dataTransfer.files));
+    }
   }
 
   async function convertPdf() {
@@ -342,11 +363,8 @@ export function PdfToJpgTool() {
       <label
         data-primary-upload="true"
         htmlFor="pdf-jpg-upload"
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
+        onDragOver={onFileDragOver}
+        onDragLeave={onFileDragLeave}
         onDrop={onDrop}
         className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
@@ -558,6 +576,9 @@ export function PdfToJpgTool() {
       data-v0-managed-flow="true"
       data-merge-pdf-workspace={files.length > 0 ? "true" : undefined}
       id="pdf-to-jpg-tool"
+      onDragOver={onFileDragOver}
+      onDragLeave={onFileDragLeave}
+      onDrop={onDrop}
       className={`mx-auto mt-6 max-w-full text-left ${
         files.length > 0 ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}

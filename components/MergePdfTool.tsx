@@ -129,6 +129,7 @@ export function MergePdfTool() {
     setWorkflowStep("arrange");
     setStatus("PDF files added. Arrange the order, then merge.");
     setProgress(0);
+    scrollToolStageIntoView();
 
     newItems.forEach((item) => {
       void renderFirstPageThumbnail(item.file)
@@ -161,8 +162,27 @@ export function MergePdfTool() {
     event.target.value = "";
   }
 
-  function onUploadDrop(event: DragEvent<HTMLLabelElement>) {
+  function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function onFileDragOver(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDraggingUpload(true);
+  }
+
+  function onFileDragLeave(event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setIsDraggingUpload(false);
+  }
+
+  function onUploadDrop(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
     setIsDraggingUpload(false);
     if (event.dataTransfer.files.length) {
       addFiles(event.dataTransfer.files);
@@ -356,11 +376,8 @@ export function MergePdfTool() {
       <label
         data-primary-upload="true"
         htmlFor="merge-pdf-upload"
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDraggingUpload(true);
-        }}
-        onDragLeave={() => setIsDraggingUpload(false)}
+        onDragOver={onFileDragOver}
+        onDragLeave={onFileDragLeave}
         onDrop={onUploadDrop}
         className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
           isDraggingUpload ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
@@ -472,7 +489,7 @@ export function MergePdfTool() {
         <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onAddMoreInputChange} />
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid grid-cols-2 items-start gap-4 sm:gap-5 md:grid-cols-3 xl:grid-cols-6 2xl:grid-cols-8">
+            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {items.map((item, index) => (
                 <article
                   key={item.id}
@@ -561,9 +578,19 @@ export function MergePdfTool() {
   }
 
   return (
-    <section data-v0-managed-flow="true" data-merge-pdf-workspace={items.length ? "true" : undefined} id="merge-pdf-tool" className={`mx-auto mt-6 max-w-full text-left ${items.length ? "w-screen border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"}`}>
+    <section
+      data-v0-managed-flow="true"
+      data-merge-pdf-workspace={items.length ? "true" : undefined}
+      id="merge-pdf-tool"
+      onDragOver={onFileDragOver}
+      onDragLeave={onFileDragLeave}
+      onDrop={onUploadDrop}
+      className={`mx-auto mt-6 max-w-full text-left ${
+        items.length ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+      }`}
+    >
       {items.length ? (
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDraggingUpload ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>
