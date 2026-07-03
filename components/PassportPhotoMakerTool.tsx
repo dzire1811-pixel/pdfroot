@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { IdCard, ImageUp, Sparkles, RotateCcw } from "lucide-react";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -365,10 +365,9 @@ export function PassportPhotoMakerTool() {
     );
   }
 
-  return (
-    <section ref={toolSectionRef} id="passport-photo-maker-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-        <div>
+  if (!file) {
+    return (
+      <section ref={toolSectionRef} id="passport-photo-maker-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
           <ImageUploadBox
             id="passport-photo-upload"
             inputRef={fileInputRef}
@@ -385,17 +384,28 @@ export function PassportPhotoMakerTool() {
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
           />
+          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+      </section>
+    );
+  }
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {["Passport Crop", "Background", "Target KB"].map((label) => (
-              <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+  return (
+    <ImagePreviewWorkspace
+      id="passport-photo-maker-tool"
+      sectionRef={(node) => {
+        toolSectionRef.current = node;
+      }}
+      preview={sourceUrl ? <img src={sourceUrl} alt="Uploaded passport photo preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" /> : null}
+      fileName={file.name}
+      fileMeta={sourceSize}
+      status={`${status} ${progress}%`}
+      error={error}
+      actionLabel={isProcessing ? "Creating..." : "Create Passport Photo"}
+      actionIcon={<IdCard className="h-5 w-5" aria-hidden="true" />}
+      onAction={() => void createPassportPhoto()}
+      actionDisabled={isProcessing}
+      onReset={resetTool}
+    >
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">Passport Photo Maker</h2>
@@ -550,56 +560,21 @@ export function PassportPhotoMakerTool() {
           </div>
 
           <div className="mt-5">
-            <div className="flex items-center justify-between gap-3 text-sm font-bold text-slate-700">
-              <span>{status}</span>
-              <span>{progress}%</span>
-            </div>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
               <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
 
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => void createPassportPhoto()}
-              disabled={isProcessing}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
-            >
-              {isProcessing ? "Creating..." : "Create Passport Photo"}
-              <IdCard className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               onClick={resetTool}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
             >
               Clear
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
-        </div>
-      </div>
-
-      {sourceUrl && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">Original Preview</h3>
-            <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-              {sourceUrl ? <img src={sourceUrl} alt="Original passport photo preview" className="max-h-96 max-w-full object-contain" /> : null}
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">Passport Photo Preview</h3>
-            <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-              <p className="px-6 text-center text-sm font-semibold text-slate-500">Preview will appear after creating passport photo.</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+    </ImagePreviewWorkspace>
   );
 }

@@ -469,9 +469,10 @@ export function CompressPdfTool() {
 
   function renderCompressionOptions() {
     return (
-      <div className="grid min-w-0 gap-2 sm:grid-cols-3 xl:w-[42rem]">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
         {compressionOptions.map((option) => {
           const selected = level === option.id;
+          const label = option.id.charAt(0).toUpperCase() + option.id.slice(1);
           return (
             <button
               key={option.id}
@@ -482,17 +483,11 @@ export function CompressPdfTool() {
                 setProgress(0);
                 setStatus("Compression level selected. Click Compress PDF.");
               }}
-              className={`flex min-h-12 items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left transition ${
-                selected ? "border-[#FF2D2D] shadow-[0_16px_35px_rgba(255,45,45,0.14)]" : "border-slate-200 hover:border-red-200"
+              className={`inline-flex h-10 items-center justify-center rounded-xl border px-3 text-xs font-black transition ${
+                selected ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.2)]" : "border-red-200 bg-red-50 text-[#FF2D2D] hover:border-[#FF2D2D]"
               }`}
             >
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border ${selected ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-300 text-transparent"}`}>
-                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-black text-slate-950">{option.title}</span>
-                <span className="mt-0.5 block text-[0.68rem] font-semibold leading-snug text-slate-500">{option.description}</span>
-              </span>
+              {label}
             </button>
           );
         })}
@@ -520,7 +515,7 @@ export function CompressPdfTool() {
 
   function renderBottomActionBar() {
     return (
-      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+      <div ref={actionBarRef} data-merge-action-bar="true" data-compress-pdf-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
             <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
@@ -557,11 +552,11 @@ export function CompressPdfTool() {
       onDragLeave={onFileDragLeave}
       onDrop={onDrop}
       className={`mx-auto mt-6 max-w-full text-left ${
-        files.length > 0 ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+        files.length > 0 ? "w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 pb-32 shadow-none sm:pb-28" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}
     >
       {files.length > 0 ? (
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100 transition">
           <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}

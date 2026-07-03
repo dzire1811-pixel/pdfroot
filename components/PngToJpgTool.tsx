@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { Download, RefreshCw } from "lucide-react";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { RefreshCw } from "lucide-react";
+import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type ConvertResult = {
   url: string;
@@ -194,10 +194,8 @@ export function PngToJpgTool() {
         />
       )}
 
-      {stage !== "processing" && stage !== "success" && (
-    <section ref={toolSectionRef} id="png-to-jpg-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-        <div>
+      {stage === "upload" && (
+    <section ref={toolSectionRef} id="png-to-jpg-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
           <ImageUploadBox
             id="png-to-jpg-upload"
             inputRef={fileInputRef}
@@ -214,17 +212,27 @@ export function PngToJpgTool() {
             onDragLeave={() => setIsDragging(false)}
             onDrop={onDrop}
           />
+          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+    </section>
+      )}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {["Secure Files", "Fast Processing", "Instant Download"].map((label) => (
-              <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+      {stage === "workspace" && sourceUrl && (
+        <ImagePreviewWorkspace
+          id="png-to-jpg-tool"
+          sectionRef={(node) => {
+            toolSectionRef.current = node;
+          }}
+          preview={<img src={sourceUrl} alt="Uploaded PNG preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" />}
+          fileName={file?.name}
+          fileMeta={sourceSize}
+          status={status}
+          error={error}
+          actionLabel={isProcessing ? "Processing..." : "Convert to JPG"}
+          actionIcon={<RefreshCw className={`h-5 w-5 ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />}
+          onAction={() => void convertToJpg()}
+          actionDisabled={!file || isProcessing}
+          onReset={resetTool}
+        >
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">PNG to JPG</h2>
@@ -236,58 +244,9 @@ export function PngToJpgTool() {
           <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected image</p>
             <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No PNG uploaded"}</p>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
-          </div>
-
-          <p className="mt-5 text-sm font-bold text-slate-600">{status}</p>
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
-          <button
-            type="button"
-            onClick={() => void convertToJpg()}
-            disabled={!file || isProcessing}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isProcessing ? "Processing..." : "Convert to JPG"}
-            <RefreshCw className={`h-5 w-5 ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />
-          </button>
-
-          {result && (
-            <a href={result.url} download={result.fileName} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-              Download JPG ({result.sizeKb.toFixed(1)} KB)
-              <Download className="h-5 w-5" aria-hidden="true" />
-            </a>
-          )}
-        </div>
-      </div>
-
-      {(sourceUrl || result) && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-2">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">PNG Preview</h3>
-            <div className="mt-3 grid min-h-64 place-items-center overflow-hidden rounded-2xl bg-white">
-              {sourceUrl ? <img src={sourceUrl} alt="Original PNG preview" className="max-h-80 max-w-full object-contain" /> : null}
+              <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
             </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">JPG Preview</h3>
-            <div className="mt-3 grid min-h-64 place-items-center overflow-hidden rounded-2xl bg-white">
-              {result ? (
-                <img src={result.url} alt="Converted JPG preview" className="max-h-80 max-w-full object-contain" />
-              ) : (
-                <p className="px-6 text-center text-sm font-semibold text-slate-500">JPG preview will appear after conversion.</p>
-              )}
-            </div>
-            {result && (
-              <p className="mt-3 text-sm font-semibold text-slate-500">
-                Dimensions: {result.width} x {result.height}px
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-    </section>
+        </ImagePreviewWorkspace>
       )}
     </>
   );

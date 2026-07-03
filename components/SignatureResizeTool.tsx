@@ -2,8 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ImageUp, PenLine, RotateCcw, UploadCloud } from "lucide-react";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ImageUp, PenLine, RotateCcw } from "lucide-react";
+import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -331,44 +331,47 @@ export function SignatureResizeTool() {
     );
   }
 
+  if (!file) {
+    return (
+      <section ref={toolSectionRef} id="signature-resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+        <ImageUploadBox
+          id="signature-upload"
+          inputRef={fileInputRef}
+          accept="image/jpeg,image/png,image/webp"
+          isDragging={isDragging}
+          title="Drag & Drop Signature"
+          description="Upload JPG, JPEG, PNG, or WEBP signature image for online forms and applications."
+          buttonText="Choose Signature"
+          onChange={onInputChange}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={onDrop}
+        />
+        {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+      </section>
+    );
+  }
+
   return (
-    <section ref={toolSectionRef} id="signature-resize-tool" className="mx-auto mt-6 max-w-5xl rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-      <div className="grid gap-6 lg:grid-cols-[1fr_0.85fr]">
-        <div>
-          <label
-            htmlFor="signature-upload"
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-            className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-              isDragging ? "border-[#FF2D2D] bg-red-50" : "border-red-200 bg-red-50/40 hover:border-[#FF2D2D] hover:bg-red-50"
-            }`}
-          >
-            <input id="signature-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={onInputChange} />
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-white text-[#FF2D2D] shadow-[0_12px_35px_rgba(255,45,45,0.16)] transition group-hover:scale-105 group-hover:bg-[#FF2D2D] group-hover:text-white">
-              <PenLine className="h-9 w-9" aria-hidden="true" />
-            </span>
-            <span className="mt-5 text-xl font-black text-slate-950">Drag & Drop Signature</span>
-            <span className="mt-2 max-w-md text-sm leading-6 text-slate-600">Upload JPG, JPEG, or PNG signature image for online forms and applications.</span>
-            <span className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)]">
-              Choose Signature
-              <UploadCloud className="h-5 w-5" aria-hidden="true" />
-            </span>
-          </label>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {["Auto Crop", "Exact Pixels", "Target KB"].map((label) => (
-              <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm font-bold text-slate-700">
-                {label}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+    <ImagePreviewWorkspace
+      id="signature-resize-tool"
+      sectionRef={(node) => {
+        toolSectionRef.current = node;
+      }}
+      preview={sourceUrl ? <img src={sourceUrl} alt="Uploaded signature preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" /> : null}
+      fileName={file.name}
+      fileMeta={sourceSize}
+      status={`${status} ${progress}%`}
+      error={error}
+      actionLabel={isProcessing ? "Resizing..." : "Resize Signature"}
+      actionIcon={<PenLine className="h-5 w-5" aria-hidden="true" />}
+      onAction={() => void resizeSignature()}
+      actionDisabled={isProcessing}
+      onReset={resetTool}
+    >
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">Signature Resize</h2>
@@ -462,49 +465,21 @@ export function SignatureResizeTool() {
           </label>
 
           <div className="mt-5">
-            <div className="flex items-center justify-between gap-3 text-sm font-bold text-slate-700">
-              <span>{status}</span>
-              <span>{progress}%</span>
-            </div>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
               <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
 
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() => void resizeSignature()}
-              disabled={isProcessing}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
-            >
-              {isProcessing ? "Resizing..." : "Resize Signature"}
-              <PenLine className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               onClick={resetTool}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-6 py-4 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
             >
               Clear
               <RotateCcw className="h-5 w-5" aria-hidden="true" />
             </button>
           </div>
-        </div>
-      </div>
-
-      {sourceUrl && (
-        <div className="mt-6">
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-            <h3 className="text-base font-black text-slate-950">Original Preview</h3>
-            <div className="mt-3 grid min-h-48 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-              {sourceUrl ? <img src={sourceUrl} alt="Original signature preview" className="max-h-64 max-w-full object-contain" /> : null}
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
+    </ImagePreviewWorkspace>
   );
 }

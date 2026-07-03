@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, DragEvent, ReactNode, RefObject, useEffect } from "react";
-import { CheckCircle2, Download, ImageUp, RefreshCw, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, ImageUp, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
 
 export type ImageWorkflowStage = "upload" | "workspace" | "processing" | "success";
 
@@ -204,6 +204,103 @@ export function ImageSuccessScreen({
         <button type="button" onClick={onReset} className="mt-3 inline-flex items-center justify-center border-0 bg-transparent px-2 py-1 text-sm font-black text-[#FF2D2D] transition hover:text-red-700">
           Resize Another Image
         </button>
+      </div>
+    </section>
+  );
+}
+
+export function ImagePreviewWorkspace({
+  id,
+  sectionRef,
+  preview,
+  previewLabel = "Uploaded image preview",
+  fileName,
+  fileMeta,
+  status,
+  error,
+  children,
+  actionLabel,
+  actionIcon,
+  onAction,
+  actionDisabled = false,
+  onReset,
+  resetLabel = "Change image",
+}: {
+  id: string;
+  sectionRef: (node: HTMLElement | null) => void;
+  preview: ReactNode;
+  previewLabel?: string;
+  fileName?: string;
+  fileMeta?: string;
+  status?: string;
+  error?: string | null;
+  children: ReactNode;
+  actionLabel: string;
+  actionIcon?: ReactNode;
+  onAction: () => void;
+  actionDisabled?: boolean;
+  onReset: () => void;
+  resetLabel?: string;
+}) {
+  return (
+    <section
+      ref={sectionRef}
+      data-v0-managed-flow="true"
+      data-image-workspace="true"
+      id={id}
+      className="mx-auto mt-6 w-full max-w-full scroll-mt-32 bg-slate-100 text-left"
+    >
+      <div className="relative min-h-[calc(100vh-9rem)] pb-[11rem] sm:pb-36 lg:pb-28">
+        <div className="mx-auto grid w-full max-w-[1600px] gap-5 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_clamp(20rem,32vw,26rem)] lg:items-start">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-950">Image uploaded and ready</p>
+                {fileName && <p className="mt-1 truncate text-xs font-bold text-slate-500">{fileName}</p>}
+              </div>
+              {fileMeta && <p className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">{fileMeta}</p>}
+            </div>
+            <div className="grid min-h-[min(72vh,42rem)] place-items-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+              <div aria-label={previewLabel} className="grid h-full w-full place-items-center">
+                {preview}
+              </div>
+            </div>
+          </div>
+
+          <aside className="min-w-0 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-[90px] sm:p-5">
+            {children}
+            {status && <p className="mt-5 text-sm font-bold text-slate-600">{status}</p>}
+            {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+          </aside>
+        </div>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black text-slate-950">{fileName ?? "Image ready"}</p>
+            <p className="text-xs font-bold text-slate-500">Review settings, then continue.</p>
+          </div>
+          <div className="grid grid-cols-[minmax(7.5rem,1fr)_auto] gap-2 sm:min-w-[28rem]">
+            <button
+              type="button"
+              onClick={onAction}
+              disabled={actionDisabled}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
+            >
+              {actionLabel}
+              {actionIcon}
+            </button>
+            <button
+              type="button"
+              onClick={onReset}
+              className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
+            >
+              {resetLabel}
+              <RotateCcw className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );

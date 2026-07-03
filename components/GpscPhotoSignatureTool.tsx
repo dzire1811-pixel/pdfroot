@@ -400,22 +400,28 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-          <ImageUploadBox
-            id={`${config.slug}-photo-upload`}
-            inputRef={photoInputRef}
-            accept="image/jpeg,image/png"
-            isDragging={photo.isDragging}
-            title={`Upload ${config.examName} Photo`}
-            description="Auto crop face, resize pixels, add optional date stamp, and compress to exact KB."
-            buttonText="Choose Photo"
-            onChange={(event) => onInputChange("photo", event)}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setPhoto((state) => ({ ...state, isDragging: true }));
-            }}
-            onDragLeave={() => setPhoto((state) => ({ ...state, isDragging: false }))}
-            onDrop={(event) => onDrop("photo", event)}
-          />
+          {!photo.file ? (
+            <ImageUploadBox
+              id={`${config.slug}-photo-upload`}
+              inputRef={photoInputRef}
+              accept="image/jpeg,image/png"
+              isDragging={photo.isDragging}
+              title={`Upload ${config.examName} Photo`}
+              description="Auto crop face, resize pixels, add optional date stamp, and compress to exact KB."
+              buttonText="Choose Photo"
+              onChange={(event) => onInputChange("photo", event)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setPhoto((state) => ({ ...state, isDragging: true }));
+              }}
+              onDragLeave={() => setPhoto((state) => ({ ...state, isDragging: false }))}
+              onDrop={(event) => onDrop("photo", event)}
+            />
+          ) : (
+            <div className="grid min-h-[min(72vh,36rem)] place-items-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+              {photo.sourceUrl && <img src={photo.sourceUrl} alt={`${config.examName} uploaded photo preview`} className="max-h-[min(68vh,34rem)] max-w-full object-contain" />}
+            </div>
+          )}
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected photo</p>
@@ -473,27 +479,33 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
             )}
           </div>
 
-          <ProcessFooter state={photo} buttonLabel={`Create ${config.examName} Photo`} onProcess={() => void processImage("photo")} />
+          <ProcessFooter state={photo} />
           <PreviewPanel state={photo} title={`${config.examName} Photo Preview`} targetKb={photoTargetKb} extra={dateMode === "with" ? `Date stamp: ${previewDate}` : "Date stamp: Without Date"} />
         </div>
 
         <div className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-          <ImageUploadBox
-            id={`${config.slug}-signature-upload`}
-            inputRef={signatureInputRef}
-            accept="image/jpeg,image/png"
-            isDragging={signature.isDragging}
-            title={`Upload ${config.examName} Signature`}
-            description="Resize signature by width, height, and exact KB. JPG, JPEG, and PNG supported."
-            buttonText="Choose Signature"
-            onChange={(event) => onInputChange("signature", event)}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setSignature((state) => ({ ...state, isDragging: true }));
-            }}
-            onDragLeave={() => setSignature((state) => ({ ...state, isDragging: false }))}
-            onDrop={(event) => onDrop("signature", event)}
-          />
+          {!signature.file ? (
+            <ImageUploadBox
+              id={`${config.slug}-signature-upload`}
+              inputRef={signatureInputRef}
+              accept="image/jpeg,image/png"
+              isDragging={signature.isDragging}
+              title={`Upload ${config.examName} Signature`}
+              description="Resize signature by width, height, and exact KB. JPG, JPEG, and PNG supported."
+              buttonText="Choose Signature"
+              onChange={(event) => onInputChange("signature", event)}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setSignature((state) => ({ ...state, isDragging: true }));
+              }}
+              onDragLeave={() => setSignature((state) => ({ ...state, isDragging: false }))}
+              onDrop={(event) => onDrop("signature", event)}
+            />
+          ) : (
+            <div className="grid min-h-[min(72vh,36rem)] place-items-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+              {signature.sourceUrl && <img src={signature.sourceUrl} alt={`${config.examName} uploaded signature preview`} className="max-h-[min(68vh,34rem)] max-w-full object-contain" />}
+            </div>
+          )}
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected signature</p>
@@ -520,10 +532,27 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
           </div>
           <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{config.signaturePresetNote}</p>
 
-          <ProcessFooter state={signature} buttonLabel={`Create ${config.examName} Signature`} onProcess={() => void processImage("signature")} />
+          <ProcessFooter state={signature} />
           <PreviewPanel state={signature} title={`${config.examName} Signature Preview`} targetKb={signatureTargetKb} />
         </div>
       </div>
+      {(photo.file || signature.file) && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <p className="truncate text-sm font-black text-slate-950">{config.examName} images ready</p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[32rem]">
+              <button type="button" onClick={() => void processImage("photo")} disabled={!photo.file || photo.isProcessing || signature.isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14">
+                {photo.isProcessing ? "Processing..." : `Create ${config.examName} Photo`}
+                <Download className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={() => void processImage("signature")} disabled={!signature.file || photo.isProcessing || signature.isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14">
+                {signature.isProcessing ? "Processing..." : `Create ${config.examName} Signature`}
+                <Download className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -584,7 +613,7 @@ function OptionCard({ label, selected, onClick }: { label: string; selected: boo
   );
 }
 
-function ProcessFooter({ state, buttonLabel, onProcess }: { state: WorkspaceState; buttonLabel: string; onProcess: () => void }) {
+function ProcessFooter({ state }: { state: WorkspaceState }) {
   return (
     <>
       <p className="mt-5 text-sm font-bold text-slate-600">{state.status}</p>
@@ -592,15 +621,6 @@ function ProcessFooter({ state, buttonLabel, onProcess }: { state: WorkspaceStat
         <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${state.progress}%` }} />
       </div>
       {state.error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{state.error}</p>}
-      <button
-        type="button"
-        onClick={onProcess}
-        disabled={state.isProcessing}
-        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-      >
-        {state.isProcessing ? "Processing..." : buttonLabel}
-        <Download className="h-5 w-5" aria-hidden="true" />
-      </button>
     </>
   );
 }

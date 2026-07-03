@@ -502,15 +502,6 @@ export function FrontBackCardMergeTool() {
             <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
           {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-          <button
-            type="button"
-            onClick={() => void createOutput()}
-            disabled={isProcessing}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isProcessing ? "Merging..." : "Merge Front & Back"}
-            <Download className="h-5 w-5" aria-hidden="true" />
-          </button>
         </div>
 
         <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.06)] sm:p-6">
@@ -541,6 +532,24 @@ export function FrontBackCardMergeTool() {
           )}
         </div>
       </div>
+      {(front.file || back.file) && !output && (
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="truncate text-sm font-black text-slate-950">
+              {[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}
+            </p>
+            <button
+              type="button"
+              onClick={() => void createOutput()}
+              disabled={isProcessing || !front.file || !back.file}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14 sm:w-auto sm:min-w-[18rem] sm:px-5 sm:text-base"
+            >
+              {isProcessing ? "Merging..." : "Merge Front & Back"}
+              <Download className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

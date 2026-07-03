@@ -824,6 +824,7 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"],
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-compress-image-upload="true"],
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-primary-upload="true"] {
   border-color: color-mix(in oklch, var(--primary-foreground) 70%, transparent) !important;
   background: var(--primary) !important;
@@ -832,12 +833,14 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"] span[class*="bg-white"],
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-compress-image-upload="true"] span[class*="bg-white"],
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-primary-upload="true"] span[class*="bg-white"] {
   background: var(--primary-foreground) !important;
   color: var(--foreground) !important;
 }
 
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-exact-kb-upload="true"]::after,
+.v0-tool-page section[data-v0-managed-flow="true"] label[data-compress-image-upload="true"]::after,
 .v0-tool-page section[data-v0-managed-flow="true"] label[data-primary-upload="true"]::after {
   content: "or drop files here";
   display: block;
@@ -860,12 +863,216 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page .max-w-4xl:has(> section[data-exact-kb-workspace="true"]) {
-  max-width: min(calc(100vw - 3rem), 82rem) !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-crop-image-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-compress-image-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
 }
 
 .v0-tool-page .max-w-4xl:has(> section[data-merge-pdf-workspace="true"]) {
   max-width: none !important;
   width: 100% !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] {
+    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] {
+    padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+  }
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding: clamp(1rem, 2vw, 1.5rem) !important;
+    padding-bottom: 13rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-grid="true"] {
+  padding-bottom: 12rem !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-grid="true"] {
+    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+
+  .v0-tool-page section[data-exact-kb-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] article {
+  padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] article [class*="p-3"] {
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-action-bar="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-area="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-grid="true"] {
+  padding-bottom: 12rem !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-grid="true"] {
+    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+
+  .v0-tool-page section[data-compress-image-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] article {
+  padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] article [class*="p-3"] {
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-action-bar="true"] > div {
+  padding: 0 !important;
 }
 
 .v0-tool-page section[data-merge-pdf-workspace="true"] {

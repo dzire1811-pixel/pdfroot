@@ -4,7 +4,7 @@
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, Download } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { SignatureResizeTool } from "@/components/SignatureResizeTool";
 
 type DateFormat = "slash" | "dash";
@@ -319,9 +319,8 @@ export function OjasPhotoSignatureTool() {
         </div>
       </div>
 
-      <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-          <div>
+      {!file ? (
+        <div className="mt-6 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
             <ImageUploadBox
               id="ojas-photo-upload"
               inputRef={fileInputRef}
@@ -338,14 +337,25 @@ export function OjasPhotoSignatureTool() {
               onDragLeave={() => setIsDragging(false)}
               onDrop={onDrop}
             />
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected file</p>
-              <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No photo uploaded"}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
-            </div>
-          </div>
-
-          <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+            {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+        </div>
+      ) : (
+        <ImagePreviewWorkspace
+          id="ojas-photo-signature-tool"
+          sectionRef={(node) => {
+            toolSectionRef.current = node;
+          }}
+          preview={sourceUrl ? <img src={sourceUrl} alt="Uploaded OJAS photo preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" /> : null}
+          fileName={file.name}
+          fileMeta={sourceSize}
+          status={`${status} ${progress}%`}
+          error={error}
+          actionLabel={isProcessing ? "Processing..." : "Create OJAS Photo"}
+          actionIcon={<Download className="h-5 w-5" aria-hidden="true" />}
+          onAction={() => void createOjasPhoto()}
+          actionDisabled={isProcessing}
+          onReset={resetTool}
+        >
             <div className="flex items-start gap-3">
               <span className="grid h-11 w-11 flex-none place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
                 <CalendarDays className="h-6 w-6" aria-hidden="true" />
@@ -400,35 +410,11 @@ export function OjasPhotoSignatureTool() {
               </div>
             )}
 
-            <p className="mt-4 text-sm font-bold text-slate-600">{status}</p>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
               <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
-            {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
-            <button
-              type="button"
-              onClick={() => void createOjasPhoto()}
-              disabled={isProcessing}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isProcessing ? "Processing..." : "Create OJAS Photo"}
-              <Download className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        {sourceUrl && (
-          <div className="mt-6">
-            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-base font-black text-slate-950">Original Preview</h3>
-              <div className="mt-3 grid min-h-72 place-items-center overflow-hidden rounded-2xl bg-white p-4">
-                {sourceUrl && <img src={sourceUrl} alt="Original OJAS photo preview" className="max-h-96 max-w-full object-contain" />}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        </ImagePreviewWorkspace>
+      )}
 
       <div className="mt-10">
         <div className="mx-auto max-w-4xl text-center">

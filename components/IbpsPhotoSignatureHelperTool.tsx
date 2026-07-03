@@ -4,7 +4,7 @@
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Download, FileImage, Fingerprint, PenLine, ScrollText } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 
 type HelperItem = {
   id: string;
@@ -276,8 +276,56 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
     );
   }
 
+  if (!file) {
+    return (
+      <article ref={toolSectionRef} id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+        <div className="mb-5 flex items-start gap-3">
+          <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
+            <ToolIcon icon={item.icon} />
+          </span>
+          <div>
+            <h3 className="text-xl font-black text-slate-950">{item.title}</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
+          </div>
+        </div>
+        <ImageUploadBox
+          id={`ibps-upload-${item.id}`}
+          inputRef={fileInputRef}
+          accept="image/jpeg,image/png"
+          isDragging={isDragging}
+          title={`Upload ${item.title}`}
+          description="Upload JPG, JPEG, or PNG and prepare it for IBPS upload."
+          buttonText="Choose File"
+          onChange={onInputChange}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={onDrop}
+        />
+        {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+      </article>
+    );
+  }
+
   return (
-    <article ref={toolSectionRef} id={`ibps-${item.id}`} className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+    <ImagePreviewWorkspace
+      id={`ibps-${item.id}`}
+      sectionRef={(node) => {
+        toolSectionRef.current = node;
+      }}
+      preview={sourceUrl ? <img src={sourceUrl} alt={`${item.title} preview`} className="max-h-[min(72vh,40rem)] max-w-full object-contain" /> : null}
+      fileName={file.name}
+      fileMeta={sourceSize}
+      status={status}
+      error={error}
+      actionLabel={isProcessing ? "Processing..." : "Resize & Download"}
+      actionIcon={<Download className="h-5 w-5" aria-hidden="true" />}
+      onAction={() => void resizeImage()}
+      actionDisabled={isProcessing}
+      onReset={resetTool}
+    >
       <div className="flex items-start gap-3">
         <span className="grid h-12 w-12 flex-none place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
           <ToolIcon icon={item.icon} />
@@ -288,32 +336,7 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-        <div>
-          <ImageUploadBox
-            id={`ibps-upload-${item.id}`}
-            inputRef={fileInputRef}
-            accept="image/jpeg,image/png"
-            isDragging={isDragging}
-            title={`Choose ${item.title}`}
-            description="Upload JPG, JPEG, or PNG and prepare it for IBPS upload."
-            buttonText="Upload"
-            onChange={onInputChange}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-          />
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected file</p>
-            <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No image uploaded"}</p>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
-          </div>
-        </div>
-
-        <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+      <div className="mt-5">
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="text-sm font-black text-slate-800">
               Width px
@@ -328,33 +351,8 @@ function IbpsResizeSection({ item }: { item: HelperItem }) {
               <input value={targetKb} type="number" min={5} max={1000} onChange={(event) => { setTargetKb(Number(event.target.value)); clearOutput(); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
             </label>
           </div>
-
-          <p className="mt-4 text-sm font-bold text-slate-600">{status}</p>
-          {error && <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-
-          <button
-            type="button"
-            onClick={() => void resizeImage()}
-            disabled={isProcessing}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FF2D2D] px-6 py-4 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {isProcessing ? "Processing..." : "Resize & Download"}
-            <Download className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
       </div>
-
-      {sourceUrl && (
-        <div className="mt-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-950">Preview</p>
-            <div className="mt-3 grid min-h-44 place-items-center rounded-2xl bg-white p-4">
-              {sourceUrl && <img src={sourceUrl} alt={`${item.title} original preview`} className="max-h-64 max-w-full object-contain" />}
-            </div>
-          </div>
-        </div>
-      )}
-    </article>
+    </ImagePreviewWorkspace>
   );
 }
 
