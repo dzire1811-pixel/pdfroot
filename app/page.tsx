@@ -19,8 +19,8 @@ export const metadata: Metadata = {
     "pdf tools",
     "image tools",
     "resize image to exact kb",
-    "ssc photo resize",
-    "rrb photo resize",
+    "ssc signature resize",
+  "rrb signature resize",
     "passport photo maker",
     "compress pdf",
     "jpg to pdf",
@@ -33,9 +33,9 @@ export const metadata: Metadata = {
 
 const governmentToolNames = [
   "Resize Image to Exact KB",
-  "SSC Photo Resize",
-  "RRB Photo Resize",
-  "IBPS Photo Resize",
+  "SSC Signature Resize Tool",
+  "RRB Signature Resize",
+  "IBPS Photo, Signature, Thumb & Declaration Resize",
   "OJAS Photo Resize",
   "GPSC Photo Resize",
   "UPSC Photo Resize",
@@ -56,14 +56,14 @@ const faqs = [
       "Open Resize Image to Exact KB, upload your photo or signature, enter the target size such as 20KB, 50KB, or 100KB, and download the optimized file.",
   },
   {
-    question: "Can I resize SSC photo and signature online?",
+    question: "Can I resize SSC signatures online?",
     answer:
-      "Yes. PDFRoot provides SSC Photo Resize and signature resize tools for candidates who need form-ready images with strict size limits.",
+      "Yes. PDFRoot provides an SSC Signature Resize Tool for candidates who need JPG/JPEG signatures sized between 10KB and 20KB.",
   },
   {
-    question: "Can I resize photos for RRB railway forms?",
+    question: "Can I resize signatures for RRB railway forms?",
     answer:
-      "Yes. The RRB Photo Resize tool helps prepare photo and signature files for railway recruitment applications.",
+      "Yes. The RRB Signature Resize tool helps prepare JPG/JPEG signatures for railway recruitment applications.",
   },
   {
     question: "Does PDFRoot include a passport photo maker?",

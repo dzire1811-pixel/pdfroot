@@ -13,9 +13,9 @@ const aliases: Record<string, string[]> = {
   "front-back-card-merge": ["aadhaar", "aadhar", "pan", "voter", "driving licence", "driving license", "rc book", "passport card", "atm card", "employee id", "student id"],
   "signature-resize-tool": ["signature kb", "sign resize", "20kb signature", "50kb signature"],
   "resize-image-to-exact-kb": ["exact kb", "20kb", "50kb", "100kb", "photo kb", "government form photo"],
-  "ssc-photo-resize": ["ssc helper", "ssc signature"],
-  "rrb-photo-resize": ["rrb helper", "railway photo"],
-  "ibps-photo-resize": ["ibps helper", "thumb impression", "handwritten declaration"],
+  "ssc-photo-resize": ["ssc helper", "ssc signature", "ssc signature 10kb", "ssc signature 20kb"],
+  "rrb-photo-resize": ["rrb helper", "railway signature", "rrb signature 30kb", "rrb signature 49kb"],
+  "ibps-photo-resize": ["ibps helper", "thumb impression", "handwritten declaration", "ibps declaration", "ibps thumb"],
 };
 
 function normalize(value: string) {

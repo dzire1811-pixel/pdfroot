@@ -5,6 +5,7 @@ import { ResizeImageExactKbTool } from "@/components/ResizeImageExactKbTool";
 import { CompressImageTool } from "@/components/CompressImageTool";
 import { JpgToPngTool } from "@/components/JpgToPngTool";
 import { PngToJpgTool } from "@/components/PngToJpgTool";
+import { BackgroundRemoverTool } from "@/components/BackgroundRemoverTool";
 import { CropImageTool } from "@/components/CropImageTool";
 import { ResizeImageTool } from "@/components/ResizeImageTool";
 import { JpgToPdfTool } from "@/components/JpgToPdfTool";
@@ -39,6 +40,7 @@ export function ToolRenderer({ slug, name, description }: { slug: string; name: 
   if (slug === "compress-image" || slug === "image-compressor-for-government-forms") return <CompressImageTool />;
   if (slug === "jpg-to-png") return <JpgToPngTool />;
   if (slug === "png-to-jpg") return <PngToJpgTool />;
+  if (slug === "background-remover") return <BackgroundRemoverTool />;
   if (slug === "crop-image") return <CropImageTool />;
   if (slug === "resize-image") return <ResizeImageTool />;
   if (slug === "jpg-to-pdf" || slug === "png-to-pdf") return <JpgToPdfTool />;

@@ -7,7 +7,7 @@ import { CheckCircle2, Crop, Download, FileArchive, ImageUp, Minus, Plus, Refres
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
-type DragMode = "move" | "resize-se" | "resize-sw" | "resize-ne" | "resize-nw";
+type DragMode = "draw" | "move" | "resize-se" | "resize-sw" | "resize-ne" | "resize-nw";
 type OutputSizeMode = "free" | "fixed";
 type OutputUnit = "pixel" | "cm";
 
@@ -33,7 +33,7 @@ type SelectedImage = {
     width: number;
     height: number;
   };
-  cropBox: CropBox;
+  cropBox: CropBox | null;
   zoom: number;
 };
 
@@ -48,7 +48,6 @@ type CropResult = {
   height: number;
 };
 
-const defaultCropBox: CropBox = { x: 0, y: 0, width: 100, height: 100 };
 const standardDpi = 300;
 
 function formatKb(bytes: number) {
@@ -147,6 +146,9 @@ async function cropOneImage(
 ): Promise<CropResult> {
   const loadedImage = await loadImage(image.file);
   const cropBox = image.cropBox;
+  if (!cropBox) {
+    throw new Error("Please select a crop area first.");
+  }
   const sx = Math.round((cropBox.x / 100) * loadedImage.naturalWidth);
   const sy = Math.round((cropBox.y / 100) * loadedImage.naturalHeight);
   const sw = Math.round((cropBox.width / 100) * loadedImage.naturalWidth);
@@ -401,7 +403,7 @@ export function CropImageTool() {
             file,
             previewUrl: URL.createObjectURL(file),
             dimensions: { width: image.naturalWidth, height: image.naturalHeight },
-            cropBox: defaultCropBox,
+            cropBox: null,
             zoom: 1,
           };
         }),
@@ -466,11 +468,34 @@ export function CropImageTool() {
   }
 
   function onCropMouseDown(event: MouseEvent<HTMLDivElement>, mode: DragMode) {
-    if (!activeImage) return;
+    if (!activeImage || !activeImage.cropBox) return;
     event.preventDefault();
     event.stopPropagation();
     const point = pointFromEvent(event);
     setDragState({ mode, startX: point.x, startY: point.y, startBox: activeImage.cropBox });
+    if (completedResultFor(activeImage.id)) {
+      removeResult(activeImage.id);
+    }
+  }
+
+  function createClickCropBox(point: { x: number; y: number }) {
+    const width = 40;
+    const height = 40;
+    return {
+      x: clamp(point.x - width / 2, 0, 100 - width),
+      y: clamp(point.y - height / 2, 0, 100 - height),
+      width,
+      height,
+    };
+  }
+
+  function onPreviewMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (!activeImage) return;
+    event.preventDefault();
+    const point = pointFromEvent(event);
+    const nextCropBox = { x: point.x, y: point.y, width: 0, height: 0 };
+    updateActiveCropBox(nextCropBox);
+    setDragState({ mode: "draw", startX: point.x, startY: point.y, startBox: nextCropBox });
     if (completedResultFor(activeImage.id)) {
       removeResult(activeImage.id);
     }
@@ -487,6 +512,20 @@ export function CropImageTool() {
         ...dragState.startBox,
         x: clamp(dragState.startBox.x + deltaX, 0, 100 - dragState.startBox.width),
         y: clamp(dragState.startBox.y + deltaY, 0, 100 - dragState.startBox.height),
+      });
+      return;
+    }
+
+    if (dragState.mode === "draw") {
+      const left = Math.min(dragState.startX, point.x);
+      const top = Math.min(dragState.startY, point.y);
+      const right = Math.max(dragState.startX, point.x);
+      const bottom = Math.max(dragState.startY, point.y);
+      updateActiveCropBox({
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
       });
       return;
     }
@@ -527,10 +566,23 @@ export function CropImageTool() {
     });
   }
 
+  function stopCropDrag() {
+    if (!dragState) return;
+    if (dragState.mode === "draw" && activeImage && (!activeImage.cropBox || activeImage.cropBox.width < 5 || activeImage.cropBox.height < 5)) {
+      updateActiveCropBox(createClickCropBox({ x: dragState.startX, y: dragState.startY }));
+    }
+    setDragState(null);
+  }
+
   async function cropActiveImage() {
     if (!activeImage) {
       setError("Please upload an image first.");
       setStage("upload");
+      return;
+    }
+
+    if (!activeImage.cropBox) {
+      setError("Click or drag on the image to select a crop area first.");
       return;
     }
 
@@ -731,10 +783,11 @@ export function CropImageTool() {
       <div
         ref={cropFrameRef}
         role="presentation"
+        onMouseDown={onPreviewMouseDown}
         onMouseMove={onPreviewMouseMove}
-        onMouseUp={() => setDragState(null)}
-        onMouseLeave={() => setDragState(null)}
-        className="relative h-full w-full select-none"
+        onMouseUp={stopCropDrag}
+        onMouseLeave={stopCropDrag}
+        className="relative h-full w-full cursor-crosshair select-none"
         style={{ transform: `scale(${activeImage.zoom})`, transformOrigin: "center" }}
       >
         <img
@@ -744,34 +797,36 @@ export function CropImageTool() {
           style={{ objectFit: "contain" }}
           draggable={false}
         />
-        <div
-          role="presentation"
-          onMouseDown={(event) => onCropMouseDown(event, "move")}
-          className="absolute cursor-move border border-[#FF2D2D] shadow-[0_0_0_9999px_rgba(15,23,42,0.38)]"
-          style={{
-            left: `${activeImage.cropBox.x}%`,
-            top: `${activeImage.cropBox.y}%`,
-            width: `${activeImage.cropBox.width}%`,
-            height: `${activeImage.cropBox.height}%`,
-          }}
-        >
-          {(["resize-nw", "resize-ne", "resize-sw", "resize-se"] as DragMode[]).map((mode) => (
-            <div
-              key={mode}
-              role="presentation"
-              onMouseDown={(event) => onCropMouseDown(event, mode)}
-              className={`absolute h-3 w-3 border border-white bg-[#FF2D2D] shadow ${
-                mode === "resize-nw"
-                  ? "left-[-6px] top-[-6px] cursor-nw-resize"
-                  : mode === "resize-ne"
-                    ? "right-[-6px] top-[-6px] cursor-ne-resize"
-                    : mode === "resize-sw"
-                      ? "bottom-[-6px] left-[-6px] cursor-sw-resize"
-                      : "bottom-[-6px] right-[-6px] cursor-se-resize"
-              }`}
-            />
-          ))}
-        </div>
+        {activeImage.cropBox && (
+          <div
+            role="presentation"
+            onMouseDown={(event) => onCropMouseDown(event, "move")}
+            className="absolute cursor-move border border-[#FF2D2D] shadow-[0_0_0_9999px_rgba(15,23,42,0.38)]"
+            style={{
+              left: `${activeImage.cropBox.x}%`,
+              top: `${activeImage.cropBox.y}%`,
+              width: `${activeImage.cropBox.width}%`,
+              height: `${activeImage.cropBox.height}%`,
+            }}
+          >
+            {(["resize-nw", "resize-ne", "resize-sw", "resize-se"] as DragMode[]).map((mode) => (
+              <div
+                key={mode}
+                role="presentation"
+                onMouseDown={(event) => onCropMouseDown(event, mode)}
+                className={`absolute h-3 w-3 border border-white bg-[#FF2D2D] shadow ${
+                  mode === "resize-nw"
+                    ? "left-[-6px] top-[-6px] cursor-nw-resize"
+                    : mode === "resize-ne"
+                      ? "right-[-6px] top-[-6px] cursor-ne-resize"
+                      : mode === "resize-sw"
+                        ? "bottom-[-6px] left-[-6px] cursor-sw-resize"
+                        : "bottom-[-6px] right-[-6px] cursor-se-resize"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }

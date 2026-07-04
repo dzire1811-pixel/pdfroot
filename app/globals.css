@@ -867,7 +867,52 @@ section[id$="-tool"] label {
   width: 100% !important;
 }
 
+.v0-tool-page .max-w-4xl:has(> section[data-signature-resize-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
 .v0-tool-page .max-w-4xl:has(> section[data-crop-image-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-resize-image-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-jpg-to-png-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-png-to-jpg-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-background-remover-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-passport-photo-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-ssc-signature-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-rrb-signature-workspace="true"]) {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.v0-tool-page .max-w-4xl:has(> section[data-ibps-document-workspace="true"]) {
   max-width: none !important;
   width: 100% !important;
 }
@@ -961,6 +1006,518 @@ section[id$="-tool"] label {
   }
 }
 
+.v0-tool-page section[data-resize-image-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-resize-image-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+
+  .v0-tool-page section[data-jpg-to-png-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+
+  .v0-tool-page section[data-png-to-jpg-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+
+  .v0-tool-page section[data-background-remover-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+
+  .v0-tool-page section[data-passport-photo-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-scan-line="true"],
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-scan-glow="true"] {
+  animation: background-remover-scan 1.8s ease-in-out infinite;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-alert-marquee="true"] {
+  animation: background-remover-alert-marquee 8s linear infinite;
+  padding-left: 100%;
+}
+
+@keyframes background-remover-scan {
+  0% {
+    transform: translateY(-2rem);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(48rem);
+    opacity: 0;
+  }
+}
+
+@keyframes background-remover-alert-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 20rem !important;
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+
+  .v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+
+  .v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+
+  .v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+
+  .v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-preview-area="true"] {
+    padding-bottom: 15rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .v0-tool-page section[data-background-remover-workspace="true"] [data-background-remover-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-height: 58vh !important;
+    overflow-y: auto !important;
+  }
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-ssc-signature-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-rrb-signature-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"] {
+    padding-bottom: 13rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] {
+  width: calc(100% + 3rem) !important;
+  max-width: calc(100% + 3rem) !important;
+  margin-left: -1.5rem !important;
+  margin-right: -1.5rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-ibps-document-workspace="true"] {
+    width: calc(100% + 4rem) !important;
+    max-width: calc(100% + 4rem) !important;
+    margin-left: -2rem !important;
+    margin-right: -2rem !important;
+  }
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-action-bar="true"] > div {
+  width: min(100%, 1600px) !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"] {
+  box-sizing: border-box !important;
+  width: min(100%, 1600px) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+  padding-bottom: 22rem !important;
+}
+
+.v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"] {
+    padding-bottom: 17rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-action-bar="true"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
 .v0-tool-page section[data-exact-kb-workspace="true"] {
   width: 100vw !important;
   max-width: 100vw !important;
@@ -1015,6 +1572,63 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-action-bar="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-area="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-grid="true"] {
+  padding-bottom: 12rem !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-grid="true"] {
+    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+
+  .v0-tool-page section[data-signature-resize-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] article {
+  padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] article [class*="p-3"] {
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-action-bar="true"] > div {
   padding: 0 !important;
 }
 

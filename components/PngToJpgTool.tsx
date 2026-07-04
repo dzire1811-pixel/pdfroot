@@ -1,13 +1,31 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import JSZip from "jszip";
+import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+
+type Stage = "upload" | "workspace" | "processing" | "success";
+
+type ImageDimensions = {
+  width: number;
+  height: number;
+};
+
+type SelectedImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  dimensions: ImageDimensions;
+};
 
 type ConvertResult = {
+  id: string;
+  blob: Blob;
   url: string;
   fileName: string;
+  sourceName: string;
   sizeKb: number;
   width: number;
   height: number;
@@ -21,6 +39,10 @@ function isPng(file: File) {
   return file.type === "image/png" || /\.png$/i.test(file.name);
 }
 
+function safeBaseName(name: string) {
+  return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot-image";
+}
+
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -31,7 +53,7 @@ function loadImage(file: File) {
     };
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("Could not read this PNG image. Please try another file."));
+      reject(new Error("Could not read this PNG image. Please upload PNG only."));
     };
     image.src = url;
   });
@@ -43,211 +65,599 @@ function canvasToJpg(canvas: HTMLCanvasElement) {
   });
 }
 
-function safeBaseName(name: string) {
-  return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot-image";
-}
-
 export function PngToJpgTool() {
-  const [file, setFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
-  const [result, setResult] = useState<ConvertResult | null>(null);
+  const [stage, setStage] = useState<Stage>("upload");
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [convertedFiles, setConvertedFiles] = useState<ConvertResult[]>([]);
+  const [zipUrl, setZipUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [status, setStatus] = useState("Upload a PNG image to convert.");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
   const shouldScrollToUploadRef = useRef(false);
+  const selectedImagesRef = useRef<SelectedImage[]>([]);
+  const convertedFilesRef = useRef<ConvertResult[]>([]);
+  const zipUrlRef = useRef<string | null>(null);
 
-  const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
-  const stage: ImageWorkflowStage = isProcessing ? "processing" : result ? "success" : file ? "workspace" : "upload";
-
-  useImageToolStageEffects({
-    stage,
-    toolRef: toolSectionRef,
-    processingRef: processingSectionRef,
-    successRef: successSectionRef,
-    shouldScrollToUploadRef,
-    resultReady: Boolean(result),
-  });
-
-  function clearResult() {
-    if (result?.url) URL.revokeObjectURL(result.url);
-    setResult(null);
+  function clearNativeInputs() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (addMoreInputRef.current) addMoreInputRef.current.value = "";
   }
 
-  function clearSource() {
-    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-    setSourceUrl(null);
+  function revokeSelectedImages(images = selectedImages) {
+    images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  }
+
+  function revokeResults(results = convertedFiles) {
+    results.forEach((result) => URL.revokeObjectURL(result.url));
+  }
+
+  function clearProcessedOutput() {
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+    setConvertedFiles([]);
+    setZipUrl(null);
   }
 
   function resetTool() {
-    clearResult();
-    clearSource();
-    setFile(null);
+    revokeSelectedImages();
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+
+    setStage("upload");
+    setSelectedImages([]);
+    setConvertedFiles([]);
+    setZipUrl(null);
     setError(null);
     setIsDragging(false);
-    setIsProcessing(false);
-    setStatus("Upload a PNG image to convert.");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setDraggedId(null);
+    setIsActionBarVisible(false);
+    clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
 
-  function handleFile(nextFile: File | undefined) {
+  async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
     setError(null);
-    clearResult();
 
-    if (!nextFile) return;
-    if (!isPng(nextFile)) {
-      setFile(null);
-      clearSource();
-      setStatus("Upload a PNG image to convert.");
-      setError(`"${nextFile.name}" is not a PNG file. Please upload PNG only.`);
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+
+    const unsupported = files.filter((file) => !isPng(file));
+    if (unsupported.length) {
+      if (!options.append) resetTool();
+      setError("Please upload only PNG images.");
       return;
     }
 
-    clearSource();
-    setFile(nextFile);
-    setSourceUrl(URL.createObjectURL(nextFile));
-    setStatus("PNG image loaded. Click Convert to JPG.");
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+    if (!options.append) revokeSelectedImages();
+
+    const preservedScrollY = options.append ? window.scrollY : null;
+
+    if (!options.append) {
+      setStage("processing");
+    }
+    setConvertedFiles([]);
+    setZipUrl(null);
+    clearNativeInputs();
+
+    try {
+      const loaded = await Promise.all(
+        files.map(async (file, index) => {
+          const image = await loadImage(file);
+          return {
+            id: `${file.name}-${file.lastModified}-${file.size}-${Date.now()}-${index}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+            dimensions: { width: image.naturalWidth, height: image.naturalHeight },
+          };
+        }),
+      );
+
+      setSelectedImages((currentImages) => (options.append ? [...currentImages, ...loaded] : loaded));
+      setStage("workspace");
+      if (!options.append) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      } else if (preservedScrollY !== null) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: preservedScrollY, behavior: "auto" }));
+      }
+    } catch (err) {
+      setStage(options.append && selectedImages.length ? "workspace" : "upload");
+      setError(err instanceof Error ? err.message : "Could not read one of these PNG images. Please try again.");
+    }
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    handleFile(event.target.files?.[0]);
-    event.target.value = "";
+    void handleFiles(event.target.files ?? undefined);
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function onAddMoreInputChange(event: ChangeEvent<HTMLInputElement>) {
+    void handleFiles(event.target.files ?? undefined, { append: true });
+  }
+
+  function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function onFileDragOver(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragging(true);
+  }
+
+  function onFileDragLeave(event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setIsDragging(false);
+  }
+
+  function onUploadDrop(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    void handleFiles(event.dataTransfer.files, { append: selectedImages.length > 0 });
+  }
+
+  function onUploadBoxDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
-    handleFile(event.dataTransfer.files?.[0]);
+    void handleFiles(event.dataTransfer.files);
+  }
+
+  function removeImage(id: string) {
+    const removed = selectedImages.find((image) => image.id === id);
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
+    const nextImages = selectedImages.filter((image) => image.id !== id);
+    setSelectedImages(nextImages);
+    setDraggedId(null);
+    clearProcessedOutput();
+
+    window.requestAnimationFrame(() => {
+      if (nextImages.length === 0) {
+        setStage("upload");
+        shouldScrollToUploadRef.current = true;
+      }
+    });
+  }
+
+  function reorderByDragEnter(targetId: string) {
+    if (!draggedId || draggedId === targetId) return;
+    setSelectedImages((current) => {
+      const draggedIndex = current.findIndex((image) => image.id === draggedId);
+      const targetIndex = current.findIndex((image) => image.id === targetId);
+      if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return current;
+      const next = [...current];
+      const [draggedImage] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, draggedImage);
+      return next;
+    });
   }
 
   async function convertToJpg() {
-    if (!file) {
+    if (!selectedImages.length) {
       setError("Please upload a PNG image first.");
+      setStage("upload");
       return;
     }
 
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+
     window.scrollTo({ top: 0, behavior: "auto" });
-    setIsProcessing(true);
+    setStage("processing");
     setError(null);
-    clearResult();
-    setStatus("Converting PNG to JPG...");
+    setConvertedFiles([]);
+    setZipUrl(null);
 
     try {
-      const image = await loadImage(file);
-      const canvas = document.createElement("canvas");
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Your browser does not support image conversion.");
+      const results = await Promise.all(
+        selectedImages.map(async (selectedImage, index) => {
+          const image = await loadImage(selectedImage.file);
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Your browser does not support image conversion.");
 
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.drawImage(image, 0, 0);
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = "high";
+          context.drawImage(image, 0, 0);
 
-      const blob = await canvasToJpg(canvas);
-      setResult({
-        url: URL.createObjectURL(blob),
-        fileName: `${safeBaseName(file.name)}.jpg`,
-        sizeKb: blob.size / 1024,
-        width: canvas.width,
-        height: canvas.height,
-      });
-      setStatus("JPG image is ready to download.");
+          const blob = await canvasToJpg(canvas);
+
+          return {
+            id: selectedImage.id,
+            blob,
+            url: URL.createObjectURL(blob),
+            fileName: `${safeBaseName(selectedImage.file.name)}${selectedImages.length > 1 ? `-${index + 1}` : ""}.jpg`,
+            sourceName: selectedImage.file.name,
+            sizeKb: blob.size / 1024,
+            width: canvas.width,
+            height: canvas.height,
+          };
+        }),
+      );
+
+      if (results.length > 1) {
+        const zip = new JSZip();
+        results.forEach((result) => zip.file(result.fileName, result.blob));
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        setZipUrl(URL.createObjectURL(zipBlob));
+      }
+
+      setConvertedFiles(results);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      setStage("success");
     } catch (err) {
-      setStatus("PNG to JPG conversion failed.");
       setError(err instanceof Error ? err.message : "Could not convert this PNG to JPG.");
-    } finally {
-      setIsProcessing(false);
+      setStage("workspace");
     }
   }
 
-  return (
-    <>
-      {stage === "processing" && (
-        <ImageProcessingScreen
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-            processingSectionRef.current = node;
-          }}
-          text="Converting your image..."
-          detail="Please wait, your file is being prepared"
-        />
-      )}
+  useEffect(() => {
+    let isActive = true;
+    void readUploadSession(isStoredImage).then((files) => {
+      if (isActive && files.length) {
+        void handleFiles(files);
+      }
+    });
 
-      {stage === "success" && result && (
-        <ImageSuccessScreen
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-            successSectionRef.current = node;
-          }}
-          title="Conversion Complete"
-          subtitle={`JPG ready - ${result.sizeKb.toFixed(1)} KB`}
-          downloadUrl={result.url}
-          fileName={result.fileName}
-          downloadLabel="Download JPG"
-          onReset={resetTool}
-        />
-      )}
+    return () => {
+      isActive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      {stage === "upload" && (
-    <section ref={toolSectionRef} id="png-to-jpg-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
-          <ImageUploadBox
-            id="png-to-jpg-upload"
-            inputRef={fileInputRef}
-            accept="image/png,.png"
-            isDragging={isDragging}
-            title="Drag & Drop PNG"
-            description="Upload PNG and convert it to JPG in your browser with a white background."
-            buttonText="Choose PNG"
-            onChange={onInputChange}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-          />
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-    </section>
-      )}
+  useEffect(() => {
+    selectedImagesRef.current = selectedImages;
+  }, [selectedImages]);
 
-      {stage === "workspace" && sourceUrl && (
-        <ImagePreviewWorkspace
-          id="png-to-jpg-tool"
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-          }}
-          preview={<img src={sourceUrl} alt="Uploaded PNG preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" />}
-          fileName={file?.name}
-          fileMeta={sourceSize}
-          status={status}
-          error={error}
-          actionLabel={isProcessing ? "Processing..." : "Convert to JPG"}
-          actionIcon={<RefreshCw className={`h-5 w-5 ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />}
-          onAction={() => void convertToJpg()}
-          actionDisabled={!file || isProcessing}
-          onReset={resetTool}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">PNG to JPG</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Convert transparent PNGs to JPG with a clean white background.</p>
+  useEffect(() => {
+    convertedFilesRef.current = convertedFiles;
+  }, [convertedFiles]);
+
+  useEffect(() => {
+    zipUrlRef.current = zipUrl;
+  }, [zipUrl]);
+
+  useEffect(() => {
+    if (stage !== "success" || !convertedFiles.length) return;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [stage, convertedFiles.length]);
+
+  useEffect(() => {
+    if (stage !== "processing") return;
+
+    window.requestAnimationFrame(() => {
+      const processingSection = processingSectionRef.current;
+      if (!processingSection) return;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      processingSection.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "upload" || !shouldScrollToUploadRef.current) return;
+
+    shouldScrollToUploadRef.current = false;
+    window.requestAnimationFrame(() => {
+      const uploadSection = toolSectionRef.current;
+      if (!uploadSection) return;
+      const pageHero = uploadSection.parentElement?.closest<HTMLElement>("section");
+      const target = pageHero ?? uploadSection;
+      const y = target.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    if (!selectedImages.length || stage !== "workspace") {
+      setIsActionBarVisible(false);
+      return;
+    }
+
+    let frame = 0;
+
+    const updateActionBarVisibility = () => {
+      const workspace = workspaceRef.current;
+      const workArea = workAreaRef.current;
+
+      if (!workspace || !workArea) {
+        setIsActionBarVisible(false);
+        return;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const workAreaRect = workArea.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
+      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
+
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActionBarVisibility);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [selectedImages.length, stage]);
+
+  useEffect(() => {
+    const toolSection = toolSectionRef.current;
+    if (!toolSection || (stage !== "processing" && stage !== "success")) return;
+
+    const hiddenElements: Array<{ element: HTMLElement; display: string }> = [];
+    const hideElement = (element: Element | null) => {
+      if (!(element instanceof HTMLElement) || element === toolSection) return;
+      hiddenElements.push({ element, display: element.style.display });
+      element.style.display = "none";
+    };
+
+    const toolShell = toolSection.parentElement;
+    if (toolShell) {
+      let reachedToolSection = false;
+      Array.from(toolShell.children).forEach((child) => {
+        if (child === toolSection) {
+          reachedToolSection = true;
+          return;
+        }
+        if (stage === "success" && !reachedToolSection) {
+          return;
+        }
+        if (child !== toolSection) hideElement(child);
+      });
+    }
+
+    const heroSection = toolSection.parentElement?.closest("section");
+    let sibling = heroSection?.nextElementSibling ?? null;
+    while (sibling) {
+      hideElement(sibling);
+      sibling = sibling.nextElementSibling;
+    }
+
+    return () => {
+      hiddenElements.forEach(({ element, display }) => {
+        element.style.display = display;
+      });
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    return () => {
+      selectedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      convertedFilesRef.current.forEach((result) => URL.revokeObjectURL(result.url));
+      if (zipUrlRef.current) URL.revokeObjectURL(zipUrlRef.current);
+    };
+  }, []);
+
+  function renderUploadBox() {
+    return (
+      <label
+        data-primary-upload="true"
+        htmlFor="png-to-jpg-upload"
+        onDragOver={onFileDragOver}
+        onDragLeave={onFileDragLeave}
+        onDrop={onUploadBoxDrop}
+        className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
+          isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
+        }`}
+      >
+        <input id="png-to-jpg-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
+        <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
+          <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
+        </span>
+        <span className="sr-only">Upload PNG and convert it to JPG in your browser.</span>
+        <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
+          Choose File
+          <UploadCloud className="h-5 w-5" aria-hidden="true" />
+        </span>
+      </label>
+    );
+  }
+
+  function renderAddMoreButton(className = "") {
+    return (
+      <button
+        type="button"
+        aria-label="Add more images"
+        title="Add more files"
+        onClick={() => addMoreInputRef.current?.click()}
+        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14 ${className}`}
+      >
+        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+          {selectedImages.length}
+        </span>
+        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  function renderWorkspacePreview() {
+    return (
+      <div ref={workAreaRef} data-png-to-jpg-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onAddMoreInputChange} />
+        <div data-png-to-jpg-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+          {selectedImages.map((image, index) => (
+            <article
+              key={image.id}
+              draggable
+              onDragStart={() => setDraggedId(image.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDragEnter={() => reorderByDragEnter(image.id)}
+              onDrop={() => setDraggedId(null)}
+              onDragEnd={() => setDraggedId(null)}
+              className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
+                draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
+              }`}
+            >
+              <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
+                  {index + 1}
+                </span>
+                <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                  <GripVertical className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
+              </div>
+              <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    {formatKb(image.file.size)} KB - {image.dimensions.width} x {image.dimensions.height}px
+                  </p>
+                </div>
+                <button type="button" onClick={() => removeImage(image.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "success" && convertedFiles.length) {
+    const singleResult = convertedFiles.length === 1 ? convertedFiles[0] : null;
+    const downloadUrl = singleResult?.url ?? zipUrl;
+    const downloadName = singleResult?.fileName ?? "PDFRoot-jpg-images.zip";
+
+    return (
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        data-png-to-jpg-workspace="true"
+        id="png-to-jpg-tool"
+        className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+      >
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
+          <div data-png-to-jpg-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+                </div>
+                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Conversion Complete</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  JPG ready - {convertedFiles[0].width} x {convertedFiles[0].height}px
+                </p>
+                {downloadUrl && (
+                  <a
+                    href={downloadUrl}
+                    download={downloadName}
+                    className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
+                  >
+                    Download JPG
+                    <Download className="h-5 w-5" aria-hidden="true" />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={resetTool}
+                  className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"
+                >
+                  Convert Another Image
+                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
-            <RefreshCw className={`h-5 w-5 text-[#FF2D2D] ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />
           </div>
+        </div>
+      </section>
+    );
+  }
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected image</p>
-            <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No PNG uploaded"}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
+  if (stage === "processing") {
+    return (
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        id="png-to-jpg-tool"
+        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
+      >
+        <div>
+          <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
+          <p className="mt-4 text-base font-black text-slate-950">Converting your images...</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Please wait, your files are being prepared</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (stage === "workspace" && selectedImages.length) {
+    return (
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-png-to-jpg-workspace="true" id="png-to-jpg-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          {renderWorkspacePreview()}
+          {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
+          {isActionBarVisible && (
+            <div ref={actionBarRef} data-png-to-jpg-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
+                  <p className="truncate text-sm font-black text-slate-950">
+                    {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
+                  </p>
+                </div>
+                <div className="min-w-0 lg:ml-auto">
+                  <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+                    {renderAddMoreButton()}
+                    <button type="button" onClick={() => void convertToJpg()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+                      Convert to JPG
+                      <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+                      Clear all
+                      <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-        </ImagePreviewWorkspace>
-      )}
-    </>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section ref={toolSectionRef} data-v0-managed-flow="true" id="png-to-jpg-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+      {renderUploadBox()}
+      {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+    </section>
   );
 }

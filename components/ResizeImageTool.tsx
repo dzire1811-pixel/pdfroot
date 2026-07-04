@@ -1,22 +1,39 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
-import { ImagePreviewWorkspace, ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import JSZip from "jszip";
+import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+
+type Stage = "upload" | "workspace" | "processing" | "success";
 
 type ImageDimensions = {
   width: number;
   height: number;
 };
 
+type SelectedImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  dimensions: ImageDimensions;
+};
+
 type ResizeResult = {
+  id: string;
+  blob: Blob;
   url: string;
   fileName: string;
+  sourceName: string;
   sizeKb: number;
   width: number;
   height: number;
 };
+
+type DimensionUnit = "px" | "cm";
+
+const CM_DPI = 300;
 
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
@@ -42,11 +59,18 @@ function outputExtension(mimeType: string) {
   return "jpg";
 }
 
-function loadImageFromUrl(url: string) {
+function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
     const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Could not read this image. Please upload JPG, JPEG, PNG, or WEBP."));
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read this image. Please upload JPG, JPEG, PNG, or WEBP."));
+    };
     image.src = url;
   });
 }
@@ -57,309 +81,756 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string) {
   });
 }
 
+function parsePositiveInteger(value: string) {
+  const parsed = Math.round(Number(value));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parsePositiveNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function pxToCm(px: number) {
+  return (px / CM_DPI) * 2.54;
+}
+
+function cmToPx(cm: number) {
+  return Math.max(1, Math.round((cm / 2.54) * CM_DPI));
+}
+
+function formatCm(value: number) {
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function dimensionValueToPixels(value: string, unit: DimensionUnit) {
+  if (unit === "px") {
+    return parsePositiveInteger(value);
+  }
+
+  const cm = parsePositiveNumber(value);
+  return cm ? cmToPx(cm) : null;
+}
+
 export function ResizeImageTool() {
-  const [file, setFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
-  const [originalDimensions, setOriginalDimensions] = useState<ImageDimensions | null>(null);
+  const [stage, setStage] = useState<Stage>("upload");
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [dimensionUnit, setDimensionUnit] = useState<DimensionUnit>("px");
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [keepAspect, setKeepAspect] = useState(true);
-  const [result, setResult] = useState<ResizeResult | null>(null);
+  const [resizedFiles, setResizedFiles] = useState<ResizeResult[]>([]);
+  const [zipUrl, setZipUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [status, setStatus] = useState("Upload an image to resize.");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
   const shouldScrollToUploadRef = useRef(false);
+  const selectedImagesRef = useRef<SelectedImage[]>([]);
+  const resizedFilesRef = useRef<ResizeResult[]>([]);
+  const zipUrlRef = useRef<string | null>(null);
 
-  const sourceSize = useMemo(() => (file ? `${formatKb(file.size)} KB` : "No file selected"), [file]);
-  const originalSizeText = originalDimensions ? `${originalDimensions.width} x ${originalDimensions.height}px` : "No dimensions";
-  const stage: ImageWorkflowStage = isProcessing ? "processing" : result ? "success" : file ? "workspace" : "upload";
+  const firstImage = selectedImages[0];
 
-  useImageToolStageEffects({
-    stage,
-    toolRef: toolSectionRef,
-    processingRef: processingSectionRef,
-    successRef: successSectionRef,
-    shouldScrollToUploadRef,
-    resultReady: Boolean(result),
-  });
-
-  function clearResult() {
-    if (result?.url) URL.revokeObjectURL(result.url);
-    setResult(null);
+  function clearNativeInputs() {
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (addMoreInputRef.current) addMoreInputRef.current.value = "";
   }
 
-  function clearSource() {
-    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
-    setSourceUrl(null);
+  function revokeSelectedImages(images = selectedImages) {
+    images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  }
+
+  function revokeResults(results = resizedFiles) {
+    results.forEach((result) => URL.revokeObjectURL(result.url));
+  }
+
+  function clearProcessedOutput() {
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+    setResizedFiles([]);
+    setZipUrl(null);
   }
 
   function resetTool() {
-    clearResult();
-    clearSource();
-    setFile(null);
-    setOriginalDimensions(null);
+    revokeSelectedImages();
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+
+    setStage("upload");
+    setSelectedImages([]);
+    setDimensionUnit("px");
     setWidth("");
     setHeight("");
     setKeepAspect(true);
+    setResizedFiles([]);
+    setZipUrl(null);
     setError(null);
     setIsDragging(false);
-    setIsProcessing(false);
-    setStatus("Upload an image to resize.");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setDraggedId(null);
+    setIsActionBarVisible(false);
+    clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
 
-  async function handleFile(nextFile: File | undefined) {
+  async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
     setError(null);
-    clearResult();
 
-    if (!nextFile) return;
-    if (!isSupportedImage(nextFile)) {
-      setFile(null);
-      clearSource();
-      setOriginalDimensions(null);
-      setWidth("");
-      setHeight("");
-      setStatus("Upload an image to resize.");
-      setError(`"${nextFile.name}" is not a supported image. Please upload JPG, JPEG, PNG, or WEBP.`);
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+
+    const unsupported = files.filter((file) => !isSupportedImage(file));
+    if (unsupported.length) {
+      if (!options.append) resetTool();
+      setError("Please upload only JPG, JPEG, PNG, or WEBP images.");
       return;
     }
 
-    const nextUrl = URL.createObjectURL(nextFile);
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+    if (!options.append) revokeSelectedImages();
+
+    const preservedScrollY = options.append ? window.scrollY : null;
+
+    if (!options.append) {
+      setStage("processing");
+    }
+    setResizedFiles([]);
+    setZipUrl(null);
+    clearNativeInputs();
+
     try {
-      const image = await loadImageFromUrl(nextUrl);
-      clearSource();
-      setFile(nextFile);
-      setSourceUrl(nextUrl);
-      setOriginalDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-      setWidth(String(image.naturalWidth));
-      setHeight(String(image.naturalHeight));
-      setStatus("Image loaded. Enter width and height, then resize.");
+      const loaded = await Promise.all(
+        files.map(async (file, index) => {
+          const image = await loadImage(file);
+          return {
+            id: `${file.name}-${file.lastModified}-${file.size}-${Date.now()}-${index}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+            dimensions: { width: image.naturalWidth, height: image.naturalHeight },
+          };
+        }),
+      );
+
+      const baseImage = options.append && selectedImages.length ? selectedImages[0] : loaded[0];
+      if (baseImage && (!options.append || !width || !height)) {
+        if (dimensionUnit === "px") {
+          setWidth(String(baseImage.dimensions.width));
+          setHeight(String(baseImage.dimensions.height));
+        } else {
+          setWidth(formatCm(pxToCm(baseImage.dimensions.width)));
+          setHeight(formatCm(pxToCm(baseImage.dimensions.height)));
+        }
+      }
+      setSelectedImages((currentImages) => (options.append ? [...currentImages, ...loaded] : loaded));
+      setStage("workspace");
+      if (!options.append) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      } else if (preservedScrollY !== null) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: preservedScrollY, behavior: "auto" }));
+      }
     } catch (err) {
-      URL.revokeObjectURL(nextUrl);
-      setFile(null);
-      setOriginalDimensions(null);
-      setWidth("");
-      setHeight("");
-      setStatus("Upload an image to resize.");
-      setError(err instanceof Error ? err.message : "Could not read this image.");
+      setStage(options.append && selectedImages.length ? "workspace" : "upload");
+      setError(err instanceof Error ? err.message : "Could not read one of these images. Please try again.");
     }
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    void handleFile(event.target.files?.[0]);
-    event.target.value = "";
+    void handleFiles(event.target.files ?? undefined);
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function onAddMoreInputChange(event: ChangeEvent<HTMLInputElement>) {
+    void handleFiles(event.target.files ?? undefined, { append: true });
+  }
+
+  function hasDraggedFiles(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function onFileDragOver(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragging(true);
+  }
+
+  function onFileDragLeave(event: DragEvent<HTMLElement>) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setIsDragging(false);
+  }
+
+  function onUploadDrop(event: DragEvent<HTMLElement>) {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    void handleFiles(event.dataTransfer.files, { append: selectedImages.length > 0 });
+  }
+
+  function onUploadBoxDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
-    void handleFile(event.dataTransfer.files?.[0]);
+    void handleFiles(event.dataTransfer.files);
+  }
+
+  function removeImage(id: string) {
+    const removed = selectedImages.find((image) => image.id === id);
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
+    const nextImages = selectedImages.filter((image) => image.id !== id);
+    setSelectedImages(nextImages);
+
+    setDraggedId(null);
+    clearProcessedOutput();
+
+    window.requestAnimationFrame(() => {
+      if (nextImages.length === 0) {
+        setStage("upload");
+        setDimensionUnit("px");
+        setWidth("");
+        setHeight("");
+        shouldScrollToUploadRef.current = true;
+      }
+    });
+  }
+
+  function reorderByDragEnter(targetId: string) {
+    if (!draggedId || draggedId === targetId) return;
+    setSelectedImages((current) => {
+      const draggedIndex = current.findIndex((image) => image.id === draggedId);
+      const targetIndex = current.findIndex((image) => image.id === targetId);
+      if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return current;
+      const next = [...current];
+      const [draggedImage] = next.splice(draggedIndex, 1);
+      next.splice(targetIndex, 0, draggedImage);
+      return next;
+    });
   }
 
   function updateWidth(nextValue: string) {
     setWidth(nextValue);
-    clearResult();
-    if (!keepAspect || !originalDimensions) return;
+    clearProcessedOutput();
+    setError(null);
+    if (!keepAspect || !firstImage) return;
 
-    const nextWidth = Number(nextValue);
-    if (!Number.isFinite(nextWidth) || nextWidth <= 0) return;
-    setHeight(String(Math.max(1, Math.round((nextWidth * originalDimensions.height) / originalDimensions.width))));
+    const nextWidth = dimensionValueToPixels(nextValue, dimensionUnit);
+    if (!nextWidth) {
+      setHeight("");
+      return;
+    }
+    const nextHeightPx = Math.max(1, Math.round((nextWidth * firstImage.dimensions.height) / firstImage.dimensions.width));
+    setHeight(dimensionUnit === "px" ? String(nextHeightPx) : formatCm(pxToCm(nextHeightPx)));
   }
 
   function updateHeight(nextValue: string) {
     setHeight(nextValue);
-    clearResult();
-    if (!keepAspect || !originalDimensions) return;
+    clearProcessedOutput();
+    setError(null);
+    if (!keepAspect || !firstImage) return;
 
-    const nextHeight = Number(nextValue);
-    if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
-    setWidth(String(Math.max(1, Math.round((nextHeight * originalDimensions.width) / originalDimensions.height))));
+    const nextHeight = dimensionValueToPixels(nextValue, dimensionUnit);
+    if (!nextHeight) {
+      setWidth("");
+      return;
+    }
+    const nextWidthPx = Math.max(1, Math.round((nextHeight * firstImage.dimensions.width) / firstImage.dimensions.height));
+    setWidth(dimensionUnit === "px" ? String(nextWidthPx) : formatCm(pxToCm(nextWidthPx)));
+  }
+
+  function toggleKeepAspect(nextValue: boolean) {
+    setKeepAspect(nextValue);
+    setError(null);
+    if (!nextValue || !firstImage) return;
+
+    const nextWidth = dimensionValueToPixels(width, dimensionUnit);
+    if (nextWidth) {
+      const nextHeightPx = Math.max(1, Math.round((nextWidth * firstImage.dimensions.height) / firstImage.dimensions.width));
+      setHeight(dimensionUnit === "px" ? String(nextHeightPx) : formatCm(pxToCm(nextHeightPx)));
+    }
+  }
+
+  function switchDimensionUnit(nextUnit: DimensionUnit) {
+    if (nextUnit === dimensionUnit) return;
+
+    clearProcessedOutput();
+    setError(null);
+
+    if (nextUnit === "cm") {
+      const widthPx = dimensionValueToPixels(width, "px");
+      const heightPx = dimensionValueToPixels(height, "px");
+      setWidth(widthPx ? formatCm(pxToCm(widthPx)) : "");
+      setHeight(heightPx ? formatCm(pxToCm(heightPx)) : "");
+    } else {
+      const widthPx = dimensionValueToPixels(width, "cm");
+      const heightPx = dimensionValueToPixels(height, "cm");
+      setWidth(widthPx ? String(widthPx) : "");
+      setHeight(heightPx ? String(heightPx) : "");
+    }
+
+    setDimensionUnit(nextUnit);
   }
 
   async function resizeImage() {
-    if (!file || !sourceUrl) {
+    if (!selectedImages.length) {
       setError("Please upload an image first.");
+      setStage("upload");
       return;
     }
 
-    const targetWidth = Math.round(Number(width));
-    const targetHeight = Math.round(Number(height));
-    if (!Number.isFinite(targetWidth) || !Number.isFinite(targetHeight) || targetWidth < 1 || targetHeight < 1) {
-      setError("Please enter valid width and height in pixels.");
+    const targetWidth = dimensionValueToPixels(width, dimensionUnit);
+    const targetHeight = dimensionValueToPixels(height, dimensionUnit);
+    if (!targetWidth || !targetHeight) {
+      setError(`Please enter valid width and height in ${dimensionUnit}.`);
+      setStage("workspace");
       return;
     }
 
     if (targetWidth > 10000 || targetHeight > 10000) {
-      setError("Width and height must be 10000px or less.");
+      setError("Output width and height must be 10000px or less.");
+      setStage("workspace");
       return;
     }
 
+    revokeResults();
+    if (zipUrl) URL.revokeObjectURL(zipUrl);
+
     window.scrollTo({ top: 0, behavior: "auto" });
-    setIsProcessing(true);
+    setStage("processing");
     setError(null);
-    clearResult();
-    setStatus("Resizing image...");
+    setResizedFiles([]);
+    setZipUrl(null);
 
     try {
-      const image = await loadImageFromUrl(sourceUrl);
-      const canvas = document.createElement("canvas");
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-      const context = canvas.getContext("2d");
-      if (!context) throw new Error("Your browser does not support image resizing.");
+      const results = await Promise.all(
+        selectedImages.map(async (selectedImage, index) => {
+          const image = await loadImage(selectedImage.file);
+          const canvas = document.createElement("canvas");
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("Your browser does not support image resizing.");
 
-      const mimeType = outputMimeType(file);
-      if (mimeType === "image/jpeg") {
-        context.fillStyle = "#ffffff";
-        context.fillRect(0, 0, targetWidth, targetHeight);
+          const mimeType = outputMimeType(selectedImage.file);
+          if (mimeType === "image/jpeg") {
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, targetWidth, targetHeight);
+          }
+
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = "high";
+          context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+          const blob = await canvasToBlob(canvas, mimeType);
+          const extension = outputExtension(mimeType);
+
+          return {
+            id: selectedImage.id,
+            blob,
+            url: URL.createObjectURL(blob),
+            fileName: `${safeBaseName(selectedImage.file.name)}-${targetWidth}x${targetHeight}${selectedImages.length > 1 ? `-${index + 1}` : ""}.${extension}`,
+            sourceName: selectedImage.file.name,
+            sizeKb: blob.size / 1024,
+            width: targetWidth,
+            height: targetHeight,
+          };
+        }),
+      );
+
+      if (results.length > 2) {
+        const zip = new JSZip();
+        results.forEach((result) => zip.file(result.fileName, result.blob));
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        setZipUrl(URL.createObjectURL(zipBlob));
       }
 
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
-      context.drawImage(image, 0, 0, targetWidth, targetHeight);
-
-      const blob = await canvasToBlob(canvas, mimeType);
-      setResult({
-        url: URL.createObjectURL(blob),
-        fileName: `${safeBaseName(file.name)}-resized.${outputExtension(mimeType)}`,
-        sizeKb: blob.size / 1024,
-        width: targetWidth,
-        height: targetHeight,
-      });
-      setStatus("Resized image is ready to download.");
+      setResizedFiles(results);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      setStage("success");
     } catch (err) {
-      setStatus("Image resize failed.");
       setError(err instanceof Error ? err.message : "Could not resize this image.");
-    } finally {
-      setIsProcessing(false);
+      setStage("workspace");
     }
   }
 
+  useEffect(() => {
+    let isActive = true;
+    void readUploadSession(isStoredImage).then((files) => {
+      if (isActive && files.length) {
+        void handleFiles(files);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    selectedImagesRef.current = selectedImages;
+  }, [selectedImages]);
+
+  useEffect(() => {
+    resizedFilesRef.current = resizedFiles;
+  }, [resizedFiles]);
+
+  useEffect(() => {
+    zipUrlRef.current = zipUrl;
+  }, [zipUrl]);
+
+  useEffect(() => {
+    if (stage !== "success" || !resizedFiles.length) return;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [stage, resizedFiles.length]);
+
+  useEffect(() => {
+    if (stage !== "processing") return;
+
+    window.requestAnimationFrame(() => {
+      const processingSection = processingSectionRef.current;
+      if (!processingSection) return;
+      window.scrollTo({ top: 0, behavior: "auto" });
+      processingSection.scrollIntoView({ behavior: "auto", block: "center" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "upload" || !shouldScrollToUploadRef.current) return;
+
+    shouldScrollToUploadRef.current = false;
+    window.requestAnimationFrame(() => {
+      const uploadSection = toolSectionRef.current;
+      if (!uploadSection) return;
+      const pageHero = uploadSection.parentElement?.closest<HTMLElement>("section");
+      const target = pageHero ?? uploadSection;
+      const y = target.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    });
+  }, [stage]);
+
+  useEffect(() => {
+    if (!selectedImages.length || stage !== "workspace") {
+      setIsActionBarVisible(false);
+      return;
+    }
+
+    let frame = 0;
+
+    const updateActionBarVisibility = () => {
+      const workspace = workspaceRef.current;
+      const workArea = workAreaRef.current;
+
+      if (!workspace || !workArea) {
+        setIsActionBarVisible(false);
+        return;
+      }
+
+      const viewportHeight = window.innerHeight;
+      const workAreaRect = workArea.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
+      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
+
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActionBarVisibility);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [selectedImages.length, stage]);
+
+  useEffect(() => {
+    const toolSection = toolSectionRef.current;
+    if (!toolSection || (stage !== "processing" && stage !== "success")) return;
+
+    const hiddenElements: Array<{ element: HTMLElement; display: string }> = [];
+    const hideElement = (element: Element | null) => {
+      if (!(element instanceof HTMLElement) || element === toolSection) return;
+      hiddenElements.push({ element, display: element.style.display });
+      element.style.display = "none";
+    };
+
+    const toolShell = toolSection.parentElement;
+    if (toolShell) {
+      let reachedToolSection = false;
+      Array.from(toolShell.children).forEach((child) => {
+        if (child === toolSection) {
+          reachedToolSection = true;
+          return;
+        }
+        if (stage === "success" && !reachedToolSection) {
+          return;
+        }
+        if (child !== toolSection) hideElement(child);
+      });
+    }
+
+    const heroSection = toolSection.parentElement?.closest("section");
+    let sibling = heroSection?.nextElementSibling ?? null;
+    while (sibling) {
+      hideElement(sibling);
+      sibling = sibling.nextElementSibling;
+    }
+
+    return () => {
+      hiddenElements.forEach(({ element, display }) => {
+        element.style.display = display;
+      });
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    return () => {
+      selectedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+      resizedFilesRef.current.forEach((result) => URL.revokeObjectURL(result.url));
+      if (zipUrlRef.current) URL.revokeObjectURL(zipUrlRef.current);
+    };
+  }, []);
+
+  function renderUploadBox() {
+    return (
+      <label
+        data-primary-upload="true"
+        htmlFor="resize-image-upload"
+        onDragOver={onFileDragOver}
+        onDragLeave={onFileDragLeave}
+        onDrop={onUploadBoxDrop}
+        className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
+          isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
+        }`}
+      >
+        <input id="resize-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
+          <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
+        </span>
+        <span className="sr-only">Upload JPG, JPEG, PNG, or WEBP and resize it in your browser.</span>
+        <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
+          Choose File
+          <UploadCloud className="h-5 w-5" aria-hidden="true" />
+        </span>
+      </label>
+    );
+  }
+
+  function renderAddMoreButton(className = "") {
+    return (
+      <button
+        type="button"
+        aria-label="Add more images"
+        title="Add more files"
+        onClick={() => addMoreInputRef.current?.click()}
+        className={`relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14 ${className}`}
+      >
+        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+          {selectedImages.length}
+        </span>
+        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  function renderWorkspacePreview() {
+    return (
+      <div ref={workAreaRef} data-resize-image-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
+        <div data-resize-image-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+          {selectedImages.map((image, index) => (
+            <article
+              key={image.id}
+              draggable
+              onDragStart={() => setDraggedId(image.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDragEnter={() => reorderByDragEnter(image.id)}
+              onDrop={() => setDraggedId(null)}
+              onDragEnd={() => setDraggedId(null)}
+              className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
+                draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
+              }`}
+            >
+              <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
+                  {index + 1}
+                </span>
+                <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                  <GripVertical className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
+              </div>
+              <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    {formatKb(image.file.size)} KB - {image.dimensions.width} x {image.dimensions.height}px
+                  </p>
+                </div>
+                <button type="button" onClick={() => removeImage(image.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "success" && resizedFiles.length) {
+    const singleResult = resizedFiles.length === 1 ? resizedFiles[0] : null;
+    const downloadUrl = singleResult?.url ?? zipUrl;
+    const downloadName = singleResult?.fileName ?? "PDFRoot-resized-images.zip";
+
+    return (
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          successSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        data-resize-image-workspace="true"
+        id="resize-image-tool"
+        className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+      >
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
+          <div data-resize-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+                </div>
+                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Resize Complete</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-500">Resized to {resizedFiles[0].width} × {resizedFiles[0].height}px</p>
+                {downloadUrl && (
+                  <a
+                    href={downloadUrl}
+                    download={downloadName}
+                    className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
+                  >
+                    Download Image
+                    <Download className="h-5 w-5" aria-hidden="true" />
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={resetTool}
+                  className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"
+                >
+                  Resize Another Image
+                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (stage === "processing") {
+    return (
+      <section
+        ref={(node) => {
+          toolSectionRef.current = node;
+          processingSectionRef.current = node;
+        }}
+        data-v0-managed-flow="true"
+        id="resize-image-tool"
+        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
+      >
+        <div>
+          <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
+          <p className="mt-4 text-base font-black text-slate-950">Resizing your images...</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Please wait, your files are being prepared</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (stage === "workspace" && selectedImages.length) {
+    return (
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-resize-image-workspace="true" id="resize-image-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          {renderWorkspacePreview()}
+          {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
+          {isActionBarVisible && (
+            <div ref={actionBarRef} data-resize-image-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
+                  <p className="truncate text-sm font-black text-slate-950">
+                    {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
+                  </p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
+                      {(["px", "cm"] as DimensionUnit[]).map((unit) => (
+                        <button
+                          key={unit}
+                          type="button"
+                          onClick={() => switchDimensionUnit(unit)}
+                          className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black uppercase transition ${
+                            dimensionUnit === unit ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"
+                          }`}
+                        >
+                          {unit}
+                        </button>
+                      ))}
+                    </div>
+                    <input aria-label={`Width in ${dimensionUnit}`} type="number" min={dimensionUnit === "px" ? 1 : 0.01} max={dimensionUnit === "px" ? 10000 : undefined} step={dimensionUnit === "px" ? 1 : 0.01} placeholder={`Width ${dimensionUnit}`} value={width} onChange={(event) => updateWidth(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                    <input aria-label={`Height in ${dimensionUnit}`} type="number" min={dimensionUnit === "px" ? 1 : 0.01} max={dimensionUnit === "px" ? 10000 : undefined} step={dimensionUnit === "px" ? 1 : 0.01} placeholder={`Height ${dimensionUnit}`} value={height} onChange={(event) => updateHeight(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                    <label className="flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
+                      <input type="checkbox" checked={keepAspect} onChange={(event) => toggleKeepAspect(event.target.checked)} className="h-4 w-4 accent-[#FF2D2D]" />
+                      Maintain ratio
+                    </label>
+                  </div>
+                </div>
+                <div className="min-w-0 lg:ml-auto">
+                  <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+                    {renderAddMoreButton()}
+                    <button type="button" onClick={() => void resizeImage()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+                      Resize Image Now
+                      <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+                      Clear all
+                      <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <>
-      {stage === "processing" && (
-        <ImageProcessingScreen
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-            processingSectionRef.current = node;
-          }}
-          text="Resizing your image..."
-          detail="Please wait, your file is being prepared"
-        />
-      )}
-
-      {stage === "success" && result && (
-        <ImageSuccessScreen
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-            successSectionRef.current = node;
-          }}
-          title="Resize Complete"
-          subtitle={`${result.width} x ${result.height}px - ${result.sizeKb.toFixed(1)} KB`}
-          downloadUrl={result.url}
-          fileName={result.fileName}
-          downloadLabel="Download Resized Image"
-          onReset={resetTool}
-        />
-      )}
-
-      {stage === "upload" && (
-    <section ref={toolSectionRef} id="resize-image-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
-          <ImageUploadBox
-            id="resize-image-upload"
-            inputRef={fileInputRef}
-            accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-            isDragging={isDragging}
-            description="Upload JPG, JPEG, PNG, or WEBP and resize it in your browser."
-            onChange={onInputChange}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={onDrop}
-          />
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+    <section ref={toolSectionRef} data-v0-managed-flow="true" id="resize-image-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+      {renderUploadBox()}
+      {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
     </section>
-      )}
-
-      {stage === "workspace" && sourceUrl && (
-        <ImagePreviewWorkspace
-          id="resize-image-tool"
-          sectionRef={(node) => {
-            toolSectionRef.current = node;
-          }}
-          preview={<img src={sourceUrl} alt="Uploaded image preview" className="max-h-[min(72vh,40rem)] max-w-full object-contain" />}
-          fileName={file?.name}
-          fileMeta={`${sourceSize}${originalDimensions ? ` - ${originalDimensions.width} x ${originalDimensions.height}px` : ""}`}
-          status={status}
-          error={error}
-          actionLabel={isProcessing ? "Processing..." : "Resize Image"}
-          actionIcon={<RefreshCw className={`h-5 w-5 ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />}
-          onAction={() => void resizeImage()}
-          actionDisabled={!file || isProcessing}
-          onReset={resetTool}
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-black leading-tight tracking-tight text-slate-950">Resize Image</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Set custom width and height while keeping image quality clear.</p>
-            </div>
-            <RefreshCw className={`h-5 w-5 text-[#FF2D2D] ${isProcessing ? "animate-spin" : ""}`} aria-hidden="true" />
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected image</p>
-            <p className="mt-2 truncate text-sm font-black text-slate-950">{file?.name ?? "No image uploaded"}</p>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Original size: {sourceSize}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Original dimensions: {originalSizeText}</p>
-            </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-black text-slate-950">
-              Width (px)
-              <input
-                type="number"
-                min={1}
-                max={10000}
-                value={width}
-                onChange={(event) => updateWidth(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
-                placeholder="Width"
-              />
-            </label>
-            <label className="block text-sm font-black text-slate-950">
-              Height (px)
-              <input
-                type="number"
-                min={1}
-                max={10000}
-                value={height}
-                onChange={(event) => updateHeight(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
-                placeholder="Height"
-              />
-            </label>
-          </div>
-
-          <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800">
-            <input
-              type="checkbox"
-              checked={keepAspect}
-              onChange={(event) => setKeepAspect(event.target.checked)}
-              className="h-5 w-5 rounded border-slate-300 accent-[#FF2D2D]"
-            />
-            Keep aspect ratio
-          </label>
-
-        </ImagePreviewWorkspace>
-      )}
-    </>
   );
 }
