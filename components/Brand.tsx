@@ -2,6 +2,16 @@
 import type { ReactNode } from "react";
 import { Logo } from "@/components/Logo";
 
+const supportEmail = process.env.NEXT_PUBLIC_PDFROOT_CONTACT_EMAIL?.trim() || "contact@example.com";
+
+export const siteConfig = {
+  name: "PDFRoot",
+  domain: "pdfroot.com",
+  url: "https://pdfroot.com",
+  supportEmail,
+  supportMailto: `mailto:${supportEmail}`,
+} as const;
+
 export function BrandText({ styled = false }: { styled?: boolean }) {
   if (!styled) return <>PDFRoot</>;
 
