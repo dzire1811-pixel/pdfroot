@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Mail, MessageSquare, ShieldCheck, Timer } from "lucide-react";
-import { BrandText } from "@/components/Brand";
+import { BrandText, siteConfig } from "@/components/Brand";
 import { InfoBulletGrid, InfoCard, InfoPageLayout } from "@/components/InfoPageLayout";
 
 export const metadata: Metadata = {
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Contact PDFRoot | Support",
-    description: "Get help with PDFRoot PDF and image tools. Contact support at support@pdfroot.com.",
+    description: `Get help with PDFRoot PDF and image tools. Contact support at ${siteConfig.supportEmail}.`,
     url: "https://pdfroot.com/contact",
     images: ["/pdfroot-og-image.png"],
   },
@@ -43,14 +43,14 @@ export default function ContactPage() {
       <InfoCard title="Contact Information">
         <Mail className="h-7 w-7 text-primary" aria-hidden="true" />
         <p>For support, questions, feedback, or tool-related help, contact us by email.</p>
-        <a href="mailto:support@pdfroot.com" className="inline-flex rounded-lg bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
-          support@pdfroot.com
+        <a href={siteConfig.supportMailto} className="inline-flex rounded-lg bg-primary/10 px-4 py-2 text-sm font-semibold text-primary">
+          {siteConfig.supportEmail}
         </a>
       </InfoCard>
 
       <InfoCard title="How can we help?">
         <p>Share your question, issue, or suggestion. Please include the tool name and file type if your message is about a specific <BrandText styled /> tool.</p>
-        <form action="mailto:support@pdfroot.com" method="post" encType="text/plain" className="mt-6 grid gap-4">
+        <form action={siteConfig.supportMailto} method="post" encType="text/plain" className="mt-6 grid gap-4">
           <label className="text-sm font-semibold text-foreground">
             Name
             <input className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" name="name" placeholder="Your name" />
