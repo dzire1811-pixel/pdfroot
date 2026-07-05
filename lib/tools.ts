@@ -338,7 +338,7 @@ export const imageTools: Tool[] = [
     icon: FileUp,
   },
   {
-    name: "GPSC Photo Resize",
+    name: "GPSC Photo Resize Online",
     slug: "gpsc-photo-resize",
     category: "Image Tools",
     description: "Prepare GPSC form photos and signatures at the required file size.",

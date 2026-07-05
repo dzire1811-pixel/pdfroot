@@ -1,9 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, Dispatch, DragEvent, RefObject, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileImage, FileText, RotateCw, ShieldCheck } from "lucide-react";
-import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import { ChangeEvent, Dispatch, DragEvent, RefObject, SetStateAction, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileImage, Plus, RefreshCw, RotateCw, UploadCloud } from "lucide-react";
+import { ImageProcessingScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Side = "front" | "back";
@@ -15,6 +15,7 @@ type SideState = {
   url: string | null;
   rotation: number;
   isDragging: boolean;
+  dimensions: { width: number; height: number } | null;
 };
 
 type OutputState = {
@@ -24,19 +25,6 @@ type OutputState = {
   height: number;
   fileName: string;
 };
-
-const supportedDocuments = [
-  "Aadhaar Card",
-  "PAN Card",
-  "Voter ID",
-  "Driving Licence",
-  "RC Book",
-  "Passport",
-  "ATM Card",
-  "Employee ID Card",
-  "Student ID Card",
-  "Custom Document",
-];
 
 function isImage(file: File) {
   return ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
@@ -172,8 +160,11 @@ export function FrontBackCardMergeTool() {
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
   const shouldScrollToUploadRef = useRef(false);
-  const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false });
-  const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false });
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const workAreaRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
+  const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [layout, setLayout] = useState<LayoutMode>("horizontal");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("jpg");
   const [title, setTitle] = useState("");
@@ -182,9 +173,11 @@ export function FrontBackCardMergeTool() {
   const [spacing, setSpacing] = useState(48);
   const [output, setOutput] = useState<OutputState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("Upload front and back side images to create a printable page.");
-  const [progress, setProgress] = useState(0);
+  const [, setStatus] = useState("Upload front and back side images to create a printable page.");
+  const [, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [actionBarHeight, setActionBarHeight] = useState(128);
   const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : front.file || back.file ? "workspace" : "upload";
 
   useImageToolStageEffects({
@@ -196,13 +189,7 @@ export function FrontBackCardMergeTool() {
     resultReady: Boolean(output),
   });
 
-  const selectedSummary = useMemo(
-    () => [
-      front.file ? `Front: ${front.file.name} (${formatKb(front.file.size)})` : "Front side not uploaded",
-      back.file ? `Back: ${back.file.name} (${formatKb(back.file.size)})` : "Back side not uploaded",
-    ],
-    [front.file, back.file],
-  );
+  const selectedCount = (front.file ? 1 : 0) + (back.file ? 1 : 0);
 
   function clearOutput() {
     if (output?.url) URL.revokeObjectURL(output.url);
@@ -213,11 +200,11 @@ export function FrontBackCardMergeTool() {
     clearOutput();
     setFront((state) => {
       if (state.url) URL.revokeObjectURL(state.url);
-      return { file: null, url: null, rotation: 0, isDragging: false };
+      return { file: null, url: null, rotation: 0, isDragging: false, dimensions: null };
     });
     setBack((state) => {
       if (state.url) URL.revokeObjectURL(state.url);
-      return { file: null, url: null, rotation: 0, isDragging: false };
+      return { file: null, url: null, rotation: 0, isDragging: false, dimensions: null };
     });
     setLayout("horizontal");
     setOutputFormat("jpg");
@@ -246,7 +233,10 @@ export function FrontBackCardMergeTool() {
     const setter = side === "front" ? setFront : setBack;
     setter((state) => {
       if (state.url) URL.revokeObjectURL(state.url);
-      return { ...state, file, url: URL.createObjectURL(file), rotation: 0 };
+      return { ...state, file, url: URL.createObjectURL(file), rotation: 0, dimensions: null };
+    });
+    void loadImage(file).then((image) => {
+      setter((state) => (state.file === file ? { ...state, dimensions: { width: image.naturalWidth, height: image.naturalHeight } } : state));
     });
     setStatus(`${side === "front" ? "Front" : "Back"} side selected.`);
     setProgress(0);
@@ -257,11 +247,27 @@ export function FrontBackCardMergeTool() {
     event.target.value = "";
   }
 
-  function onDrop(side: Side, event: DragEvent<HTMLLabelElement>) {
+  function handleFiles(fileList: FileList | File[] | undefined) {
+    setError(null);
+    const files = Array.from(fileList ?? []).filter(isImage).slice(0, 2);
+    if (!files.length) {
+      setError("Please upload JPG, JPEG, PNG, or WEBP images.");
+      return;
+    }
+    if (files[0]) handleFile("front", files[0]);
+    if (files[1]) handleFile("back", files[1]);
+  }
+
+  function onMultiInputChange(event: ChangeEvent<HTMLInputElement>) {
+    handleFiles(event.target.files ?? undefined);
+    event.target.value = "";
+  }
+
+  function onMultiDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
-    const setter = side === "front" ? setFront : setBack;
-    setter((state) => ({ ...state, isDragging: false }));
-    handleFile(side, event.dataTransfer.files?.[0]);
+    setFront((state) => ({ ...state, isDragging: false }));
+    setBack((state) => ({ ...state, isDragging: false }));
+    handleFiles(event.dataTransfer.files);
   }
 
   function rotate(side: Side) {
@@ -283,6 +289,45 @@ export function FrontBackCardMergeTool() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (stage !== "workspace") {
+      setIsActionBarVisible(false);
+      return;
+    }
+
+    let frame = 0;
+    const updateActionBarVisibility = () => {
+      const workspace = workspaceRef.current;
+      const workArea = workAreaRef.current;
+      if (!workspace || !workArea) {
+        setIsActionBarVisible(false);
+        return;
+      }
+      const viewportHeight = window.innerHeight;
+      const workAreaRect = workArea.getBoundingClientRect();
+      const workspaceRect = workspace.getBoundingClientRect();
+      const barHeight = actionBarRef.current?.offsetHeight ?? 110;
+      setActionBarHeight(barHeight);
+      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
+      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
+      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateActionBarVisibility);
+    };
+
+    scheduleUpdate();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [stage, front.file, back.file]);
 
   async function buildCanvas() {
     if (!front.file || !back.file) {
@@ -399,6 +444,82 @@ export function FrontBackCardMergeTool() {
     }
   }
 
+  function renderUploadDrop() {
+    const isDragging = front.isDragging || back.isDragging;
+    return (
+      <label
+        data-primary-upload="true"
+        htmlFor="front-back-card-upload"
+        onDragOver={(event) => {
+          event.preventDefault();
+          setFront((state) => ({ ...state, isDragging: true }));
+          setBack((state) => ({ ...state, isDragging: true }));
+        }}
+        onDragLeave={() => {
+          setFront((state) => ({ ...state, isDragging: false }));
+          setBack((state) => ({ ...state, isDragging: false }));
+        }}
+        onDrop={onMultiDrop}
+        className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
+          isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
+        }`}
+      >
+        <input id="front-back-card-upload" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onMultiInputChange} />
+        <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
+          <FileImage className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
+        </span>
+        <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
+          Choose Files
+          <UploadCloud className="h-5 w-5" aria-hidden="true" />
+        </span>
+      </label>
+    );
+  }
+
+  function renderPreviewCard(side: Side, label: string) {
+    const state = side === "front" ? front : back;
+    return (
+      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div className="min-w-0">
+            <p className="text-sm font-black text-slate-950">{label} preview</p>
+            <p className="mt-1 truncate text-xs font-bold text-slate-500">{state.file?.name ?? `${label} not uploaded`}</p>
+          </div>
+          <button type="button" onClick={() => rotate(side)} disabled={!state.file} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-40">
+            Rotate
+            <RotateCw className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+        <div
+          className="grid place-items-center overflow-hidden rounded-xl bg-slate-50 p-3 sm:p-4"
+          style={{ height: "clamp(16rem, 34vh, 26rem)" }}
+        >
+          {state.url ? (
+            <img
+              src={state.url}
+              alt={`${label} card preview`}
+              style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }}
+              className="block h-auto max-h-full w-auto max-w-full object-contain transition"
+            />
+          ) : (
+            <div className="text-center text-sm font-bold text-slate-500">{label} image needed</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderAddReplaceButton(side: Side) {
+    const inputRef = side === "front" ? frontInputRef : backInputRef;
+    const state = side === "front" ? front : back;
+    return (
+      <button type="button" aria-label={`${state.file ? "Replace" : "Add"} ${side} side`} title={`${state.file ? "Replace" : "Add"} ${side} side`} onClick={() => inputRef.current?.click()} className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14">
+        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.62rem] font-black leading-none text-white ring-2 ring-white">{side === "front" ? "F" : "B"}</span>
+        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+      </button>
+    );
+  }
+
   if (stage === "processing") {
     return (
       <ImageProcessingScreen
@@ -414,146 +535,94 @@ export function FrontBackCardMergeTool() {
 
   if (stage === "success" && output) {
     return (
-      <ImageSuccessScreen
-        sectionRef={(node) => {
+      <section
+        ref={(node) => {
           toolSectionRef.current = node;
           successSectionRef.current = node;
         }}
-        title="Merge Complete"
-        subtitle={`${output.width} x ${output.height}px`}
-        downloadUrl={output.url}
-        fileName={output.fileName}
-        downloadLabel={`Download ${outputFormat.toUpperCase()}`}
-        onReset={resetTool}
-      />
+        data-v0-managed-flow="true"
+        data-v0-result-screen="true"
+        data-crop-image-workspace="true"
+        id="front-back-card-merge-tool"
+        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+      >
+        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
+              <div className="w-full max-w-[40rem] rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+                <div className="mx-auto grid h-[4.5rem] w-[4.5rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-10 w-10" aria-hidden="true" />
+                </div>
+                <h3 className="mt-7 text-xl font-black tracking-tight text-slate-950">Card Merge Complete</h3>
+                <p className="mt-3 text-lg font-black text-slate-500">File Size: {formatKb(output.blob.size)}</p>
+                <a href={output.url} download={output.fileName} className="mt-9 inline-flex min-h-16 w-full items-center justify-center gap-3 rounded-xl bg-[#FF2D2D] px-8 py-4 text-lg font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
+                  Download Merged Card
+                  <Download className="h-6 w-6" aria-hidden="true" />
+                </a>
+                <button type="button" onClick={resetTool} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl border border-red-100 bg-red-50 px-6 py-3 text-base font-black text-[#FF2D2D] transition hover:border-red-200 hover:bg-red-100">
+                  Merge Another Card
+                  <RotateCw className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (stage === "workspace") {
+    return (
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-card-merge-workspace="true" id="front-back-card-merge-tool" className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+            <input ref={frontInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("front", event)} />
+            <input ref={backInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("back", event)} />
+            <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 40, 144)}px` }}>
+              <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-2">
+                {renderPreviewCard("front", "Front Side")}
+                {renderPreviewCard("back", "Back Side")}
+              </div>
+              {error && <p className="mx-auto w-full max-w-6xl rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+            </div>
+          </div>
+
+          {isActionBarVisible && (
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
+              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-1 lg:flex-row lg:items-center lg:gap-3">
+                  <p className="truncate text-sm font-black text-slate-950">{selectedCount} of 2 images selected</p>
+                  <p className="truncate text-xs font-bold text-slate-500">{[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}</p>
+                </div>
+                <div className="grid grid-cols-[3rem_3rem_minmax(9rem,1fr)_minmax(5.5rem,0.7fr)] gap-2 sm:grid-cols-[3.5rem_3.5rem_minmax(13rem,1fr)_auto] lg:min-w-[38rem]">
+                  {renderAddReplaceButton("front")}
+                  {renderAddReplaceButton("back")}
+                  <button type="button" onClick={() => void createOutput()} disabled={isProcessing || !front.file || !back.file} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14 sm:px-5 sm:text-base">
+                    {isProcessing ? "Merging..." : "Merge Card"}
+                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+                    Clear all
+                    <RotateCw className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
     );
   }
 
   return (
-    <section ref={toolSectionRef} id="front-back-card-merge-tool" className="mx-auto mt-6 max-w-6xl text-left">
-      <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-[#FF2D2D]">Browser-only processing</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">Merge both sides into one printable file</h2>
-            <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-              Upload front and back side images of Aadhaar, PAN, Voter ID, Driving Licence, RC Book, Passport, ID cards, ATM cards, or any custom document. Files are processed in your browser only.
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700">
-            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            No server upload
-          </span>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          {supportedDocuments.map((item) => (
-            <span key={item} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-600">
-              {item}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <UploadSideCard side="front" title="Front Side Image" state={front} inputRef={frontInputRef} onInputChange={onInputChange} onDrop={onDrop} setDragging={setFront} onRotate={rotate} />
-        <UploadSideCard side="back" title="Back Side Image" state={back} inputRef={backInputRef} onInputChange={onInputChange} onDrop={onDrop} setDragging={setBack} onRotate={rotate} />
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
-          <h3 className="text-xl font-black text-slate-950">Layout & Output</h3>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <SelectButton label="Side by Side" selected={layout === "horizontal"} onClick={() => { setLayout("horizontal"); clearOutput(); }} />
-            <SelectButton label="Top & Bottom" selected={layout === "vertical"} onClick={() => { setLayout("vertical"); clearOutput(); }} />
-            <SelectButton label="A4 Print Layout" selected={layout === "a4"} onClick={() => { setLayout("a4"); clearOutput(); }} />
-            <SelectButton label="Card Size Layout" selected={layout === "card"} onClick={() => { setLayout("card"); clearOutput(); }} />
-          </div>
-
-          <label className="mt-5 block text-sm font-black text-slate-800">
-            Document Title
-            <input value={title} onChange={(event) => { setTitle(event.target.value); clearOutput(); }} placeholder="Optional title" className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-          </label>
-
-          <label className="mt-5 block text-sm font-black text-slate-800">
-            Spacing between images: {spacing}px
-            <input value={spacing} min={16} max={160} type="range" onChange={(event) => { setSpacing(Number(event.target.value)); clearOutput(); }} className="mt-3 w-full accent-[#FF2D2D]" />
-          </label>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <ToggleButton label="Auto Crop Background" active={autoCrop} onClick={() => { setAutoCrop(!autoCrop); clearOutput(); }} />
-            <ToggleButton label="Add Border" active={addBorder} onClick={() => { setAddBorder(!addBorder); clearOutput(); }} />
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <SelectButton label="JPG" selected={outputFormat === "jpg"} onClick={() => { setOutputFormat("jpg"); clearOutput(); }} />
-            <SelectButton label="PNG" selected={outputFormat === "png"} onClick={() => { setOutputFormat("png"); clearOutput(); }} />
-            <SelectButton label="PDF" selected={outputFormat === "pdf"} onClick={() => { setOutputFormat("pdf"); clearOutput(); }} />
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Selected files</p>
-            {selectedSummary.map((item) => (
-              <p key={item} className="mt-2 truncate text-sm font-bold text-slate-700">{item}</p>
-            ))}
-          </div>
-
-          <p className="mt-5 text-sm font-bold text-slate-600">{status}</p>
-          <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
-            <div className="h-full rounded-full bg-[#FF2D2D] transition-all duration-300" style={{ width: `${progress}%` }} />
-          </div>
-          {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
-        </div>
-
-        <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.06)] sm:p-6">
-          <h3 className="text-xl font-black text-slate-950">Final Preview</h3>
-          <div className="mt-4 grid min-h-[420px] place-items-center overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4">
-            {output ? (
-              outputFormat === "pdf" ? (
-                <div className="text-center">
-                  <FileText className="mx-auto h-16 w-16 text-[#FF2D2D]" aria-hidden="true" />
-                  <p className="mt-4 text-sm font-black text-slate-950">PDF generated successfully</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">{output.width} x {output.height}px</p>
-                </div>
-              ) : (
-                <img src={output.url} alt="Merged front and back card preview" className="max-h-[520px] max-w-full object-contain" />
-              )
-            ) : (
-              <div className="max-w-sm text-center">
-                <FileImage className="mx-auto h-16 w-16 text-slate-300" aria-hidden="true" />
-                <p className="mt-4 text-sm font-bold leading-6 text-slate-500">Preview will appear here after merging both side images.</p>
-              </div>
-            )}
-          </div>
-          {output && (
-            <a href={output.url} download={output.fileName} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800">
-              Download {outputFormat.toUpperCase()}
-              <Download className="h-5 w-5" aria-hidden="true" />
-            </a>
-          )}
-        </div>
-      </div>
-      {(front.file || back.file) && !output && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-          <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="truncate text-sm font-black text-slate-950">
-              {[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}
-            </p>
-            <button
-              type="button"
-              onClick={() => void createOutput()}
-              disabled={isProcessing || !front.file || !back.file}
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14 sm:w-auto sm:min-w-[18rem] sm:px-5 sm:text-base"
-            >
-              {isProcessing ? "Merging..." : "Merge Front & Back"}
-              <Download className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      )}
+    <section ref={toolSectionRef} data-v0-managed-flow="true" id="front-back-card-merge-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+      {renderUploadDrop()}
+      {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
     </section>
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function UploadSideCard({
   side,
   title,
@@ -611,6 +680,7 @@ function UploadSideCard({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function SelectButton({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (
     <button
@@ -625,6 +695,7 @@ function SelectButton({ label, selected, onClick }: { label: string; selected: b
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function ToggleButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button

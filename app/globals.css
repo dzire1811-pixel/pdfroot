@@ -1505,6 +1505,11 @@ section[id$="-tool"] label {
   padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
 }
 
+.v0-tool-page section[data-card-merge-workspace="true"] [data-ibps-document-preview-area="true"] {
+  min-height: auto !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
 @media (min-width: 1024px) {
   .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"] {
     padding-bottom: 17rem !important;
