@@ -9,6 +9,7 @@ import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 type Side = "front" | "back";
 type LayoutMode = "horizontal" | "vertical" | "a4" | "card";
 type OutputFormat = "jpg" | "png" | "pdf";
+type OutputLayoutMode = "side-by-side" | "top-bottom";
 
 type SideState = {
   file: File | null;
@@ -28,10 +29,6 @@ type OutputState = {
 
 function isImage(file: File) {
   return ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
-}
-
-function formatKb(bytes: number) {
-  return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
 function loadImage(file: File) {
@@ -167,6 +164,7 @@ export function FrontBackCardMergeTool() {
   const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [layout, setLayout] = useState<LayoutMode>("horizontal");
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("jpg");
+  const [outputLayout, setOutputLayout] = useState<OutputLayoutMode>("side-by-side");
   const [title, setTitle] = useState("");
   const [addBorder, setAddBorder] = useState(true);
   const [autoCrop, setAutoCrop] = useState(true);
@@ -186,8 +184,16 @@ export function FrontBackCardMergeTool() {
     processingRef: processingSectionRef,
     successRef: successSectionRef,
     shouldScrollToUploadRef,
-    resultReady: Boolean(output),
+    resultReady: false,
   });
+
+  useEffect(() => {
+    if (stage !== "success" || !output) return;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [output, stage]);
 
   const selectedCount = (front.file ? 1 : 0) + (back.file ? 1 : 0);
 
@@ -208,6 +214,7 @@ export function FrontBackCardMergeTool() {
     });
     setLayout("horizontal");
     setOutputFormat("jpg");
+    setOutputLayout("side-by-side");
     setTitle("");
     setAddBorder(true);
     setAutoCrop(true);
@@ -367,6 +374,14 @@ export function FrontBackCardMergeTool() {
       backBox = { x: 850, y: 160 + titleHeight, width: 620, height: 460 };
     }
 
+    if (outputLayout === "top-bottom") {
+      const outputGap = 90;
+      canvasWidth = 1400;
+      canvasHeight = 1850 + titleHeight;
+      frontBox = { x: 190, y: 170 + titleHeight, width: 1020, height: 660 };
+      backBox = { x: 190, y: 170 + titleHeight + 660 + outputGap, width: 1020, height: 660 };
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -491,7 +506,7 @@ export function FrontBackCardMergeTool() {
           </button>
         </div>
         <div
-          className="grid place-items-center overflow-hidden rounded-xl bg-slate-50 p-3 sm:p-4"
+          className="flex items-center justify-center overflow-hidden rounded-xl bg-slate-50 p-3 sm:p-4"
           style={{ height: "clamp(16rem, 34vh, 26rem)" }}
         >
           {state.url ? (
@@ -520,6 +535,30 @@ export function FrontBackCardMergeTool() {
     );
   }
 
+  function setOutputLayoutMode(mode: OutputLayoutMode) {
+    clearOutput();
+    setOutputLayout(mode);
+  }
+
+  function renderOutputLayoutIcon(mode: OutputLayoutMode, active: boolean) {
+    const cardClass = active ? "border-white bg-white/20" : "border-[#FF2D2D] bg-red-50";
+    if (mode === "top-bottom") {
+      return (
+        <span className="grid h-5 w-5 place-items-center gap-0.5" aria-hidden="true">
+          <span className={`block h-1.5 w-4 rounded-[0.2rem] border ${cardClass}`} />
+          <span className={`block h-1.5 w-4 rounded-[0.2rem] border ${cardClass}`} />
+        </span>
+      );
+    }
+
+    return (
+      <span className="flex h-5 w-5 items-center justify-center gap-0.5" aria-hidden="true">
+        <span className={`block h-4 w-1.5 rounded-[0.2rem] border ${cardClass}`} />
+        <span className={`block h-4 w-1.5 rounded-[0.2rem] border ${cardClass}`} />
+      </span>
+    );
+  }
+
   if (stage === "processing") {
     return (
       <ImageProcessingScreen
@@ -534,6 +573,8 @@ export function FrontBackCardMergeTool() {
   }
 
   if (stage === "success" && output) {
+    const outputTypeLabel = outputFormat.toUpperCase();
+
     return (
       <section
         ref={(node) => {
@@ -546,20 +587,31 @@ export function FrontBackCardMergeTool() {
         id="front-back-card-merge-tool"
         className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
+        <div className="relative mx-auto max-w-4xl px-4 text-center" style={{ paddingTop: "calc(var(--header-height, 72px) + 3rem)" }}>
+          <div className="mx-auto flex max-w-3xl justify-center">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
+              <FileImage className="h-3.5 w-3.5" aria-hidden="true" />
+              Image Tools
+            </div>
+          </div>
+          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            Front &amp; Back Card Merge Online
+          </h1>
+        </div>
         <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
           <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
-              <div className="w-full max-w-[40rem] rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
-                <div className="mx-auto grid h-[4.5rem] w-[4.5rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 className="h-10 w-10" aria-hidden="true" />
+              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </div>
-                <h3 className="mt-7 text-xl font-black tracking-tight text-slate-950">Card Merge Complete</h3>
-                <p className="mt-3 text-lg font-black text-slate-500">File Size: {formatKb(output.blob.size)}</p>
-                <a href={output.url} download={output.fileName} className="mt-9 inline-flex min-h-16 w-full items-center justify-center gap-3 rounded-xl bg-[#FF2D2D] px-8 py-4 text-lg font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
+                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Card Merge Ready</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-500">1 {outputTypeLabel} file created</p>
+                <a href={output.url} download={output.fileName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
                   Download Merged Card
-                  <Download className="h-6 w-6" aria-hidden="true" />
+                  <Download className="h-5 w-5" aria-hidden="true" />
                 </a>
-                <button type="button" onClick={resetTool} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl border border-red-100 bg-red-50 px-6 py-3 text-base font-black text-[#FF2D2D] transition hover:border-red-200 hover:bg-red-100">
+                <button type="button" onClick={resetTool} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]">
                   Merge Another Card
                   <RotateCw className="h-5 w-5" aria-hidden="true" />
                 </button>
@@ -590,9 +642,24 @@ export function FrontBackCardMergeTool() {
           {isActionBarVisible && (
             <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
               <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 flex-1 flex-col gap-1 lg:flex-row lg:items-center lg:gap-3">
-                  <p className="truncate text-sm font-black text-slate-950">{selectedCount} of 2 images selected</p>
-                  <p className="truncate text-xs font-bold text-slate-500">{[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}</p>
+                <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+                  <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                    <span className="text-xs font-black text-slate-600 sm:whitespace-nowrap">Output Layout</span>
+                    <div className="grid grid-cols-2 gap-1 rounded-2xl border border-red-100 bg-red-50/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+                      <button type="button" onClick={() => setOutputLayoutMode("side-by-side")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "side-by-side" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
+                        {renderOutputLayoutIcon("side-by-side", outputLayout === "side-by-side")}
+                        <span className="whitespace-nowrap">Side by Side</span>
+                      </button>
+                      <button type="button" onClick={() => setOutputLayoutMode("top-bottom")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "top-bottom" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
+                        {renderOutputLayoutIcon("top-bottom", outputLayout === "top-bottom")}
+                        <span className="whitespace-nowrap">Top &amp; Bottom</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-950">{selectedCount} of 2 images selected</p>
+                    <p className="truncate text-xs font-bold text-slate-500">{[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}</p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-[3rem_3rem_minmax(9rem,1fr)_minmax(5.5rem,0.7fr)] gap-2 sm:grid-cols-[3.5rem_3.5rem_minmax(13rem,1fr)_auto] lg:min-w-[38rem]">
                   {renderAddReplaceButton("front")}
@@ -667,8 +734,8 @@ function UploadSideCard({
       </div>
       {state.url && (
         <>
-          <div className="mt-4 grid min-h-64 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
-            <img src={state.url} alt={`${side} side preview`} style={{ transform: `rotate(${state.rotation}deg)` }} className="max-h-72 max-w-full object-contain transition" />
+          <div className="mt-4 flex min-h-64 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
+            <img src={state.url} alt={`${side} side preview`} style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }} className="h-auto max-h-72 w-auto max-w-full object-contain transition" />
           </div>
           <button type="button" onClick={() => onRotate(side)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-900 transition hover:border-red-200 hover:text-[#FF2D2D]">
             Rotate Image
