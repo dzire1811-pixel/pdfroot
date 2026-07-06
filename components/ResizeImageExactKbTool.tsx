@@ -166,6 +166,8 @@ export function ResizeImageExactKbTool() {
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
   const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -176,6 +178,7 @@ export function ResizeImageExactKbTool() {
   const actionBarRef = useRef<HTMLDivElement>(null);
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
   const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resizedFilesRef = useRef<OutputState[]>([]);
@@ -217,6 +220,9 @@ export function ResizeImageExactKbTool() {
     setIsActionBarVisible(false);
     setIsSettingsDrawerOpen(false);
     setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragOffsetRef.current = 0;
     setTargetKb(50);
     setDimensionMode("pixel");
     setPixelWidth("");
@@ -536,6 +542,9 @@ export function ResizeImageExactKbTool() {
       setIsActionBarVisible(false);
       setIsSettingsDrawerOpen(false);
       setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragOffsetRef.current = 0;
       return;
     }
 
@@ -579,24 +588,52 @@ export function ResizeImageExactKbTool() {
 
   const closeSettingsDrawer = useCallback(() => {
     if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
     window.setTimeout(() => {
       setIsSettingsDrawerOpen(false);
       setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
         mobileSettingsButtonRef.current?.focus();
       });
-    }, 220);
+    }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  const closeSettingsDrawerIfDragged = useCallback(
+  const updateSettingsDrawerDrag = useCallback(
     (clientY: number) => {
       if (drawerDragStartYRef.current === null) return;
-      const dragDistance = clientY - drawerDragStartYRef.current;
-      if (dragDistance > 36) {
-        drawerDragStartYRef.current = null;
-        closeSettingsDrawer();
+      const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = dragDistance;
+      setSettingsDrawerDragOffset(dragDistance);
+    },
+    [],
+  );
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      if (typeof clientY === "number") {
+        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = dragDistance;
+        setSettingsDrawerDragOffset(dragDistance);
       }
+
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+
+      if (drawerDragOffsetRef.current >= 84) {
+        closeSettingsDrawer();
+        return;
+      }
+
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
     },
     [closeSettingsDrawer],
   );
@@ -617,40 +654,38 @@ export function ResizeImageExactKbTool() {
     };
 
     const onPointerMove = (event: globalThis.PointerEvent) => {
-      closeSettingsDrawerIfDragged(event.clientY);
+      updateSettingsDrawerDrag(event.clientY);
     };
 
     const onMouseMove = (event: globalThis.MouseEvent) => {
-      closeSettingsDrawerIfDragged(event.clientY);
+      updateSettingsDrawerDrag(event.clientY);
     };
 
     const onTouchMove = (event: globalThis.TouchEvent) => {
       const touch = event.touches[0];
       if (touch) {
-        closeSettingsDrawerIfDragged(touch.clientY);
+        updateSettingsDrawerDrag(touch.clientY);
       }
     };
 
     const clearDrawerDrag = () => {
       drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
     };
 
     const onPointerEnd = (event: globalThis.PointerEvent) => {
-      closeSettingsDrawerIfDragged(event.clientY);
-      clearDrawerDrag();
+      finishSettingsDrawerDrag(event.clientY);
     };
 
     const onMouseEnd = (event: globalThis.MouseEvent) => {
-      closeSettingsDrawerIfDragged(event.clientY);
-      clearDrawerDrag();
+      finishSettingsDrawerDrag(event.clientY);
     };
 
     const onTouchEnd = (event: globalThis.TouchEvent) => {
       const touch = event.changedTouches[0];
-      if (touch) {
-        closeSettingsDrawerIfDragged(touch.clientY);
-      }
-      clearDrawerDrag();
+      finishSettingsDrawerDrag(touch?.clientY);
     };
 
     document.addEventListener("keydown", onKeyDown);
@@ -675,7 +710,7 @@ export function ResizeImageExactKbTool() {
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", clearDrawerDrag);
     };
-  }, [isSettingsDrawerOpen, closeSettingsDrawer, closeSettingsDrawerIfDragged]);
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -775,11 +810,17 @@ export function ResizeImageExactKbTool() {
       }
     }
     setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragOffsetRef.current = 0;
     setIsSettingsDrawerOpen(true);
   }
 
   function beginDrawerHandleDrag(clientY: number) {
     drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
   }
 
   function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
@@ -788,7 +829,7 @@ export function ResizeImageExactKbTool() {
   }
 
   function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
-    closeSettingsDrawerIfDragged(event.clientY);
+    updateSettingsDrawerDrag(event.clientY);
   }
 
   function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
@@ -805,30 +846,28 @@ export function ResizeImageExactKbTool() {
   function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
     const touch = event.touches[0];
     if (touch) {
-      closeSettingsDrawerIfDragged(touch.clientY);
+      updateSettingsDrawerDrag(touch.clientY);
     }
   }
 
   function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
-    closeSettingsDrawerIfDragged(event.clientY);
-    drawerDragStartYRef.current = null;
+    finishSettingsDrawerDrag(event.clientY);
   }
 
   function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
-    closeSettingsDrawerIfDragged(event.clientY);
-    drawerDragStartYRef.current = null;
+    finishSettingsDrawerDrag(event.clientY);
   }
 
   function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
     const touch = event.changedTouches[0];
-    if (touch) {
-      closeSettingsDrawerIfDragged(touch.clientY);
-    }
-    drawerDragStartYRef.current = null;
+    finishSettingsDrawerDrag(touch?.clientY);
   }
 
   function clearDrawerHandleDrag() {
     drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
   }
 
   function renderSettingsControls(idPrefix: string, className = "") {
@@ -1039,13 +1078,16 @@ export function ResizeImageExactKbTool() {
           role="dialog"
           aria-modal="true"
           aria-label="Resize image settings"
-          className={`absolute inset-x-0 bottom-0 max-h-[min(82vh,34rem)] overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
-            isSettingsDrawerClosing ? "animate-[exactKbDrawerOut_220ms_ease-in]" : "animate-[exactKbDrawerIn_220ms_ease-out]"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 max-h-[min(82vh,34rem)] overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[exactKbDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
           }`}
         >
           <button
             type="button"
-            className="mx-auto mt-2 flex h-8 w-20 touch-none cursor-grab items-center justify-center rounded-full active:cursor-grabbing"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
             aria-label="Drag down to close settings"
             onPointerDown={onDrawerHandlePointerDown}
             onPointerMove={onDrawerHandlePointerMove}
@@ -1059,12 +1101,12 @@ export function ResizeImageExactKbTool() {
             onTouchEnd={onDrawerHandleTouchEnd}
             onTouchCancel={clearDrawerHandleDrag}
           >
-            <span className="h-1.5 w-12 rounded-full bg-slate-300" aria-hidden="true" />
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
           </button>
-          <div className="border-b border-slate-200 px-4 py-3">
+          <div className="overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
             <p className="text-sm font-black text-slate-950">Settings</p>
           </div>
-          <div className="max-h-[calc(min(82vh,34rem)-6.5rem)] overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="max-h-[calc(min(82vh,34rem)-6rem)] overflow-y-auto overscroll-contain rounded-b-2xl px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             {renderSettingsControls("exact-kb-mobile", "items-stretch")}
             {renderActionButtons("mt-4")}
           </div>
