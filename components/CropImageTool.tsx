@@ -1,9 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { CSSProperties, ChangeEvent, DragEvent, MouseEvent, useEffect, useRef, useState } from "react";
+import { CSSProperties, ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Crop, Download, FileArchive, ImageUp, Minus, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Crop, Download, FileArchive, ImageUp, Minus, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
@@ -226,6 +226,9 @@ export function CropImageTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
   const shouldScrollToUploadRef = useRef(false);
@@ -241,6 +244,10 @@ export function CropImageTool() {
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const [outputSizeMode, setOutputSizeMode] = useState<OutputSizeMode>("free");
   const [outputUnit, setOutputUnit] = useState<OutputUnit>("pixel");
   const [outputWidth, setOutputWidth] = useState("");
@@ -286,6 +293,11 @@ export function CropImageTool() {
     setError(null);
     setIsDragging(false);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragOffsetRef.current = 0;
     setOutputSizeMode("free");
     setOutputUnit("pixel");
     setOutputWidth("");
@@ -458,7 +470,7 @@ export function CropImageTool() {
     void handleFiles(event.dataTransfer.files, { append: selectedImages.length > 0 });
   }
 
-  function pointFromEvent(event: MouseEvent<HTMLElement>) {
+  function pointFromEvent(event: { clientX: number; clientY: number }) {
     const rect = cropFrameRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
     return {
@@ -467,10 +479,19 @@ export function CropImageTool() {
     };
   }
 
-  function onCropMouseDown(event: MouseEvent<HTMLDivElement>, mode: DragMode) {
+  function captureCropPointer(event: PointerEvent<HTMLDivElement>) {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers may reject capture if the pointer already ended.
+    }
+  }
+
+  function onCropPointerDown(event: PointerEvent<HTMLDivElement>, mode: DragMode) {
     if (!activeImage || !activeImage.cropBox) return;
     event.preventDefault();
     event.stopPropagation();
+    captureCropPointer(event);
     const point = pointFromEvent(event);
     setDragState({ mode, startX: point.x, startY: point.y, startBox: activeImage.cropBox });
     if (completedResultFor(activeImage.id)) {
@@ -489,9 +510,10 @@ export function CropImageTool() {
     };
   }
 
-  function onPreviewMouseDown(event: MouseEvent<HTMLDivElement>) {
+  function onPreviewPointerDown(event: PointerEvent<HTMLDivElement>) {
     if (!activeImage) return;
     event.preventDefault();
+    captureCropPointer(event);
     const point = pointFromEvent(event);
     const nextCropBox = { x: point.x, y: point.y, width: 0, height: 0 };
     updateActiveCropBox(nextCropBox);
@@ -501,8 +523,9 @@ export function CropImageTool() {
     }
   }
 
-  function onPreviewMouseMove(event: MouseEvent<HTMLDivElement>) {
+  function onPreviewPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!dragState) return;
+    event.preventDefault();
     const point = pointFromEvent(event);
     const deltaX = point.x - dragState.startX;
     const deltaY = point.y - dragState.startY;
@@ -692,6 +715,11 @@ export function CropImageTool() {
   useEffect(() => {
     if (!selectedImages.length || stage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragOffsetRef.current = 0;
       return;
     }
 
@@ -733,6 +761,129 @@ export function CropImageTool() {
     };
   }, [selectedImages.length, stage]);
 
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => {
+        mobileSettingsButtonRef.current?.focus();
+      });
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      if (typeof clientY === "number") {
+        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = dragDistance;
+        setSettingsDrawerDragOffset(dragDistance);
+      }
+
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+
+      if (drawerDragOffsetRef.current >= 84) {
+        closeSettingsDrawer();
+        return;
+      }
+
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeSettingsDrawer();
+      }
+    };
+
+    const onResize = () => {
+      if (window.innerWidth >= 640) {
+        closeSettingsDrawer();
+      }
+    };
+
+    const onPointerMove = (event: globalThis.PointerEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseMove = (event: globalThis.MouseEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) {
+        updateSettingsDrawerDrag(touch.clientY);
+      }
+    };
+
+    const clearDrawerDrag = () => {
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    };
+
+    const onPointerEnd = (event: globalThis.PointerEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseEnd = (event: globalThis.MouseEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
+
   function renderUploadBox() {
     return (
       <label
@@ -745,7 +896,7 @@ export function CropImageTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="crop-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <input id="crop-image-upload" name="crop-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -776,6 +927,200 @@ export function CropImageTool() {
     );
   }
 
+  function renderSettingsControls(idPrefix: string, className = "") {
+    const outputWidthId = `${idPrefix}-output-width`;
+    const outputHeightId = `${idPrefix}-output-height`;
+    const exactKbId = `${idPrefix}-exact-kb`;
+
+    return (
+      <div className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}>
+        <button
+          type="button"
+          onClick={() => updateActiveZoom(-0.1)}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+        >
+          <Minus className="h-4 w-4" aria-hidden="true" />
+          Zoom Out
+        </button>
+        <button
+          type="button"
+          onClick={() => updateActiveZoom(0.1)}
+          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-[#FF2D2D] transition hover:border-[#FF2D2D]"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Zoom In
+        </button>
+        <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
+          {(["free", "fixed"] as OutputSizeMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setOutputSizeMode(mode);
+                resetCompletedCropsForOutputChange();
+                setError(null);
+              }}
+              className={`h-10 rounded-lg px-3 text-xs font-black transition ${outputSizeMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
+            >
+              {mode === "free" ? "Free Size" : "Fixed Size"}
+            </button>
+          ))}
+        </div>
+        <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
+          {(["pixel", "cm"] as OutputUnit[]).map((unit) => (
+            <button
+              key={unit}
+              type="button"
+              onClick={() => {
+                setOutputUnit(unit);
+                resetCompletedCropsForOutputChange();
+                setError(null);
+              }}
+              className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black transition ${outputUnit === unit ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
+            >
+              {unit === "pixel" ? "Pixel" : "CM"}
+            </button>
+          ))}
+        </div>
+        <input
+          id={outputWidthId}
+          name={outputWidthId}
+          aria-label={`Output width in ${outputUnit === "pixel" ? "pixels" : "centimeters"}`}
+          type="number"
+          min={outputUnit === "pixel" ? 1 : 0.01}
+          step={outputUnit === "pixel" ? 1 : 0.01}
+          placeholder="Width"
+          value={outputWidth}
+          disabled={outputSizeMode === "free"}
+          onChange={(event) => {
+            setOutputWidth(event.target.value);
+            resetCompletedCropsForOutputChange();
+            setError(null);
+          }}
+          className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+        />
+        <input
+          id={outputHeightId}
+          name={outputHeightId}
+          aria-label={`Output height in ${outputUnit === "pixel" ? "pixels" : "centimeters"}`}
+          type="number"
+          min={outputUnit === "pixel" ? 1 : 0.01}
+          step={outputUnit === "pixel" ? 1 : 0.01}
+          placeholder="Height"
+          value={outputHeight}
+          disabled={outputSizeMode === "free"}
+          onChange={(event) => {
+            setOutputHeight(event.target.value);
+            resetCompletedCropsForOutputChange();
+            setError(null);
+          }}
+          className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+        />
+        <input
+          id={exactKbId}
+          name={exactKbId}
+          aria-label="Exact KB"
+          type="number"
+          min={1}
+          step={0.1}
+          placeholder="Exact KB"
+          value={exactKb}
+          onChange={(event) => {
+            setExactKb(event.target.value);
+            resetCompletedCropsForOutputChange();
+            setError(null);
+          }}
+          className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
+        />
+      </div>
+    );
+  }
+
+  function renderActionButtons(className = "") {
+    return (
+      <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] xl:w-auto xl:min-w-[30rem] ${className}`}>
+        {renderAddMoreButton()}
+        <button type="button" onClick={() => void cropActiveImage()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Crop Image
+          <Crop className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragOffsetRef.current = 0;
+    setIsSettingsDrawerOpen(true);
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) {
+      beginDrawerHandleDrag(touch.clientY);
+    }
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) {
+      updateSettingsDrawerDrag(touch.clientY);
+    }
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
   function renderCropPreview() {
     if (!activeImage) return null;
 
@@ -783,11 +1128,12 @@ export function CropImageTool() {
       <div
         ref={cropFrameRef}
         role="presentation"
-        onMouseDown={onPreviewMouseDown}
-        onMouseMove={onPreviewMouseMove}
-        onMouseUp={stopCropDrag}
-        onMouseLeave={stopCropDrag}
-        className="relative h-full w-full cursor-crosshair select-none"
+        onPointerDown={onPreviewPointerDown}
+        onPointerMove={onPreviewPointerMove}
+        onPointerUp={stopCropDrag}
+        onPointerCancel={stopCropDrag}
+        onLostPointerCapture={stopCropDrag}
+        className="relative h-full w-full touch-none cursor-crosshair select-none"
         style={{ transform: `scale(${activeImage.zoom})`, transformOrigin: "center" }}
       >
         <img
@@ -800,8 +1146,8 @@ export function CropImageTool() {
         {activeImage.cropBox && (
           <div
             role="presentation"
-            onMouseDown={(event) => onCropMouseDown(event, "move")}
-            className="absolute cursor-move border border-[#FF2D2D] shadow-[0_0_0_9999px_rgba(15,23,42,0.38)]"
+            onPointerDown={(event) => onCropPointerDown(event, "move")}
+            className="absolute touch-none cursor-move border border-[#FF2D2D] shadow-[0_0_0_9999px_rgba(15,23,42,0.38)]"
             style={{
               left: `${activeImage.cropBox.x}%`,
               top: `${activeImage.cropBox.y}%`,
@@ -813,15 +1159,15 @@ export function CropImageTool() {
               <div
                 key={mode}
                 role="presentation"
-                onMouseDown={(event) => onCropMouseDown(event, mode)}
-                className={`absolute h-3 w-3 border border-white bg-[#FF2D2D] shadow ${
+                onPointerDown={(event) => onCropPointerDown(event, mode)}
+                className={`absolute h-5 w-5 touch-none border border-white bg-[#FF2D2D] shadow sm:h-3 sm:w-3 ${
                   mode === "resize-nw"
-                    ? "left-[-6px] top-[-6px] cursor-nw-resize"
+                    ? "left-[-10px] top-[-10px] cursor-nw-resize sm:left-[-6px] sm:top-[-6px]"
                     : mode === "resize-ne"
-                      ? "right-[-6px] top-[-6px] cursor-ne-resize"
+                      ? "right-[-10px] top-[-10px] cursor-ne-resize sm:right-[-6px] sm:top-[-6px]"
                       : mode === "resize-sw"
-                        ? "bottom-[-6px] left-[-6px] cursor-sw-resize"
-                        : "bottom-[-6px] right-[-6px] cursor-se-resize"
+                        ? "bottom-[-10px] left-[-10px] cursor-sw-resize sm:bottom-[-6px] sm:left-[-6px]"
+                        : "bottom-[-10px] right-[-10px] cursor-se-resize sm:bottom-[-6px] sm:right-[-6px]"
                 }`}
               />
             ))}
@@ -834,7 +1180,7 @@ export function CropImageTool() {
   function renderWorkspacePreview() {
     return (
       <div ref={workAreaRef} data-crop-image-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 px-2 py-3 text-left sm:px-3 sm:py-4 lg:px-4">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
+        <input id="crop-image-add-more" name="crop-image-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-black text-slate-950">
             {selectedImages.length} selected {selectedImages.length === 1 ? "image" : "images"}
@@ -935,6 +1281,71 @@ export function CropImageTool() {
     );
   }
 
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes cropImageDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button
+          type="button"
+          className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`}
+          aria-label="Close settings backdrop"
+          onClick={closeSettingsDrawer}
+        />
+        <div
+          id="crop-image-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Crop image settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(82vh,34rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[cropImageDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            {renderSettingsControls("crop-image-mobile", "items-stretch")}
+          </div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (stage === "success" && results.length) {
     const singleResult = results.length === 1 ? results[0] : null;
     const resultSizeLabel = singleResult ? formatResultSize(singleResult.sizeKb) : formatResultSize(results.reduce((total, result) => total + result.sizeKb, 0));
@@ -1025,123 +1436,30 @@ export function CropImageTool() {
           {isActionBarVisible && <div ref={actionBarRef} data-crop-image-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
             <div className="mx-auto flex max-w-[1760px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-                <p className="truncate text-sm font-black text-slate-950">
-                  {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
-                </p>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <p className="truncate text-sm font-black text-slate-950">
+                    {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
+                  </p>
                   <button
+                    ref={mobileSettingsButtonRef}
                     type="button"
-                    onClick={() => updateActiveZoom(-0.1)}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]"
+                    onClick={openSettingsDrawer}
+                    className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                    aria-expanded={isSettingsDrawerOpen}
+                    aria-controls="crop-image-mobile-settings-drawer"
                   >
-                    <Minus className="h-4 w-4" aria-hidden="true" />
-                    Zoom Out
+                    <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                    Settings
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => updateActiveZoom(0.1)}
-                    className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-black text-[#FF2D2D] transition hover:border-[#FF2D2D]"
-                  >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    Zoom In
-                  </button>
-                  <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                    {(["free", "fixed"] as OutputSizeMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => {
-                          setOutputSizeMode(mode);
-                          resetCompletedCropsForOutputChange();
-                          setError(null);
-                        }}
-                        className={`h-10 rounded-lg px-3 text-xs font-black transition ${
-                          outputSizeMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"
-                        }`}
-                      >
-                        {mode === "free" ? "Free Size" : "Fixed Size"}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                    {(["pixel", "cm"] as OutputUnit[]).map((unit) => (
-                      <button
-                        key={unit}
-                        type="button"
-                        onClick={() => {
-                          setOutputUnit(unit);
-                          resetCompletedCropsForOutputChange();
-                          setError(null);
-                        }}
-                        className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black transition ${
-                          outputUnit === unit ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"
-                        }`}
-                      >
-                        {unit === "pixel" ? "Pixel" : "CM"}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    aria-label={`Output width in ${outputUnit === "pixel" ? "pixels" : "centimeters"}`}
-                    type="number"
-                    min={outputUnit === "pixel" ? 1 : 0.01}
-                    step={outputUnit === "pixel" ? 1 : 0.01}
-                    placeholder="Width"
-                    value={outputWidth}
-                    disabled={outputSizeMode === "free"}
-                    onChange={(event) => {
-                      setOutputWidth(event.target.value);
-                      resetCompletedCropsForOutputChange();
-                      setError(null);
-                    }}
-                    className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
-                  />
-                  <input
-                    aria-label={`Output height in ${outputUnit === "pixel" ? "pixels" : "centimeters"}`}
-                    type="number"
-                    min={outputUnit === "pixel" ? 1 : 0.01}
-                    step={outputUnit === "pixel" ? 1 : 0.01}
-                    placeholder="Height"
-                    value={outputHeight}
-                    disabled={outputSizeMode === "free"}
-                    onChange={(event) => {
-                      setOutputHeight(event.target.value);
-                      resetCompletedCropsForOutputChange();
-                      setError(null);
-                    }}
-                    className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
-                  />
-                  <input
-                    aria-label="Exact KB"
-                    type="number"
-                    min={1}
-                    step={0.1}
-                    placeholder="Exact KB"
-                    value={exactKb}
-                    onChange={(event) => {
-                      setExactKb(event.target.value);
-                      resetCompletedCropsForOutputChange();
-                      setError(null);
-                    }}
-                    className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
-                  />
                 </div>
+                {renderSettingsControls("crop-image", "hidden sm:flex")}
               </div>
               <div className="min-w-0 xl:ml-auto">
-                <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] xl:w-auto xl:min-w-[30rem]">
-                  {renderAddMoreButton()}
-                  <button type="button" onClick={() => void cropActiveImage()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                    Crop Image
-                    <Crop className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                    Clear all
-                    <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </div>
+                {renderActionButtons()}
               </div>
             </div>
           </div>}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );
