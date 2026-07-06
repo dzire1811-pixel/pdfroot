@@ -1,9 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Maximize2, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Maximize2, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -164,6 +164,8 @@ export function ResizeImageExactKbTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -172,6 +174,8 @@ export function ResizeImageExactKbTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
   const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resizedFilesRef = useRef<OutputState[]>([]);
@@ -211,6 +215,8 @@ export function ResizeImageExactKbTool() {
     setIsDragging(false);
     setDraggedId(null);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
     setTargetKb(50);
     setDimensionMode("pixel");
     setPixelWidth("");
@@ -528,6 +534,8 @@ export function ResizeImageExactKbTool() {
   useEffect(() => {
     if (!selectedImages.length || stage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
       return;
     }
 
@@ -568,6 +576,106 @@ export function ResizeImageExactKbTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [selectedImages.length, stage]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    setIsSettingsDrawerClosing(true);
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      window.requestAnimationFrame(() => {
+        mobileSettingsButtonRef.current?.focus();
+      });
+    }, 220);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const closeSettingsDrawerIfDragged = useCallback(
+    (clientY: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      const dragDistance = clientY - drawerDragStartYRef.current;
+      if (dragDistance > 36) {
+        drawerDragStartYRef.current = null;
+        closeSettingsDrawer();
+      }
+    },
+    [closeSettingsDrawer],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeSettingsDrawer();
+      }
+    };
+
+    const onResize = () => {
+      if (window.innerWidth >= 640) {
+        closeSettingsDrawer();
+      }
+    };
+
+    const onPointerMove = (event: globalThis.PointerEvent) => {
+      closeSettingsDrawerIfDragged(event.clientY);
+    };
+
+    const onMouseMove = (event: globalThis.MouseEvent) => {
+      closeSettingsDrawerIfDragged(event.clientY);
+    };
+
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) {
+        closeSettingsDrawerIfDragged(touch.clientY);
+      }
+    };
+
+    const clearDrawerDrag = () => {
+      drawerDragStartYRef.current = null;
+    };
+
+    const onPointerEnd = (event: globalThis.PointerEvent) => {
+      closeSettingsDrawerIfDragged(event.clientY);
+      clearDrawerDrag();
+    };
+
+    const onMouseEnd = (event: globalThis.MouseEvent) => {
+      closeSettingsDrawerIfDragged(event.clientY);
+      clearDrawerDrag();
+    };
+
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      const touch = event.changedTouches[0];
+      if (touch) {
+        closeSettingsDrawerIfDragged(touch.clientY);
+      }
+      clearDrawerDrag();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, closeSettingsDrawerIfDragged]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -627,7 +735,7 @@ export function ResizeImageExactKbTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
+        <input id="image-upload" name="image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -655,6 +763,171 @@ export function ResizeImageExactKbTool() {
         </span>
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
       </button>
+    );
+  }
+
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    drawerDragStartYRef.current = clientY;
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    closeSettingsDrawerIfDragged(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) {
+      beginDrawerHandleDrag(touch.clientY);
+    }
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) {
+      closeSettingsDrawerIfDragged(touch.clientY);
+    }
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    closeSettingsDrawerIfDragged(event.clientY);
+    drawerDragStartYRef.current = null;
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    closeSettingsDrawerIfDragged(event.clientY);
+    drawerDragStartYRef.current = null;
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    if (touch) {
+      closeSettingsDrawerIfDragged(touch.clientY);
+    }
+    drawerDragStartYRef.current = null;
+  }
+
+  function clearDrawerHandleDrag() {
+    drawerDragStartYRef.current = null;
+  }
+
+  function renderSettingsControls(idPrefix: string, className = "") {
+    const targetKbId = `${idPrefix}-target-kb`;
+    const pixelWidthId = `${idPrefix}-width-px`;
+    const pixelHeightId = `${idPrefix}-height-px`;
+    const cmWidthId = `${idPrefix}-width-cm`;
+    const cmHeightId = `${idPrefix}-height-cm`;
+    const dpiId = `${idPrefix}-dpi`;
+    const ratioId = `${idPrefix}-maintain-ratio`;
+
+    return (
+      <div className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}>
+        <label htmlFor={targetKbId} className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
+          Target KB
+          <input
+            id={targetKbId}
+            name={targetKbId}
+            type="number"
+            min={5}
+            max={1000}
+            value={targetKb}
+            onChange={(event) => {
+              setTargetKb(Number(event.target.value));
+              setError(null);
+            }}
+            className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
+          />
+        </label>
+        {quickSizes.map((size) => {
+          const isActive = targetKb === size;
+
+          return (
+            <button
+              key={size}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => {
+                setTargetKb(size);
+                setError(null);
+              }}
+              className={`inline-flex h-10 items-center justify-center rounded-xl border px-3 text-xs font-black transition ${
+                isActive ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.2)]" : "border-red-200 bg-red-50 text-[#FF2D2D] hover:border-[#FF2D2D]"
+              }`}
+            >
+              {size}KB
+            </button>
+          );
+        })}
+        <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
+          {(["pixel", "cm"] as DimensionMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => {
+                setDimensionMode(mode);
+                setError(null);
+              }}
+              className={`h-10 min-w-16 rounded-lg px-3 text-xs font-black transition ${
+                dimensionMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"
+              }`}
+            >
+              {mode === "pixel" ? "Pixel" : "CM"}
+            </button>
+          ))}
+        </div>
+        {dimensionMode === "pixel" ? (
+          <>
+            <input id={pixelWidthId} name={pixelWidthId} aria-label="Width in pixels" type="number" min={1} placeholder="Width px" value={pixelWidth} onChange={(event) => syncPixelWidth(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+            <input id={pixelHeightId} name={pixelHeightId} aria-label="Height in pixels" type="number" min={1} placeholder="Height px" value={pixelHeight} onChange={(event) => syncPixelHeight(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+          </>
+        ) : (
+          <>
+            <input id={cmWidthId} name={cmWidthId} aria-label="Width in centimeters" type="number" min={0.1} step="0.01" placeholder="Width cm" value={cmWidth} onChange={(event) => syncCmWidth(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+            <input id={cmHeightId} name={cmHeightId} aria-label="Height in centimeters" type="number" min={0.1} step="0.01" placeholder="Height cm" value={cmHeight} onChange={(event) => syncCmHeight(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+            <input id={dpiId} name={dpiId} aria-label="DPI" type="number" min={72} max={1200} value={dpi} onChange={(event) => setDpi(Number(event.target.value))} className="h-12 w-20 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+          </>
+        )}
+        <label htmlFor={ratioId} className="flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
+          <input id={ratioId} name={ratioId} type="checkbox" checked={maintainAspectRatio} onChange={(event) => setMaintainAspectRatio(event.target.checked)} className="h-4 w-4 accent-[#FF2D2D]" />
+          Maintain ratio
+        </label>
+      </div>
+    );
+  }
+
+  function renderActionButtons(className = "") {
+    return (
+      <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem] ${className}`}>
+        {renderAddMoreButton()}
+        <button type="button" onClick={() => void processImages()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Resize Image Now
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
     );
   }
 
@@ -690,7 +963,7 @@ export function ResizeImageExactKbTool() {
   function renderWorkspacePreview() {
     return (
       <div ref={workAreaRef} data-exact-kb-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
+        <input id="exact-kb-add-more-images" name="exact-kb-add-more-images" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
         <div data-exact-kb-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
           {selectedImages.map((image, index) => (
             <article
@@ -705,7 +978,7 @@ export function ResizeImageExactKbTool() {
                 draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
               }`}
             >
-              <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+              <div className="relative grid aspect-[3/4] max-sm:aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
                 <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
                   {index + 1}
                 </span>
@@ -727,6 +1000,74 @@ export function ResizeImageExactKbTool() {
               </div>
             </article>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes exactKbDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+          @keyframes exactKbDrawerOut {
+            from {
+              transform: translateY(0);
+            }
+            to {
+              transform: translateY(100%);
+            }
+          }
+        `}</style>
+        <button
+          type="button"
+          className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`}
+          aria-label="Close settings backdrop"
+          onClick={closeSettingsDrawer}
+        />
+        <div
+          id="exact-kb-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Resize image settings"
+          className={`absolute inset-x-0 bottom-0 max-h-[min(82vh,34rem)] overflow-hidden rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerClosing ? "animate-[exactKbDrawerOut_220ms_ease-in]" : "animate-[exactKbDrawerIn_220ms_ease-out]"
+          }`}
+        >
+          <button
+            type="button"
+            className="mx-auto mt-2 flex h-8 w-20 touch-none cursor-grab items-center justify-center rounded-full active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1.5 w-12 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="border-b border-slate-200 px-4 py-3">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+          </div>
+          <div className="max-h-[calc(min(82vh,34rem)-6.5rem)] overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            {renderSettingsControls("exact-kb-mobile", "items-stretch")}
+            {renderActionButtons("mt-4")}
+          </div>
         </div>
       </div>
     );
@@ -846,94 +1187,30 @@ export function ResizeImageExactKbTool() {
           {isActionBarVisible && <div ref={actionBarRef} data-exact-kb-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
             <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-                <p className="truncate text-sm font-black text-slate-950">
-                  {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
-                </p>
-                <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
-                    Target KB
-                    <input
-                      type="number"
-                      min={5}
-                      max={1000}
-                      value={targetKb}
-                      onChange={(event) => {
-                        setTargetKb(Number(event.target.value));
-                        setError(null);
-                      }}
-                      className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
-                    />
-                  </label>
-                  {quickSizes.map((size) => {
-                    const isActive = targetKb === size;
-
-                    return (
-                      <button
-                        key={size}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => {
-                          setTargetKb(size);
-                          setError(null);
-                        }}
-                        className={`inline-flex h-10 items-center justify-center rounded-xl border px-3 text-xs font-black transition ${
-                          isActive ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.2)]" : "border-red-200 bg-red-50 text-[#FF2D2D] hover:border-[#FF2D2D]"
-                        }`}
-                      >
-                        {size}KB
-                      </button>
-                    );
-                  })}
-                  <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                    {(["pixel", "cm"] as DimensionMode[]).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => {
-                          setDimensionMode(mode);
-                          setError(null);
-                        }}
-                        className={`h-10 min-w-16 rounded-lg px-3 text-xs font-black transition ${
-                          dimensionMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"
-                        }`}
-                      >
-                        {mode === "pixel" ? "Pixel" : "CM"}
-                      </button>
-                    ))}
-                  </div>
-                  {dimensionMode === "pixel" ? (
-                    <>
-                      <input aria-label="Width in pixels" type="number" min={1} placeholder="Width px" value={pixelWidth} onChange={(event) => syncPixelWidth(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                      <input aria-label="Height in pixels" type="number" min={1} placeholder="Height px" value={pixelHeight} onChange={(event) => syncPixelHeight(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                    </>
-                  ) : (
-                    <>
-                      <input aria-label="Width in centimeters" type="number" min={0.1} step="0.01" placeholder="Width cm" value={cmWidth} onChange={(event) => syncCmWidth(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                      <input aria-label="Height in centimeters" type="number" min={0.1} step="0.01" placeholder="Height cm" value={cmHeight} onChange={(event) => syncCmHeight(event.target.value)} className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                      <input aria-label="DPI" type="number" min={72} max={1200} value={dpi} onChange={(event) => setDpi(Number(event.target.value))} className="h-12 w-20 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                    </>
-                  )}
-                  <label className="flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
-                    <input type="checkbox" checked={maintainAspectRatio} onChange={(event) => setMaintainAspectRatio(event.target.checked)} className="h-4 w-4 accent-[#FF2D2D]" />
-                    Maintain ratio
-                  </label>
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <p className="truncate text-sm font-black text-slate-950">
+                    {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
+                  </p>
+                  <button
+                    ref={mobileSettingsButtonRef}
+                    type="button"
+                    onClick={openSettingsDrawer}
+                    className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                    aria-expanded={isSettingsDrawerOpen}
+                    aria-controls="exact-kb-mobile-settings-drawer"
+                  >
+                    <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                    Settings
+                  </button>
                 </div>
+                {renderSettingsControls("exact-kb", "hidden sm:flex")}
               </div>
               <div className="min-w-0 lg:ml-auto">
-                <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-                  {renderAddMoreButton()}
-                  <button type="button" onClick={() => void processImages()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                    Resize Image Now
-                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                    Clear all
-                    <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </div>
+                {renderActionButtons()}
               </div>
             </div>
           </div>}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );
