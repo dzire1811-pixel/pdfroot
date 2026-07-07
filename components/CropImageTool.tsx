@@ -229,6 +229,7 @@ export function CropImageTool() {
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
   const shouldScrollToUploadRef = useRef(false);
@@ -297,6 +298,7 @@ export function CropImageTool() {
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
     drawerDragOffsetRef.current = 0;
     setOutputSizeMode("free");
     setOutputUnit("pixel");
@@ -678,6 +680,21 @@ export function CropImageTool() {
   }, []);
 
   useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "upload") {
+      delete page.dataset.cropImageActiveWorkspace;
+    } else {
+      page.dataset.cropImageActiveWorkspace = "true";
+    }
+
+    return () => {
+      delete page.dataset.cropImageActiveWorkspace;
+    };
+  }, [stage]);
+
+  useEffect(() => {
     if (stage !== "processing") return;
 
     window.requestAnimationFrame(() => {
@@ -719,6 +736,7 @@ export function CropImageTool() {
       setIsSettingsDrawerClosing(false);
       setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       return;
     }
@@ -762,8 +780,10 @@ export function CropImageTool() {
   }, [selectedImages.length, stage]);
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
     const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(true);
     setSettingsDrawerDragOffset(closeDistance);
@@ -773,6 +793,7 @@ export function CropImageTool() {
       setIsSettingsDrawerClosing(false);
       setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
         mobileSettingsButtonRef.current?.focus();
@@ -841,6 +862,7 @@ export function CropImageTool() {
     };
 
     const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
       drawerDragStartYRef.current = null;
       setIsSettingsDrawerDragging(false);
       drawerDragOffsetRef.current = 0;
@@ -1063,11 +1085,13 @@ export function CropImageTool() {
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
     drawerDragOffsetRef.current = 0;
     setIsSettingsDrawerOpen(true);
   }
 
   function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
     drawerDragStartYRef.current = clientY;
     drawerDragOffsetRef.current = 0;
     setSettingsDrawerDragOffset(0);
@@ -1115,6 +1139,7 @@ export function CropImageTool() {
   }
 
   function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     drawerDragOffsetRef.current = 0;
@@ -1158,9 +1183,10 @@ export function CropImageTool() {
             {(["resize-nw", "resize-ne", "resize-sw", "resize-se"] as DragMode[]).map((mode) => (
               <div
                 key={mode}
+                data-crop-image-resize-handle="true"
                 role="presentation"
                 onPointerDown={(event) => onCropPointerDown(event, mode)}
-                className={`absolute h-5 w-5 touch-none border border-white bg-[#FF2D2D] shadow sm:h-3 sm:w-3 ${
+                className={`absolute h-5 w-5 touch-none border border-transparent bg-transparent shadow-none sm:h-3 sm:w-3 sm:border-white sm:bg-[#FF2D2D] sm:shadow ${
                   mode === "resize-nw"
                     ? "left-[-10px] top-[-10px] cursor-nw-resize sm:left-[-6px] sm:top-[-6px]"
                     : mode === "resize-ne"
@@ -1179,9 +1205,9 @@ export function CropImageTool() {
 
   function renderWorkspacePreview() {
     return (
-      <div ref={workAreaRef} data-crop-image-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 px-2 py-3 text-left sm:px-3 sm:py-4 lg:px-4">
+      <div ref={workAreaRef} data-crop-image-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 px-2 py-3 text-left sm:min-h-[calc(100vh-9rem)] sm:px-3 sm:py-4 lg:px-4">
         <input id="crop-image-add-more" name="crop-image-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 hidden flex-wrap items-center justify-between gap-3 sm:flex">
           <p className="text-sm font-black text-slate-950">
             {selectedImages.length} selected {selectedImages.length === 1 ? "image" : "images"}
           </p>
@@ -1189,9 +1215,10 @@ export function CropImageTool() {
         </div>
 
         <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] xl:grid-cols-[minmax(0,1fr)_11.5rem]">
-          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-2 shadow-sm sm:p-3">
+          <div data-crop-image-preview-card="true" className="relative min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-3 sm:shadow-sm">
             <div
-              className="relative mx-auto grid w-[min(100%,calc((100vh-35rem)*var(--crop-aspect)))] max-w-full place-items-center overflow-hidden rounded-lg border border-slate-100 bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
+              data-crop-image-frame="true"
+              className="relative mx-auto grid w-[min(74vw,18rem)] max-w-full place-items-center overflow-hidden rounded-none border-0 bg-transparent sm:rounded-lg sm:border sm:border-slate-100 sm:bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
               style={
                 activeImage
                   ? ({
@@ -1204,7 +1231,12 @@ export function CropImageTool() {
               {renderCropPreview()}
             </div>
             {activeImage && (
-              <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <button type="button" onClick={() => removeImage(activeImage.id)} className="absolute right-0 top-0 grid h-8 w-8 translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg border border-slate-200 bg-white text-[#FF2D2D] shadow-sm transition hover:border-red-200 sm:hidden" aria-label={`Remove ${activeImage.file.name}`}>
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+            {activeImage && (
+              <div className="mt-3 hidden min-w-0 flex-wrap items-center justify-between gap-3 sm:flex">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-slate-950">{activeImage.file.name}</p>
                   <p className="mt-1 text-xs font-bold text-slate-500">
@@ -1433,7 +1465,7 @@ export function CropImageTool() {
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
-          {isActionBarVisible && <div ref={actionBarRef} data-crop-image-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
+          {selectedImages.length > 0 && <div ref={actionBarRef} data-crop-image-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
             <div className="mx-auto flex max-w-[1760px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
                 <div className="flex min-w-0 items-center justify-between gap-3">

@@ -143,14 +143,14 @@ export default async function ToolPage({ params }: ToolPageProps) {
               {tool.name} Online
             </h1>
             <ToolRenderer slug={tool.slug} name={tool.name} description={tool.description} />
-            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            <p data-tool-page-extra="intro" className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
               <BrandPhrase text={toolIntro(tool.slug, tool.name)} styled />
             </p>
-            {tool.government && <p className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-primary">{recruitmentCopy}</p>}
+            {tool.government && <p data-tool-page-extra="recruitment-intro" className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-primary">{recruitmentCopy}</p>}
           </div>
         </section>
 
-        <section className="border-b border-border bg-background px-6 py-5 lg:px-8">
+        <section data-tool-page-extra="trust" className="border-b border-border bg-background px-6 py-5 lg:px-8">
           <div className="mx-auto flex max-w-[1800px] flex-wrap justify-center gap-3">
             {["Secure Files", "Fast Processing", "Instant Download"].map((item) => (
               <div key={item} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground">
@@ -163,7 +163,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+        <section data-tool-page-extra="how-to" className="bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
             <SectionHeading
               eyebrow="How It Works"
@@ -197,7 +197,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         </section>
 
         {tool.government && (
-          <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+          <section data-tool-page-extra="government" className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
             <div className="mx-auto max-w-[1800px]">
               <SectionHeading
                 eyebrow="Government Recruitment Support"
@@ -215,7 +215,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </section>
         )}
 
-        <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+        <section data-tool-page-extra="seo" className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto grid max-w-[1800px] gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-2xl border border-border bg-card p-7">
               <p className="text-sm font-semibold uppercase tracking-wider text-primary">SEO Tool Page</p>
@@ -252,7 +252,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+        <section data-tool-page-extra="related" className="bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
             <SectionHeading
               eyebrow="Related Tools"
@@ -266,9 +266,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
             </div>
           </div>
         </section>
-        <WhyChoosePdfRoot />
+        <div data-tool-page-extra="why-choose">
+          <WhyChoosePdfRoot />
+        </div>
       </main>
-      <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
+      <div data-tool-page-extra="footer">
+        <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
+      </div>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

@@ -977,6 +977,10 @@ section[id$="-tool"] label {
   padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
 }
 
+.v0-tool-page[data-crop-image-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
 @media (min-width: 640px) {
   .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] {
     padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
@@ -1000,6 +1004,25 @@ section[id$="-tool"] label {
 }
 
 @media (max-width: 639px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding: 0.75rem 1rem !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"],
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-resize-handle="true"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
   .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
