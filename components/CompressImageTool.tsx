@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Maximize2, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Maximize2, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
@@ -41,6 +41,17 @@ function formatKb(bytes: number) {
 
 function cleanFileName(fileName: string) {
   return fileName.replace(/[\\/:*?"<>|]+/g, "-").replace(/\.[^.]+$/, "") || "PDFRoot-image";
+}
+
+function compactFileName(fileName: string, maxLength = 30) {
+  if (fileName.length <= maxLength) return fileName;
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const available = Math.max(8, maxLength - extension.length - 3);
+  const headLength = Math.max(5, available - 4);
+  const tailLength = Math.max(0, available - headLength);
+  return `${baseName.slice(0, headLength)}...${tailLength ? baseName.slice(-tailLength) : ""}${extension}`;
 }
 
 function isSupportedImage(file: File) {
@@ -159,6 +170,7 @@ export function CompressImageTool() {
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resultsRef = useRef<CompressResult[]>([]);
@@ -197,6 +209,7 @@ export function CompressImageTool() {
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
     drawerDragOffsetRef.current = 0;
     setLevel("medium");
     setQuality(65);
@@ -369,6 +382,21 @@ export function CompressImageTool() {
   }, [zipUrl]);
 
   useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.compressImageActiveWorkspace = "true";
+    } else {
+      delete page.dataset.compressImageActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.compressImageActiveWorkspace;
+    };
+  }, [stage]);
+
+  useEffect(() => {
     if (stage !== "success" || !results.length) return;
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -405,6 +433,7 @@ export function CompressImageTool() {
       setIsSettingsDrawerClosing(false);
       setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       return;
     }
@@ -446,8 +475,10 @@ export function CompressImageTool() {
   }, [selectedImages.length, stage]);
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
     const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(true);
     setSettingsDrawerDragOffset(closeDistance);
@@ -457,6 +488,7 @@ export function CompressImageTool() {
       setIsSettingsDrawerClosing(false);
       setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
         mobileSettingsButtonRef.current?.focus();
@@ -525,6 +557,7 @@ export function CompressImageTool() {
     };
 
     const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
       drawerDragStartYRef.current = null;
       setIsSettingsDrawerDragging(false);
       drawerDragOffsetRef.current = 0;
@@ -754,11 +787,13 @@ export function CompressImageTool() {
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
     drawerDragOffsetRef.current = 0;
     setIsSettingsDrawerOpen(true);
   }
 
   function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
     drawerDragStartYRef.current = clientY;
     drawerDragOffsetRef.current = 0;
     setSettingsDrawerDragOffset(0);
@@ -806,6 +841,7 @@ export function CompressImageTool() {
   }
 
   function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     drawerDragOffsetRef.current = 0;
@@ -817,7 +853,10 @@ export function CompressImageTool() {
       <div ref={workAreaRef} data-compress-image-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
         <input id="compress-image-add-more" name="compress-image-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
         <div data-compress-image-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
-          {selectedImages.map((image, index) => (
+          {selectedImages.map((image, index) => {
+            const completedResult = results.find((result) => result.id === image.id);
+
+            return (
             <article
               key={image.id}
               draggable
@@ -834,24 +873,37 @@ export function CompressImageTool() {
                 <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
                   {index + 1}
                 </span>
-                <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                <button type="button" onClick={() => removeImage(image.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
                   <GripVertical className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
               </div>
-              <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+              <div className="mt-2 min-w-0">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">
-                    {formatKb(image.file.size)} KB - {image.dimensions.width} x {image.dimensions.height}px
+                  <p className="truncate text-sm font-black leading-snug text-slate-950" title={image.file.name}>{compactFileName(image.file.name)}</p>
+                  <p className="sr-only">
+                    {formatKb(image.file.size)} KB - {image.dimensions.width}×{image.dimensions.height} px
                   </p>
+                  <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                    {completedResult ? (
+                      <>
+                        <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(image.file.size)} KB</span>
+                        <span className="max-w-full truncate rounded-full bg-emerald-50 px-2 py-1 text-[0.68rem] font-bold leading-none text-emerald-700">{completedResult.compressedKb.toFixed(1)} KB</span>
+                      </>
+                    ) : (
+                      <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                        {formatKb(image.file.size)} KB {"\u2022"} {image.dimensions.width}{"\u00d7"}{image.dimensions.height} px
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button type="button" onClick={() => removeImage(image.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -884,7 +936,7 @@ export function CompressImageTool() {
           aria-modal="true"
           aria-label="Compress image settings"
           style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
-          className={`absolute inset-x-0 bottom-0 flex max-h-[min(82vh,34rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
             isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
           } ${isSettingsDrawerClosing ? "" : "animate-[compressImageDrawerIn_220ms_ease-out]"} ${
             settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
@@ -908,8 +960,16 @@ export function CompressImageTool() {
           >
             <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
           </button>
-          <div className="shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
             <p className="text-sm font-black text-slate-950">Settings</p>
+            <button
+              type="button"
+              onClick={closeSettingsDrawer}
+              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95"
+              aria-label="Close settings"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             {renderSettingsControls("compress-image-mobile", "mobile")}

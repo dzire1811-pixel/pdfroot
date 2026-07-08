@@ -380,7 +380,7 @@ export function ProtectPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="protect-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="protect-pdf-upload" name="protect-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <LockKeyhole className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -610,6 +610,8 @@ export function ProtectPdfTool() {
     return (
       <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(10rem,14rem)_minmax(10rem,14rem)_auto] xl:flex xl:flex-none xl:items-center">
         <input
+          id="protect-pdf-password"
+          name="protect-pdf-password"
           type={showPassword ? "text" : "password"}
           value={password}
           onChange={(event) => {
@@ -622,6 +624,8 @@ export function ProtectPdfTool() {
           className={`${compactInputClass} min-w-0 xl:w-56`}
         />
         <input
+          id="protect-pdf-confirm-password"
+          name="protect-pdf-confirm-password"
           type={showPassword ? "text" : "password"}
           value={confirmPassword}
           onChange={(event) => {
@@ -698,7 +702,7 @@ export function ProtectPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <input id="protect-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="protect-pdf-workspace-upload" name="protect-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
         </div>

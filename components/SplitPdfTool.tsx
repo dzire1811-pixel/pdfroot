@@ -443,7 +443,7 @@ export function SplitPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="split-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="split-pdf-upload" name="split-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <Scissors className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -580,7 +580,7 @@ export function SplitPdfTool() {
       <div className="min-w-0 lg:min-w-[12rem]">
         <label className="sr-only" htmlFor="split-pages-input">{mode === "selected" ? "Pages to extract" : "Page ranges"}</label>
         <input
-          id="split-pages-input"
+          id="split-pages-input" name="split-pages-input"
           value={mode === "selected" ? selectedPages : pageRanges}
           onChange={(event) => (mode === "selected" ? setSelectedPages(event.target.value) : setPageRanges(event.target.value))}
           placeholder={mode === "selected" ? "1,3,5-7" : "1-3,4-6"}
@@ -653,7 +653,7 @@ export function SplitPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="split-pdf-add-more" name="split-pdf-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>

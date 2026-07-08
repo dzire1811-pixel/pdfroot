@@ -1110,7 +1110,42 @@ export function CropImageTool() {
     );
   }
 
-  function renderActionButtons(className = "") {
+  function renderActionButtons(className = "", variant: "mobile" | "desktop" = "mobile") {
+    if (variant === "desktop") {
+      return (
+        <div className={`flex items-center gap-2 ${className}`}>
+          <button
+            type="button"
+            aria-label="Add more images"
+            title="Add more files"
+            onClick={() => addMoreInputRef.current?.click()}
+            className="relative inline-grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.22)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95"
+          >
+            <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+              {selectedImages.length}
+            </span>
+            <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => void cropActiveImage()}
+            className="inline-flex min-h-14 min-w-[13rem] items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-6 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600"
+          >
+            Crop Image Now
+            <Crop className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={resetTool}
+            className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-[#FF2D2D] transition hover:border-red-200 hover:bg-red-50"
+          >
+            Clear all
+            <RotateCcw className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] xl:w-auto xl:min-w-[30rem] ${className}`}>
         {renderAddMoreButton()}
@@ -1245,6 +1280,46 @@ export function CropImageTool() {
     );
   }
 
+  function renderDesktopPreviewActions() {
+    if (!activeImage) return null;
+
+    const buttonClass = "grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-700 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95";
+
+    return (
+      <div className="mb-3 hidden items-center justify-center gap-2 sm:flex" data-crop-image-desktop-preview-actions="true">
+        <button
+          type="button"
+          onClick={enableActiveCropMode}
+          className={`grid h-9 w-9 place-items-center rounded-lg transition active:scale-95 ${
+            activeImage.cropModeEnabled ? "bg-red-50 text-[#FF2D2D]" : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-950"
+          }`}
+          aria-label="Crop area"
+          title="Crop area"
+        >
+          <Crop className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => rotateActiveImage(90)}
+          className={buttonClass}
+          aria-label="Rotate image"
+          title="Rotate image"
+        >
+          <RotateCw className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => removeImage(activeImage.id)}
+          className="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-[#FF2D2D] transition hover:bg-red-50 active:scale-95"
+          aria-label={`Delete ${activeImage.file.name}`}
+          title="Delete"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   function renderCropPreview() {
     if (!activeImage) return null;
 
@@ -1306,16 +1381,19 @@ export function CropImageTool() {
     return (
       <div ref={workAreaRef} data-crop-image-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 px-2 py-3 text-left sm:min-h-[calc(100vh-9rem)] sm:px-3 sm:py-4 lg:px-4">
         <input id="crop-image-add-more" name="crop-image-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
-        <div className="mb-3 hidden flex-wrap items-center justify-between gap-3 sm:flex">
-          <p className="text-sm font-black text-slate-950">
-            {selectedImages.length} selected {selectedImages.length === 1 ? "image" : "images"}
-          </p>
-          <p className="shrink-0 text-xs font-bold text-slate-500">{outputSizeMode === "free" ? "Free Size output" : `Fixed Size output in ${outputUnit === "pixel" ? "pixels" : "CM"}`}</p>
-        </div>
-
-        <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] xl:grid-cols-[minmax(0,1fr)_11.5rem]">
+        <div
+          className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] xl:grid-cols-[minmax(0,1fr)_11.5rem]"
+          style={
+            activeImage
+              ? ({
+                  "--crop-aspect": String(rotatedDimensions(activeImage.dimensions, activeImage.rotation).width / rotatedDimensions(activeImage.dimensions, activeImage.rotation).height),
+                } as CSSProperties)
+              : undefined
+          }
+        >
           <div data-crop-image-preview-card="true" className="relative min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-3 sm:shadow-sm">
             {renderMobilePreviewActions()}
+            {renderDesktopPreviewActions()}
             <div
               data-crop-image-frame="true"
               className="relative mx-auto grid w-[min(74vw,18rem)] max-w-full place-items-center overflow-hidden rounded-none border-0 bg-transparent sm:rounded-lg sm:border sm:border-slate-100 sm:bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
@@ -1331,16 +1409,13 @@ export function CropImageTool() {
               {renderCropPreview()}
             </div>
             {activeImage && (
-              <div className="mt-3 hidden min-w-0 flex-wrap items-center justify-between gap-3 sm:flex">
+              <div className="mt-3 hidden min-w-0 flex-wrap items-center justify-center gap-3 text-center sm:flex">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-slate-950">{activeImage.file.name}</p>
                   <p className="mt-1 text-xs font-bold text-slate-500">
                     {formatKb(activeImage.file.size)} KB - {activeImage.dimensions.width} x {activeImage.dimensions.height}px - Zoom {Math.round(activeImage.zoom * 100)}%
                   </p>
                 </div>
-                <button type="button" onClick={() => removeImage(activeImage.id)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${activeImage.file.name}`}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
               </div>
             )}
           </div>
@@ -1496,7 +1571,7 @@ export function CropImageTool() {
         id="crop-image-tool"
         className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <input id="crop-image-success-upload" name="crop-image-success-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <div className="relative min-w-0 overflow-visible bg-slate-100">
         <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
           <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
@@ -1589,8 +1664,11 @@ export function CropImageTool() {
                 </div>
                 {renderSettingsControls("crop-image", "hidden sm:flex")}
               </div>
-              <div className="min-w-0 xl:ml-auto">
+              <div className="min-w-0 sm:hidden">
                 {renderActionButtons()}
+              </div>
+              <div className="hidden min-w-0 sm:block xl:ml-auto">
+                {renderActionButtons("", "desktop")}
               </div>
             </div>
           </div>}

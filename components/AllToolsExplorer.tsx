@@ -67,6 +67,8 @@ export function AllToolsExplorer() {
                   </span>
                 ) : null}
                 <input
+                  id="all-tools-search"
+                  name="all-tools-search"
                   value={query}
                   onChange={onSearchChange}
                   className="relative z-10 w-full bg-transparent py-4 text-sm font-medium text-foreground outline-none"

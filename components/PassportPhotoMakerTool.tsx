@@ -636,7 +636,7 @@ export function PassportPhotoMakerTool() {
             isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
           }`}
         >
-          <input id="passport-photo-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
+          <input id="passport-photo-upload" name="passport-photo-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
           <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
             <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
           </span>
@@ -685,13 +685,13 @@ export function PassportPhotoMakerTool() {
         {isActionBarVisible && (
           <div ref={actionBarRef} data-passport-photo-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 max-h-[58vh] overflow-y-auto border-t border-slate-200 bg-slate-100/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
             <div className="mx-auto flex max-w-[1600px] flex-wrap items-end gap-2">
-                <label className="text-xs font-black text-slate-700">
+                <label htmlFor="passport-photo-width-mm" className="text-xs font-black text-slate-700">
                   Width mm
-                  <input type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  <input id="passport-photo-width-mm" name="passport-photo-width-mm" type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                 </label>
-                <label className="text-xs font-black text-slate-700">
+                <label htmlFor="passport-photo-height-mm" className="text-xs font-black text-slate-700">
                   Height mm
-                  <input type="number" min={10} max={100} value={photoHeightMm} onChange={(event) => updateSettings(() => setPhotoHeightMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  <input id="passport-photo-height-mm" name="passport-photo-height-mm" type="number" min={10} max={100} value={photoHeightMm} onChange={(event) => updateSettings(() => setPhotoHeightMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                 </label>
                 <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
                   {sheetPresets.map((preset) => (
@@ -700,9 +700,9 @@ export function PassportPhotoMakerTool() {
                     </button>
                   ))}
                 </div>
-                <label className="text-xs font-black text-slate-700">
+                <label htmlFor="passport-photo-gap-mm" className="text-xs font-black text-slate-700">
                   Gap mm
-                  <input type="number" min={0} max={20} step={0.5} value={gapMm} onChange={(event) => updateSettings(() => setGapMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  <input id="passport-photo-gap-mm" name="passport-photo-gap-mm" type="number" min={0} max={20} step={0.5} value={gapMm} onChange={(event) => updateSettings(() => setGapMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                 </label>
                 <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
                   {([
@@ -716,7 +716,7 @@ export function PassportPhotoMakerTool() {
                   ))}
                 </div>
                 {backgroundMode === "custom" && (
-                  <input type="color" value={customBackground} onChange={(event) => updateSettings(() => setCustomBackground(event.target.value))} className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
+                  <input id="passport-photo-custom-background" name="passport-photo-custom-background" type="color" value={customBackground} onChange={(event) => updateSettings(() => setCustomBackground(event.target.value))} className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
                 )}
                 <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
                   {(["jpg", "png", "pdf"] as OutputFormat[]).map((format) => (

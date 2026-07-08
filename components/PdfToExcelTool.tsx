@@ -399,7 +399,7 @@ export function PdfToExcelTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="pdf-excel-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="pdf-excel-upload" name="pdf-excel-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <FileSpreadsheet className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -581,7 +581,7 @@ export function PdfToExcelTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input id="pdf-excel-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="pdf-excel-workspace-upload" name="pdf-excel-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>

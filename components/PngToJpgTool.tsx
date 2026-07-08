@@ -470,7 +470,7 @@ export function PngToJpgTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="png-to-jpg-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
+        <input id="png-to-jpg-upload" name="png-to-jpg-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -503,7 +503,7 @@ export function PngToJpgTool() {
   function renderWorkspacePreview() {
     return (
       <div ref={workAreaRef} data-png-to-jpg-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onAddMoreInputChange} />
+        <input id="png-to-jpg-add-more" name="png-to-jpg-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onAddMoreInputChange} />
         <div data-png-to-jpg-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
           {selectedImages.map((image, index) => (
             <article
@@ -561,7 +561,7 @@ export function PngToJpgTool() {
         id="png-to-jpg-tool"
         className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
+        <input id="png-to-jpg-success-upload" name="png-to-jpg-success-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
         <div className="relative min-w-0 overflow-visible bg-slate-100">
           <div data-png-to-jpg-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">

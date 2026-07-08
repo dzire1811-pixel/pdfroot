@@ -17,8 +17,8 @@ export default function LoginPage() {
           <h1 className="text-3xl font-black tracking-tight text-slate-950">Login to <BrandText styled /></h1>
           <p className="mt-3 leading-7 text-slate-600">Access your PDF and image toolkit dashboard.</p>
           <div className="mt-7 grid gap-4">
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Email address" />
-            <input className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Password" type="password" />
+            <input id="login-email" name="login-email" autoComplete="email" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Email address" />
+            <input id="login-password" name="login-password" autoComplete="current-password" className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#FF2D2D]" placeholder="Password" type="password" />
             <Link href="/dashboard" className="rounded-full bg-[#FF2D2D] px-5 py-3 text-center text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600">
               Login
             </Link>

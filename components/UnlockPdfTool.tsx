@@ -423,7 +423,7 @@ export function UnlockPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="unlock-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="unlock-pdf-upload" name="unlock-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <UnlockKeyhole className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -658,6 +658,8 @@ export function UnlockPdfTool() {
     return (
       <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(10rem,14rem)_auto] xl:flex xl:flex-none xl:items-center">
         <input
+          id="unlock-pdf-password"
+          name="unlock-pdf-password"
           type={showPassword ? "text" : "password"}
           value={password}
           onChange={(event) => {
@@ -734,7 +736,7 @@ export function UnlockPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <input id="unlock-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="unlock-pdf-workspace-upload" name="unlock-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
         </div>

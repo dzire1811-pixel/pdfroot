@@ -973,8 +973,30 @@ section[id$="-tool"] label {
 
 .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] {
   min-height: calc(100vh - 12.5rem) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
   padding-top: 0.5rem !important;
   padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  margin: 0 auto !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] > div > div {
+  margin: 0 auto !important;
 }
 
 .v0-tool-page[data-crop-image-active-workspace="true"] [data-tool-page-extra] {
@@ -1000,6 +1022,92 @@ section[id$="-tool"] label {
   .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
     padding: clamp(1rem, 2vw, 1.5rem) !important;
     padding-bottom: 13rem !important;
+  }
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > .grid {
+    width: auto !important;
+    max-width: min(100%, 72rem) !important;
+    grid-template-columns: minmax(0, auto) !important;
+    justify-content: center !important;
+    align-items: start !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
+    width: fit-content !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    border-color: transparent !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
+    border-color: rgb(226 232 240) !important;
+    background: rgb(241 245 249) !important;
+    background-color: rgb(241 245 249) !important;
+    box-shadow: none !important;
+    width: min(72vw, calc((100vh - 25rem) * var(--crop-aspect))) !important;
+    min-width: 12rem !important;
+    max-width: min(100%, 48rem) !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
+    width: min(100%, 44rem) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > .grid:has(> [data-crop-image-thumbnail-list="true"]) {
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    justify-content: center !important;
+    column-gap: 0 !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
+    grid-column: 2 !important;
+    order: initial !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
+    grid-column: 3 !important;
+    justify-self: start !important;
+    order: initial !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 11.5rem !important;
+    height: min(calc(72vw / var(--crop-aspect)), calc(100vh - 25rem), calc(48rem / var(--crop-aspect))) !important;
+    min-height: 0 !important;
+    max-height: min(calc(72vw / var(--crop-aspect)), calc(100vh - 25rem), calc(48rem / var(--crop-aspect))) !important;
+    margin-top: 3rem !important;
+    margin-left: 1rem !important;
+    margin-right: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] > p {
+    flex: 0 0 auto !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] > div {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
   }
 }
 
@@ -1311,6 +1419,10 @@ section[id$="-tool"] label {
   padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
 }
 
+.v0-tool-page[data-resize-image-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
 .v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"][data-v0-result-screen="true"] {
   min-height: calc(100vh - 12.5rem) !important;
   padding-top: 0.5rem !important;
@@ -1351,7 +1463,29 @@ section[id$="-tool"] label {
   }
 }
 
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
 @media (max-width: 639px) {
+  .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    min-height: calc(100vh - 12.5rem) !important;
+    padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+  }
+
+  .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-grid="true"] {
+    padding-bottom: 0 !important;
+  }
+
+  .v0-tool-page section[data-resize-image-workspace="true"] article {
+    scroll-margin-bottom: 12rem !important;
+  }
+
   .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-action-bar="true"] {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
@@ -1594,6 +1728,21 @@ section[id$="-tool"] label {
   padding: clamp(1rem, 2vw, 1.5rem) !important;
 }
 
+.v0-tool-page[data-exact-kb-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+}
+
 .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"][data-v0-result-screen="true"] {
   min-height: calc(100vh - 12.5rem) !important;
   padding-top: 0.5rem !important;
@@ -1601,12 +1750,12 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-grid="true"] {
-  padding-bottom: 12rem !important;
+  padding-bottom: 0 !important;
 }
 
 @media (min-width: 640px) {
   .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-grid="true"] {
-    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+    padding-bottom: 0 !important;
   }
 
   .v0-tool-page section[data-exact-kb-workspace="true"] article {
@@ -1688,6 +1837,72 @@ section[id$="-tool"] label {
   padding: 0 !important;
 }
 
+.v0-tool-page section[data-jpg-to-png-workspace="true"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page[data-jpg-to-png-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-preview-grid="true"] {
+    padding-bottom: 0 !important;
+  }
+
+  .v0-tool-page section[data-jpg-to-png-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] article {
+  padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] article [class*="p-3"] {
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] > div {
+  padding: 0 !important;
+}
+
 .v0-tool-page section[data-compress-image-workspace="true"] {
   width: 100vw !important;
   max-width: 100vw !important;
@@ -1708,6 +1923,15 @@ section[id$="-tool"] label {
   padding: clamp(1rem, 2vw, 1.5rem) !important;
 }
 
+.v0-tool-page[data-compress-image-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
 .v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-area="true"][data-v0-result-screen="true"] {
   min-height: calc(100vh - 12.5rem) !important;
   padding-top: 0.5rem !important;
@@ -1715,12 +1939,12 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-grid="true"] {
-  padding-bottom: 12rem !important;
+  padding-bottom: 0 !important;
 }
 
 @media (min-width: 640px) {
   .v0-tool-page section[data-compress-image-workspace="true"] [data-compress-image-preview-grid="true"] {
-    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+    padding-bottom: 0 !important;
   }
 
   .v0-tool-page section[data-compress-image-workspace="true"] article {

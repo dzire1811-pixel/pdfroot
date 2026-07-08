@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Download, FileText, ImageUp, UploadCloud } from "lucide-react";
 import { tools } from "@/lib/tools";
 import { clearUploadSession, readUploadSession, saveUploadSession } from "@/lib/uploadSession";
@@ -82,6 +82,7 @@ export function UploadBox({
   restoreTransferredFiles?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const uploadInputId = useId();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -156,7 +157,7 @@ export function UploadBox({
           isDragging ? "border-primary bg-primary/5" : "border-primary/40 bg-primary/5 group-hover:border-primary"
         }`}
       >
-        <input ref={inputRef} className="sr-only" type="file" multiple accept={acceptValue} onChange={onInputChange} />
+        <input id={uploadInputId} name={uploadInputId} ref={inputRef} className="sr-only" type="file" multiple accept={acceptValue} onChange={onInputChange} />
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-primary/10 text-primary transition duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
           <ImageUp className="h-10 w-10" aria-hidden="true" />
         </div>

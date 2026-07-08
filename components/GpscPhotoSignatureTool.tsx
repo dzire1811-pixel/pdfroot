@@ -707,7 +707,7 @@ function GpscOjasStyleTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="gpsc-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <input id="gpsc-image-upload" name="gpsc-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <span className="grid place-items-center text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -830,7 +830,7 @@ function GpscOjasStyleTool() {
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="gpsc-photo-signature-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-x-hidden overflow-y-visible border-0 bg-transparent p-0 text-left shadow-none">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-x-hidden overflow-y-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
-            <input ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
+            <input id="gpsc-add-image-upload" name="gpsc-add-image-upload" ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
             <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
               <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="mb-4 flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
@@ -883,9 +883,11 @@ function GpscOjasStyleTool() {
                   <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain">
                     {renderTypeSelector()}
                     {selectedType === "photo" && (
-                      <label className="flex h-12 min-w-[10.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-left">
+                      <label htmlFor="gpsc-photo-capture-date-inline" className="flex h-12 min-w-[10.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-left">
                         <span className="shrink-0 text-[0.62rem] font-black leading-3 text-slate-800">Photo Date</span>
                         <input
+                          id="gpsc-photo-capture-date-inline"
+                          name="gpsc-photo-capture-date-inline"
                           aria-label="Photo Capture Date"
                           type="text"
                           inputMode="numeric"
@@ -908,7 +910,7 @@ function GpscOjasStyleTool() {
                       <button type="button" onClick={() => updateZoom(zoom - 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom out">
                         <Minus className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <input aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="w-20 min-w-16 accent-[#FF2D2D] sm:w-24" />
+                      <input id="gpsc-photo-zoom" name="gpsc-photo-zoom" aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="w-20 min-w-16 accent-[#FF2D2D] sm:w-24" />
                       <button type="button" onClick={() => updateZoom(zoom + 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom in">
                         <Plus className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -1371,9 +1373,9 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <NumberInput label="Width px" value={photoWidth} min={40} max={3000} onChange={(value) => { setPhotoWidth(value); clearOutput("photo"); }} />
-            <NumberInput label="Height px" value={photoHeight} min={30} max={3000} onChange={(value) => { setPhotoHeight(value); clearOutput("photo"); }} />
-            <NumberInput label="Target KB" value={photoTargetKb} min={5} max={1000} onChange={(value) => { setPhotoTargetKb(value); clearOutput("photo"); }} />
+            <NumberInput id={`${config.slug}-photo-width`} label="Width px" value={photoWidth} min={40} max={3000} onChange={(value) => { setPhotoWidth(value); clearOutput("photo"); }} />
+            <NumberInput id={`${config.slug}-photo-height`} label="Height px" value={photoHeight} min={30} max={3000} onChange={(value) => { setPhotoHeight(value); clearOutput("photo"); }} />
+            <NumberInput id={`${config.slug}-photo-target-kb`} label="Target KB" value={photoTargetKb} min={5} max={1000} onChange={(value) => { setPhotoTargetKb(value); clearOutput("photo"); }} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -1406,13 +1408,13 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
               </div>
               {dateMode === "with" && (
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="text-sm font-black text-slate-800">
+                  <label htmlFor={`${config.slug}-photo-date`} className="text-sm font-black text-slate-800">
                     Date
-                    <input value={dateValue} type="date" onChange={(event) => { setDateValue(event.target.value); clearOutput("photo"); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                    <input id={`${config.slug}-photo-date`} name={`${config.slug}-photo-date`} value={dateValue} type="date" onChange={(event) => { setDateValue(event.target.value); clearOutput("photo"); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                   </label>
-                  <label className="text-sm font-black text-slate-800">
+                  <label htmlFor={`${config.slug}-photo-date-format`} className="text-sm font-black text-slate-800">
                     Date Format
-                    <select value={dateFormat} onChange={(event) => { setDateFormat(event.target.value as DateFormat); clearOutput("photo"); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100">
+                    <select id={`${config.slug}-photo-date-format`} name={`${config.slug}-photo-date-format`} value={dateFormat} onChange={(event) => { setDateFormat(event.target.value as DateFormat); clearOutput("photo"); }} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100">
                       <option value="slash">DD/MM/YYYY</option>
                       <option value="dash">DD-MM-YYYY</option>
                     </select>
@@ -1457,9 +1459,9 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <NumberInput label="Width px" value={signatureWidth} min={40} max={3000} onChange={(value) => { setSignatureWidth(value); clearOutput("signature"); }} />
-            <NumberInput label="Height px" value={signatureHeight} min={30} max={3000} onChange={(value) => { setSignatureHeight(value); clearOutput("signature"); }} />
-            <NumberInput label="Target KB" value={signatureTargetKb} min={5} max={1000} onChange={(value) => { setSignatureTargetKb(value); clearOutput("signature"); }} />
+            <NumberInput id={`${config.slug}-signature-width`} label="Width px" value={signatureWidth} min={40} max={3000} onChange={(value) => { setSignatureWidth(value); clearOutput("signature"); }} />
+            <NumberInput id={`${config.slug}-signature-height`} label="Height px" value={signatureHeight} min={30} max={3000} onChange={(value) => { setSignatureHeight(value); clearOutput("signature"); }} />
+            <NumberInput id={`${config.slug}-signature-target-kb`} label="Target KB" value={signatureTargetKb} min={5} max={1000} onChange={(value) => { setSignatureTargetKb(value); clearOutput("signature"); }} />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -1485,9 +1487,11 @@ function ExamPhotoSignatureTool({ config }: { config: ExamToolConfig }) {
             <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center">
               <p className="truncate text-sm font-black text-slate-950">{config.examName} images ready</p>
               {isGpsc && photo.file && (
-                <label className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
+                <label htmlFor={`${config.slug}-photo-capture-date`} className="flex h-12 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
                   <span className="whitespace-nowrap">Photo Capture Date</span>
                   <input
+                    id={`${config.slug}-photo-capture-date`}
+                    name={`${config.slug}-photo-capture-date`}
                     value={dateValue}
                     type="date"
                     onChange={(event) => {
@@ -1989,7 +1993,7 @@ function UpscOfficialPhotoSignatureTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="upsc-document-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
+        <input id="upsc-document-upload" name="upsc-document-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -2075,7 +2079,7 @@ function UpscOfficialPhotoSignatureTool() {
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="upsc-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
-            <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
+            <input id="upsc-add-document-upload" name="upsc-add-document-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
             <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 88, 192)}px` }}>
               <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
@@ -2137,11 +2141,11 @@ function UpscOfficialPhotoSignatureTool() {
   );
 }
 
-function NumberInput({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+function NumberInput({ id, label, value, min, max, onChange }: { id: string; label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="text-sm font-black text-slate-800">
+    <label htmlFor={id} className="text-sm font-black text-slate-800">
       {label}
-      <input value={value} type="number" min={min} max={max} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+      <input id={id} name={id} value={value} type="number" min={min} max={max} onChange={(event) => onChange(Number(event.target.value))} className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-950 outline-none focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
     </label>
   );
 }

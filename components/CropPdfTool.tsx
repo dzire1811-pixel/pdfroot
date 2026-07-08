@@ -555,7 +555,7 @@ export function CropPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="crop-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="crop-pdf-upload" name="crop-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <Crop className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -828,6 +828,8 @@ export function CropPdfTool() {
               Prev
             </button>
             <input
+              id="crop-pdf-active-page"
+              name="crop-pdf-active-page"
               type="number"
               min={1}
               max={activePageCount}
@@ -848,6 +850,8 @@ export function CropPdfTool() {
               <Plus className="h-4 w-4" aria-hidden="true" />
             </button>
             <input
+              id="crop-pdf-zoom-percent"
+              name="crop-pdf-zoom-percent"
               type="number"
               min={25}
               max={300}
@@ -960,6 +964,8 @@ export function CropPdfTool() {
     return (
       <div className="grid min-w-0 gap-2 lg:grid-cols-[10.5rem_8rem_repeat(4,4.75rem)_5.75rem] xl:flex xl:flex-none xl:items-center">
         <select
+          id="crop-pdf-page-mode"
+          name="crop-pdf-page-mode"
           value={mode}
           onChange={(event) => {
             setMode(event.target.value as CropMode);
@@ -976,6 +982,8 @@ export function CropPdfTool() {
 
         {mode === "range" ? (
           <input
+            id="crop-pdf-page-range"
+            name="crop-pdf-page-range"
             value={range}
             onChange={(event) => {
               setRange(event.target.value);
@@ -987,6 +995,8 @@ export function CropPdfTool() {
           />
         ) : (
           <input
+            id="crop-pdf-selected-page"
+            name="crop-pdf-selected-page"
             type="number"
             min={1}
             value={selectedPage}
@@ -1004,6 +1014,8 @@ export function CropPdfTool() {
 
         {(["top", "right", "bottom", "left"] as const).map((key) => (
           <input
+            id={`crop-pdf-margin-${key}`}
+            name={`crop-pdf-margin-${key}`}
             key={key}
             type="number"
             min={0}
@@ -1077,7 +1089,7 @@ export function CropPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <input id="crop-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="crop-pdf-workspace-upload" name="crop-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
         </div>

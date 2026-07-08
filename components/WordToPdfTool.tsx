@@ -304,7 +304,7 @@ export function WordToPdfTool() {
             }`}
           >
             <input
-              id="word-pdf-upload"
+              id="word-pdf-upload" name="word-pdf-upload"
               className="sr-only"
               type="file"
               accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"

@@ -540,7 +540,7 @@ export function SignatureResizeTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="signature-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
+        <input id="signature-upload" name="signature-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -574,7 +574,7 @@ export function SignatureResizeTool() {
   function renderWorkspacePreview() {
     return (
       <div ref={workAreaRef} data-signature-resize-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
+        <input id="signature-add-more-upload" name="signature-add-more-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
         <div data-signature-resize-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
           {selectedImages.map((image, index) => (
             <article
@@ -694,20 +694,20 @@ export function SignatureResizeTool() {
                     {selectedImages.length} {selectedImages.length === 1 ? "signature" : "signatures"} ready
                   </p>
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
+                    <label htmlFor="signature-width-px" className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
                       Width px
-                      <input aria-label="Width in pixels" type="number" min={20} max={2000} value={widthPx} onChange={(event) => syncWidth(event.target.value)} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                      <input id="signature-width-px" name="signature-width-px" aria-label="Width in pixels" type="number" min={20} max={2000} value={widthPx} onChange={(event) => syncWidth(event.target.value)} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                     </label>
-                    <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
+                    <label htmlFor="signature-height-px" className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
                       Height px
-                      <input aria-label="Height in pixels" type="number" min={20} max={2000} value={heightPx} onChange={(event) => syncHeight(event.target.value)} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                      <input id="signature-height-px" name="signature-height-px" aria-label="Height in pixels" type="number" min={20} max={2000} value={heightPx} onChange={(event) => syncHeight(event.target.value)} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                     </label>
-                    <label className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
+                    <label htmlFor="signature-target-kb" className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
                       Target KB
-                      <input type="number" min={5} max={500} value={targetKb} onChange={(event) => setTargetKb(Number(event.target.value))} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                      <input id="signature-target-kb" name="signature-target-kb" type="number" min={5} max={500} value={targetKb} onChange={(event) => setTargetKb(Number(event.target.value))} className="h-12 w-24 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
                     </label>
-                    <label className="flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
-                      <input type="checkbox" checked={maintainAspectRatio} onChange={(event) => setMaintainAspectRatio(event.target.checked)} className="h-4 w-4 accent-[#FF2D2D]" />
+                    <label htmlFor="signature-maintain-ratio" className="flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800">
+                      <input id="signature-maintain-ratio" name="signature-maintain-ratio" type="checkbox" checked={maintainAspectRatio} onChange={(event) => setMaintainAspectRatio(event.target.checked)} className="h-4 w-4 accent-[#FF2D2D]" />
                       Maintain ratio
                     </label>
                   </div>

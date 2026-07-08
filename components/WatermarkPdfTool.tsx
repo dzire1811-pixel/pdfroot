@@ -470,7 +470,7 @@ export function WatermarkPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="watermark-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="watermark-pdf-upload" name="watermark-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <Stamp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -777,6 +777,8 @@ export function WatermarkPdfTool() {
 
         {textMode ? (
           <input
+            id="watermark-pdf-text"
+            name="watermark-pdf-text"
             type="text"
             value={text}
             onChange={(event) => setText(event.target.value)}
@@ -791,6 +793,8 @@ export function WatermarkPdfTool() {
         )}
 
         <input
+          id="watermark-pdf-size"
+          name="watermark-pdf-size"
           type="number"
           value={fontSize}
           onChange={(event) => setFontSize(clampNumber(Number(event.target.value), textMode ? 10 : 8, textMode ? 160 : 90))}
@@ -798,6 +802,8 @@ export function WatermarkPdfTool() {
           className={`${compactInputClass} w-full xl:w-20`}
         />
         <input
+          id="watermark-pdf-opacity"
+          name="watermark-pdf-opacity"
           type="number"
           step="0.01"
           value={opacity}
@@ -806,13 +812,15 @@ export function WatermarkPdfTool() {
           className={`${compactInputClass} w-full xl:w-20`}
         />
         <input
+          id="watermark-pdf-angle"
+          name="watermark-pdf-angle"
           type="number"
           value={angle}
           onChange={(event) => setAngle(clampNumber(Number(event.target.value), -180, 180))}
           aria-label="Angle"
           className={`${compactInputClass} w-full xl:w-20`}
         />
-        <select value={position} onChange={(event) => setPosition(event.target.value as WatermarkPosition)} aria-label="Position" className={`${compactInputClass} w-full appearance-auto xl:w-28`}>
+        <select id="watermark-pdf-position" name="watermark-pdf-position" value={position} onChange={(event) => setPosition(event.target.value as WatermarkPosition)} aria-label="Position" className={`${compactInputClass} w-full appearance-auto xl:w-28`}>
           <option value="center">Center</option>
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
@@ -876,8 +884,8 @@ export function WatermarkPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <input id="watermark-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
-          <input ref={imageInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={onImageInputChange} />
+          <input id="watermark-pdf-workspace-upload" name="watermark-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="watermark-image-upload" name="watermark-image-upload" ref={imageInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={onImageInputChange} />
           {renderWorkspace()}
           {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
         </div>

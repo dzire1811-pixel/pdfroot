@@ -383,7 +383,7 @@ export function MergePdfTool() {
           isDraggingUpload ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="merge-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="merge-pdf-upload" name="merge-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <FilePlus2 className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -486,7 +486,7 @@ export function MergePdfTool() {
   function renderWorkspacePreview() {
     return (
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
-        <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onAddMoreInputChange} />
+        <input id="merge-pdf-add-more" name="merge-pdf-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onAddMoreInputChange} />
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
             <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">

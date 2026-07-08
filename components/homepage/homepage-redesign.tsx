@@ -114,6 +114,8 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
               <div className="flex items-center gap-2">
                 <Search className="ml-3 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <input
+                  id="homepage-tool-search"
+                  name="homepage-tool-search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search tools: merge PDF, resize image, SSC photo..."

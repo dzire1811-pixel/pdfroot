@@ -673,7 +673,7 @@ export function OjasPhotoSignatureTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="ojas-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
+        <input id="ojas-image-upload" name="ojas-image-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <span className="grid place-items-center text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -796,7 +796,7 @@ export function OjasPhotoSignatureTool() {
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="ojas-photo-signature-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
-            <input ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
+            <input id="ojas-add-image-upload" name="ojas-add-image-upload" ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
             <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
               <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
                 <div className="mb-4 flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
@@ -854,7 +854,7 @@ export function OjasPhotoSignatureTool() {
                       <button type="button" onClick={() => updateZoom(zoom - 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom out">
                         <Minus className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <input aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="w-28 min-w-24 accent-[#FF2D2D] sm:w-36" />
+                      <input id="ojas-photo-zoom" name="ojas-photo-zoom" aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="w-28 min-w-24 accent-[#FF2D2D] sm:w-36" />
                       <button type="button" onClick={() => updateZoom(zoom + 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom in">
                         <Plus className="h-4 w-4" aria-hidden="true" />
                       </button>

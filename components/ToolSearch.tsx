@@ -87,6 +87,8 @@ export function ToolSearch() {
       <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
         <Search className="ml-3 h-5 w-5 text-slate-400" aria-hidden="true" />
         <input
+          id="tool-search-input"
+          name="tool-search-input"
           value={query}
           onChange={onChange}
           onFocus={() => setIsOpen(true)}

@@ -374,7 +374,7 @@ export function CompressPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="compress-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <input id="compress-pdf-upload" name="compress-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <FileArchive className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
@@ -557,7 +557,7 @@ export function CompressPdfTool() {
     >
       {files.length > 0 ? (
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100 transition">
-          <input ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+          <input id="compress-pdf-add-more" name="compress-pdf-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>

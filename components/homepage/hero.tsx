@@ -159,7 +159,7 @@ function HeroPreview() {
             isDragging ? "border-white bg-[#e92f2f]" : "border-red-200 bg-[#ef3030] hover:bg-[#e92f2f]"
           }`}
         >
-          <input id="homepage-upload" type="file" className="sr-only" accept="image/*,.pdf,application/pdf" onChange={(event) => void handleFiles(event.currentTarget.files)} />
+          <input id="homepage-upload" name="homepage-upload" type="file" className="sr-only" accept="image/*,.pdf,application/pdf" onChange={(event) => void handleFiles(event.currentTarget.files)} />
           <span className="sr-only">Drag &amp; Drop Files</span>
           <span className="grid h-20 w-20 place-items-center text-white transition group-hover:scale-105">
             <ImageUp className="h-16 w-16 stroke-[1.8]" aria-hidden="true" />
