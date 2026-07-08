@@ -1004,16 +1004,44 @@ section[id$="-tool"] label {
 }
 
 @media (max-width: 639px) {
+  .v0-tool-page section[data-crop-image-workspace="true"] > div,
   .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-    padding: 0.75rem 1rem !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"],
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
     background: transparent !important;
     background-color: transparent !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    min-height: calc(100svh - 7rem) !important;
+    padding: 0.75rem 1rem calc(16rem + env(safe-area-inset-bottom)) !important;
+    scroll-padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
+    position: static !important;
+    z-index: auto !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    padding-bottom: 0 !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
     border-color: transparent !important;
     box-shadow: none !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
+    background: rgb(241 245 249) !important;
+    background-color: rgb(241 245 249) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    max-height: calc(100svh - 24rem) !important;
+    min-height: 8rem !important;
+    width: min(74vw, 18rem, calc((100svh - 24rem) * var(--crop-aspect))) !important;
+  }
+
+  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
+    margin-bottom: 0 !important;
+    scroll-margin-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
   }
 
   .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-resize-handle="true"] {

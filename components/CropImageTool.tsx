@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { CSSProperties, ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Crop, Download, FileArchive, ImageUp, Minus, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Crop, Download, FileArchive, ImageUp, Minus, Plus, RefreshCw, RotateCcw, RotateCw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
@@ -34,6 +34,8 @@ type SelectedImage = {
     height: number;
   };
   cropBox: CropBox | null;
+  cropModeEnabled: boolean;
+  rotation: number;
   zoom: number;
 };
 
@@ -132,6 +134,40 @@ function copyCanvas(source: HTMLCanvasElement, width: number, height: number) {
   return canvas;
 }
 
+function normalizeRotation(rotation: number) {
+  return ((rotation % 360) + 360) % 360;
+}
+
+function rotatedDimensions(dimensions: { width: number; height: number }, rotation: number) {
+  const normalized = normalizeRotation(rotation);
+  return normalized === 90 || normalized === 270 ? { width: dimensions.height, height: dimensions.width } : dimensions;
+}
+
+function imageToRotatedCanvas(source: HTMLImageElement, rotation: number, mimeType: string) {
+  const normalized = normalizeRotation(rotation);
+  const swapsSize = normalized === 90 || normalized === 270;
+  const canvas = document.createElement("canvas");
+  canvas.width = swapsSize ? source.naturalHeight : source.naturalWidth;
+  canvas.height = swapsSize ? source.naturalWidth : source.naturalHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("Your browser does not support image rotation.");
+  }
+
+  if (mimeType === "image/jpeg") {
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.translate(canvas.width / 2, canvas.height / 2);
+  context.rotate((normalized * Math.PI) / 180);
+  context.drawImage(source, -source.naturalWidth / 2, -source.naturalHeight / 2);
+  return canvas;
+}
+
 async function cropOneImage(
   image: SelectedImage,
   index: number,
@@ -149,10 +185,12 @@ async function cropOneImage(
   if (!cropBox) {
     throw new Error("Please select a crop area first.");
   }
-  const sx = Math.round((cropBox.x / 100) * loadedImage.naturalWidth);
-  const sy = Math.round((cropBox.y / 100) * loadedImage.naturalHeight);
-  const sw = Math.round((cropBox.width / 100) * loadedImage.naturalWidth);
-  const sh = Math.round((cropBox.height / 100) * loadedImage.naturalHeight);
+  const mimeType = outputMimeType(image.file);
+  const rotatedSource = imageToRotatedCanvas(loadedImage, image.rotation, mimeType);
+  const sx = Math.round((cropBox.x / 100) * rotatedSource.width);
+  const sy = Math.round((cropBox.y / 100) * rotatedSource.height);
+  const sw = Math.round((cropBox.width / 100) * rotatedSource.width);
+  const sh = Math.round((cropBox.height / 100) * rotatedSource.height);
 
   if (sw < 2 || sh < 2) {
     throw new Error("Crop box is invalid. Please choose a larger crop area.");
@@ -167,7 +205,6 @@ async function cropOneImage(
     throw new Error("Your browser does not support image cropping.");
   }
 
-  const mimeType = outputMimeType(image.file);
   if (mimeType === "image/jpeg") {
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -175,7 +212,7 @@ async function cropOneImage(
 
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.drawImage(loadedImage, sx, sy, sw, sh, 0, 0, sw, sh);
+  context.drawImage(rotatedSource, sx, sy, sw, sh, 0, 0, sw, sh);
 
   if (settings.outputSizeMode === "fixed") {
     const requestedWidth = parsePositiveNumber(settings.outputWidth);
@@ -336,14 +373,38 @@ export function CropImageTool() {
     setDragState(null);
   }
 
-  function updateActiveCropBox(cropBox: CropBox) {
+  function updateActiveCropBox(cropBox: CropBox | null) {
     if (!activeImage) return;
     setSelectedImages((current) => current.map((image) => (image.id === activeImage.id ? { ...image, cropBox } : image)));
+  }
+
+  function enableActiveCropMode() {
+    if (!activeImage) return;
+    setError(null);
+    setSelectedImages((current) =>
+      current.map((image) =>
+        image.id === activeImage.id
+          ? {
+              ...image,
+              cropModeEnabled: true,
+            }
+          : image,
+      ),
+    );
   }
 
   function updateActiveZoom(delta: number) {
     if (!activeImage) return;
     setSelectedImages((current) => current.map((image) => (image.id === activeImage.id ? { ...image, zoom: clamp(image.zoom + delta, 0.5, 3) } : image)));
+  }
+
+  function rotateActiveImage(delta: -90 | 90) {
+    if (!activeImage) return;
+    setError(null);
+    if (completedResultFor(activeImage.id)) {
+      removeResult(activeImage.id);
+    }
+    setSelectedImages((current) => current.map((image) => (image.id === activeImage.id ? { ...image, rotation: normalizeRotation(image.rotation + delta) } : image)));
   }
 
   function completedResultFor(id: string) {
@@ -418,6 +479,8 @@ export function CropImageTool() {
             previewUrl: URL.createObjectURL(file),
             dimensions: { width: image.naturalWidth, height: image.naturalHeight },
             cropBox: null,
+            cropModeEnabled: false,
+            rotation: 0,
             zoom: 1,
           };
         }),
@@ -501,19 +564,8 @@ export function CropImageTool() {
     }
   }
 
-  function createClickCropBox(point: { x: number; y: number }) {
-    const width = 40;
-    const height = 40;
-    return {
-      x: clamp(point.x - width / 2, 0, 100 - width),
-      y: clamp(point.y - height / 2, 0, 100 - height),
-      width,
-      height,
-    };
-  }
-
   function onPreviewPointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (!activeImage) return;
+    if (!activeImage?.cropModeEnabled) return;
     event.preventDefault();
     captureCropPointer(event);
     const point = pointFromEvent(event);
@@ -594,7 +646,7 @@ export function CropImageTool() {
   function stopCropDrag() {
     if (!dragState) return;
     if (dragState.mode === "draw" && activeImage && (!activeImage.cropBox || activeImage.cropBox.width < 5 || activeImage.cropBox.height < 5)) {
-      updateActiveCropBox(createClickCropBox({ x: dragState.startX, y: dragState.startY }));
+      updateActiveCropBox(null);
     }
     setDragState(null);
   }
@@ -607,7 +659,7 @@ export function CropImageTool() {
     }
 
     if (!activeImage.cropBox) {
-      setError("Click or drag on the image to select a crop area first.");
+      setError("Tap Crop Area, then adjust the crop selection before processing.");
       return;
     }
 
@@ -1146,6 +1198,53 @@ export function CropImageTool() {
     setSettingsDrawerDragOffset(0);
   }
 
+  function renderMobilePreviewActions() {
+    if (!activeImage) return null;
+
+    return (
+      <div className="mb-2 flex items-center justify-center gap-2 sm:hidden" data-crop-image-mobile-preview-actions="true">
+        <button
+          type="button"
+          onClick={enableActiveCropMode}
+          className={`grid h-8 w-8 place-items-center rounded-full transition hover:bg-slate-200 active:scale-95 ${
+            activeImage.cropModeEnabled ? "bg-red-50 text-[#FF2D2D]" : "bg-slate-100 text-slate-600 hover:text-slate-950"
+          }`}
+          aria-label="Crop area"
+          title="Crop area"
+        >
+          <Crop className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => rotateActiveImage(-90)}
+          className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95"
+          aria-label="Rotate left"
+          title="Rotate left"
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => rotateActiveImage(90)}
+          className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95"
+          aria-label="Rotate right"
+          title="Rotate right"
+        >
+          <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => removeImage(activeImage.id)}
+          className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-[#FF2D2D] transition hover:bg-red-50 active:scale-95"
+          aria-label={`Delete ${activeImage.file.name}`}
+          title="Delete"
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   function renderCropPreview() {
     if (!activeImage) return null;
 
@@ -1158,14 +1257,14 @@ export function CropImageTool() {
         onPointerUp={stopCropDrag}
         onPointerCancel={stopCropDrag}
         onLostPointerCapture={stopCropDrag}
-        className="relative h-full w-full touch-none cursor-crosshair select-none"
+        className={`relative h-full w-full select-none ${activeImage.cropModeEnabled ? "touch-none cursor-crosshair" : "touch-pan-y cursor-default"}`}
         style={{ transform: `scale(${activeImage.zoom})`, transformOrigin: "center" }}
       >
         <img
           src={activeImage.previewUrl}
           alt="Uploaded image preview"
           className="block h-full w-full object-contain"
-          style={{ objectFit: "contain" }}
+          style={{ objectFit: "contain", transform: `rotate(${activeImage.rotation}deg)` }}
           draggable={false}
         />
         {activeImage.cropBox && (
@@ -1216,25 +1315,21 @@ export function CropImageTool() {
 
         <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_10.5rem] xl:grid-cols-[minmax(0,1fr)_11.5rem]">
           <div data-crop-image-preview-card="true" className="relative min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-3 sm:shadow-sm">
+            {renderMobilePreviewActions()}
             <div
               data-crop-image-frame="true"
               className="relative mx-auto grid w-[min(74vw,18rem)] max-w-full place-items-center overflow-hidden rounded-none border-0 bg-transparent sm:rounded-lg sm:border sm:border-slate-100 sm:bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
               style={
                 activeImage
                   ? ({
-                      "--crop-aspect": String(activeImage.dimensions.width / activeImage.dimensions.height),
-                      aspectRatio: `${activeImage.dimensions.width} / ${activeImage.dimensions.height}`,
+                      "--crop-aspect": String(rotatedDimensions(activeImage.dimensions, activeImage.rotation).width / rotatedDimensions(activeImage.dimensions, activeImage.rotation).height),
+                      aspectRatio: `${rotatedDimensions(activeImage.dimensions, activeImage.rotation).width} / ${rotatedDimensions(activeImage.dimensions, activeImage.rotation).height}`,
                     } as CSSProperties)
                   : undefined
               }
             >
               {renderCropPreview()}
             </div>
-            {activeImage && (
-              <button type="button" onClick={() => removeImage(activeImage.id)} className="absolute right-0 top-0 grid h-8 w-8 translate-x-1/2 -translate-y-1/2 place-items-center rounded-lg border border-slate-200 bg-white text-[#FF2D2D] shadow-sm transition hover:border-red-200 sm:hidden" aria-label={`Remove ${activeImage.file.name}`}>
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
             {activeImage && (
               <div className="mt-3 hidden min-w-0 flex-wrap items-center justify-between gap-3 sm:flex">
                 <div className="min-w-0">
@@ -1340,7 +1435,7 @@ export function CropImageTool() {
           aria-modal="true"
           aria-label="Crop image settings"
           style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
-          className={`absolute inset-x-0 bottom-0 flex max-h-[min(82vh,34rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
             isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
           } ${isSettingsDrawerClosing ? "" : "animate-[cropImageDrawerIn_220ms_ease-out]"} ${
             settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
@@ -1364,8 +1459,16 @@ export function CropImageTool() {
           >
             <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
           </button>
-          <div className="shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
             <p className="text-sm font-black text-slate-950">Settings</p>
+            <button
+              type="button"
+              onClick={closeSettingsDrawer}
+              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95"
+              aria-label="Close settings"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
             {renderSettingsControls("crop-image-mobile", "items-stretch")}
