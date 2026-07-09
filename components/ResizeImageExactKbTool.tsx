@@ -41,6 +41,12 @@ function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
 }
 
+function splitFileName(fileName: string) {
+  const match = fileName.match(/^(.*?)(\.[^.]+)$/);
+  if (!match) return { stem: fileName, extension: "" };
+  return { stem: match[1] || fileName, extension: match[2] };
+}
+
 function cleanFileName(fileName: string) {
   return fileName.replace(/[\\/:*?"<>|]+/g, "-").replace(/\.[^.]+$/, "") || "PDFRoot-image";
 }
@@ -1025,41 +1031,47 @@ export function ResizeImageExactKbTool() {
       <div ref={workAreaRef} data-exact-kb-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
         <input id="exact-kb-add-more-images" name="exact-kb-add-more-images" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
         <div data-exact-kb-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
-          {selectedImages.map((image, index) => (
-            <article
-              key={image.id}
-              draggable
-              onDragStart={() => setDraggedId(image.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDragEnter={() => reorderByDragEnter(image.id)}
-              onDrop={() => setDraggedId(null)}
-              onDragEnd={() => setDraggedId(null)}
-              className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
-                draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
-              }`}
-            >
-              <div className="relative grid aspect-[3/4] max-sm:aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
-                <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
-                  {index + 1}
-                </span>
-                <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
-                  <GripVertical className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
-              </div>
-              <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">
-                    {formatKb(image.file.size)} KB - {image.dimensions.width} x {image.dimensions.height}px
+          {selectedImages.map((image, index) => {
+            const displayName = splitFileName(image.file.name);
+            return (
+              <article
+                key={image.id}
+                draggable
+                onDragStart={() => setDraggedId(image.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDragEnter={() => reorderByDragEnter(image.id)}
+                onDrop={() => setDraggedId(null)}
+                onDragEnd={() => setDraggedId(null)}
+                className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
+                  draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
+                }`}
+              >
+                <div className="relative grid aspect-[3/4] max-sm:aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                  <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
+                    {index + 1}
+                  </span>
+                  <button type="button" onClick={() => removeImage(image.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${image.file.name}`}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
+                </div>
+                <div className="mt-2 min-w-0">
+                  <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={image.file.name}>
+                    <span className="min-w-0 truncate">{displayName.stem}</span>
+                    <span className="shrink-0">{displayName.extension}</span>
+                  </p>
+                  <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                    {formatKb(image.file.size)} KB {"\u2022"} {image.dimensions.width}
+                    {"\u00d7"}
+                    {image.dimensions.height} px
                   </p>
                 </div>
-                <button type="button" onClick={() => removeImage(image.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       </div>
     );

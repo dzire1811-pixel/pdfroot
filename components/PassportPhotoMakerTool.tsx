@@ -1,14 +1,16 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, IdCard, ImageUp, RefreshCw, RotateCcw, Sparkles, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, IdCard, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
 type SheetSizeKey = "4x6" | "5x7" | "8x12" | "10x15" | "12x18";
 type BackgroundMode = "white" | "blue" | "custom";
 type OutputFormat = "jpg" | "png" | "pdf";
+type PreviewMode = "original" | "enhanced";
+type ImageDimensions = { width: number; height: number };
 
 type SheetPreset = {
   key: SheetSizeKey;
@@ -47,6 +49,12 @@ function isImage(file: File) {
 
 function safeBaseName(name: string) {
   return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "passport-photo";
+}
+
+function splitFileName(name: string) {
+  const match = name.match(/^(.*?)(\.[^.]+)$/);
+  if (!match) return { stem: name, extension: "" };
+  return { stem: match[1] || name, extension: match[2] };
 }
 
 function mmToPx(mm: number) {
@@ -118,9 +126,9 @@ function enhanceCanvas(canvas: HTMLCanvasElement) {
     for (let channel = 0; channel < 3; channel += 1) {
       const value = original[index + channel];
       const smooth = softened[index + channel];
-      const brightened = value * 1.05 + 4;
-      const contrasted = (brightened - 128) * 1.09 + 128;
-      const sharpened = contrasted + (value - smooth) * 0.42;
+      const brightened = value * 1.04 + 3;
+      const contrasted = (brightened - 128) * 1.08 + 128;
+      const sharpened = contrasted + (value - smooth) * 0.34;
       output[index + channel] = Math.max(0, Math.min(255, Math.round(sharpened)));
     }
     output[index + 3] = original[index + 3];
@@ -141,7 +149,7 @@ function drawEnhancedSource(image: HTMLImageElement) {
 
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.filter = "brightness(1.04) contrast(1.06) saturate(1.03)";
+  context.filter = "brightness(1.035) contrast(1.055) saturate(1.015)";
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   context.filter = "none";
   return enhanceCanvas(canvas);
@@ -226,7 +234,10 @@ function drawSheet(image: HTMLImageElement, settings: {
 export function PassportPhotoMakerTool() {
   const [stage, setStage] = useState<Stage>("upload");
   const [file, setFile] = useState<File | null>(null);
+  const [originalDimensions, setOriginalDimensions] = useState<ImageDimensions | null>(null);
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("enhanced");
   const [photoWidthMm, setPhotoWidthMm] = useState(35);
   const [photoHeightMm, setPhotoHeightMm] = useState(45);
   const [sheetKey, setSheetKey] = useState<SheetSizeKey>("4x6");
@@ -240,6 +251,11 @@ export function PassportPhotoMakerTool() {
   const [status, setStatus] = useState("Upload one photo to create a passport photo sheet.");
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
   const processingSectionRef = useRef<HTMLElement | null>(null);
@@ -247,19 +263,21 @@ export function PassportPhotoMakerTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
+  const originalUrlRef = useRef<string | null>(null);
   const enhancedUrlRef = useRef<string | null>(null);
   const outputUrlRef = useRef<string | null>(null);
   const sheetPreviewUrlRef = useRef<string | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
 
   const selectedSheet = sheetPresets.find((preset) => preset.key === sheetKey) ?? sheetPresets[0];
-  const photoWidthPx = mmToPx(photoWidthMm);
-  const photoHeightPx = mmToPx(photoHeightMm);
-  const sheetWidthPx = inchesToPx(selectedSheet.widthIn);
-  const sheetHeightPx = inchesToPx(selectedSheet.heightIn);
-  const layout = calculateLayout(sheetWidthPx, sheetHeightPx, photoWidthPx, photoHeightPx, mmToPx(gapMm));
   const background = resolveBackground(backgroundMode, customBackground);
+  const activePhotoUrl = previewMode === "original" ? originalUrl : enhancedUrl;
+  const displayFileName = file ? splitFileName(file.name) : null;
 
   function clearNativeInput() {
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -278,6 +296,12 @@ export function PassportPhotoMakerTool() {
     setSheetPreviewUrl(null);
   }
 
+  function clearOriginal() {
+    if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+    originalUrlRef.current = null;
+    setOriginalUrl(null);
+  }
+
   function clearEnhanced() {
     if (enhancedUrlRef.current) URL.revokeObjectURL(enhancedUrlRef.current);
     enhancedUrlRef.current = null;
@@ -287,9 +311,12 @@ export function PassportPhotoMakerTool() {
   function resetTool() {
     clearOutput();
     clearSheetPreview();
+    clearOriginal();
     clearEnhanced();
     setStage("upload");
     setFile(null);
+    setOriginalDimensions(null);
+    setPreviewMode("enhanced");
     setPhotoWidthMm(35);
     setPhotoHeightMm(45);
     setSheetKey("4x6");
@@ -301,6 +328,14 @@ export function PassportPhotoMakerTool() {
     setStatus("Upload one photo to create a passport photo sheet.");
     setIsCreatingSheet(false);
     setIsDragging(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    setIsAdvancedOpen(false);
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
     clearNativeInput();
     shouldScrollToUploadRef.current = true;
   }
@@ -317,6 +352,20 @@ export function PassportPhotoMakerTool() {
     }
 
     clearEnhanced();
+    clearOriginal();
+    const nextOriginalUrl = URL.createObjectURL(nextFile);
+    originalUrlRef.current = nextOriginalUrl;
+    setOriginalUrl(nextOriginalUrl);
+    setPreviewMode("enhanced");
+    setOriginalDimensions(null);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    setIsAdvancedOpen(false);
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
     setFile(nextFile);
     setStage("processing");
     setStatus("Enhancing photo quality...");
@@ -324,6 +373,7 @@ export function PassportPhotoMakerTool() {
 
     try {
       const image = await loadImageFromFile(nextFile);
+      setOriginalDimensions({ width: image.naturalWidth, height: image.naturalHeight });
       const canvas = drawEnhancedSource(image);
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.96);
       const url = URL.createObjectURL(blob);
@@ -333,8 +383,11 @@ export function PassportPhotoMakerTool() {
       setStatus("Photo enhanced. Choose sheet settings and create your print sheet.");
       window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
     } catch (err) {
+      clearOriginal();
+      clearEnhanced();
       setStage("upload");
       setFile(null);
+      setOriginalDimensions(null);
       setError(err instanceof Error ? err.message : "Could not enhance this photo. Please try another image.");
     }
   }
@@ -372,8 +425,19 @@ export function PassportPhotoMakerTool() {
     setStatus("Settings updated. Preview refreshed automatically.");
   }
 
+  function updatePreviewMode(mode: PreviewMode) {
+    if (mode === previewMode) return;
+    clearOutput();
+    setPreviewMode(mode);
+    setStatus(mode === "enhanced" ? "Showing client-side enhanced HD preview." : "Showing original uploaded photo preview.");
+  }
+
+  function handleAiHdEnhancePlaceholder() {
+    setStatus("AI HD Enhance API is not connected yet. Current enhancement is basic client-side processing.");
+  }
+
   async function createPassportSheet() {
-    if (!file || !enhancedUrl) {
+    if (!file || !activePhotoUrl) {
       setError("Please upload a photo first.");
       setStage("upload");
       return;
@@ -387,10 +451,10 @@ export function PassportPhotoMakerTool() {
     setIsCreatingSheet(true);
     setError(null);
     clearOutput();
-    setStatus("Creating final passport photo sheet...");
+    setStatus(`Creating final passport photo sheet from the ${previewMode} photo...`);
 
     try {
-      const image = await loadImageFromUrl(enhancedUrl);
+      const image = await loadImageFromUrl(activePhotoUrl);
       const { canvas, count } = drawSheet(image, {
         sheet: selectedSheet,
         photoWidthMm,
@@ -475,7 +539,22 @@ export function PassportPhotoMakerTool() {
   }, [stage]);
 
   useEffect(() => {
-    if (stage !== "workspace" || !enhancedUrl) {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.passportPhotoActiveWorkspace = "true";
+    } else {
+      delete page.dataset.passportPhotoActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.passportPhotoActiveWorkspace;
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "workspace" || !activePhotoUrl) {
       setIsActionBarVisible(false);
       return;
     }
@@ -516,10 +595,10 @@ export function PassportPhotoMakerTool() {
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [stage, enhancedUrl]);
+  }, [stage, activePhotoUrl]);
 
   useEffect(() => {
-    if (stage !== "workspace" || !enhancedUrl || !file) return;
+    if (stage !== "workspace" || !activePhotoUrl || !file) return;
     if (!Number.isFinite(photoWidthMm) || !Number.isFinite(photoHeightMm) || photoWidthMm < 10 || photoHeightMm < 10 || photoWidthMm > 100 || photoHeightMm > 100) return;
 
     let isActive = true;
@@ -527,7 +606,7 @@ export function PassportPhotoMakerTool() {
 
     void (async () => {
       try {
-        const image = await loadImageFromUrl(enhancedUrl);
+        const image = await loadImageFromUrl(activePhotoUrl);
         const { canvas, count } = drawSheet(image, {
           sheet: selectedSheet,
           photoWidthMm,
@@ -546,7 +625,7 @@ export function PassportPhotoMakerTool() {
         if (sheetPreviewUrlRef.current) URL.revokeObjectURL(sheetPreviewUrlRef.current);
         sheetPreviewUrlRef.current = previewUrl;
         setSheetPreviewUrl(previewUrl);
-        setStatus(`${count} photos fit on ${selectedSheet.label}. Preview is ready.`);
+        setStatus(`${count} photos fit on ${selectedSheet.label}. ${previewMode === "enhanced" ? "Enhanced" : "Original"} preview is ready.`);
       } catch (err) {
         if (!isActive) return;
         setError(err instanceof Error ? err.message : "Could not refresh passport photo sheet preview.");
@@ -556,16 +635,361 @@ export function PassportPhotoMakerTool() {
     return () => {
       isActive = false;
     };
-  }, [stage, enhancedUrl, file, photoWidthMm, photoHeightMm, sheetKey, gapMm, backgroundMode, customBackground, selectedSheet, background]);
+  }, [stage, activePhotoUrl, previewMode, file, photoWidthMm, photoHeightMm, sheetKey, gapMm, backgroundMode, customBackground, selectedSheet, background]);
 
   useEffect(() => {
     return () => {
+      if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
       if (enhancedUrlRef.current) URL.revokeObjectURL(enhancedUrlRef.current);
       if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
       if (sheetPreviewUrlRef.current) URL.revokeObjectURL(sheetPreviewUrlRef.current);
       if (output?.previewUrl && output.previewUrl !== outputUrlRef.current) URL.revokeObjectURL(output.previewUrl);
     };
   }, [output?.previewUrl]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => {
+        mobileSettingsButtonRef.current?.focus();
+      });
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      if (typeof clientY === "number") {
+        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = dragDistance;
+        setSettingsDrawerDragOffset(dragDistance);
+      }
+
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+
+      if (drawerDragOffsetRef.current >= 84) {
+        closeSettingsDrawer();
+        return;
+      }
+
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer],
+  );
+
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerOpen(true);
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSettingsDrawer();
+    };
+
+    const onResize = () => {
+      if (window.innerWidth >= 640) closeSettingsDrawer();
+    };
+
+    const onPointerMove = (event: globalThis.PointerEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseMove = (event: globalThis.MouseEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) updateSettingsDrawerDrag(touch.clientY);
+    };
+
+    const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    };
+
+    const onPointerEnd = (event: globalThis.PointerEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseEnd = (event: globalThis.MouseEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
+
+  function renderChangePhotoButton() {
+    return (
+      <button
+        type="button"
+        aria-label="Change photo"
+        title="Change photo"
+        onClick={() => fileInputRef.current?.click()}
+        className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14"
+      >
+        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
+          1
+        </span>
+        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes passportPhotoDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button
+          type="button"
+          className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`}
+          aria-label="Close settings backdrop"
+          onClick={closeSettingsDrawer}
+        />
+        <div
+          id="passport-photo-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Passport photo settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[passportPhotoDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
+            <div>
+              <p className="mb-2 text-xs font-black uppercase text-slate-500">Sheet size</p>
+              <div className="grid grid-cols-5 rounded-xl bg-slate-100 p-1">
+                {sheetPresets.map((preset) => (
+                  <button key={preset.key} type="button" onClick={() => updateSettings(() => setSheetKey(preset.key))} className={`h-10 rounded-lg px-1 text-xs font-black transition ${sheetKey === preset.key ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-black uppercase text-slate-500">Background</p>
+              <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+                {([
+                  ["white", "White"],
+                  ["blue", "Light Blue"],
+                ] as Array<[BackgroundMode, string]>).map(([mode, label]) => (
+                  <button key={mode} type="button" onClick={() => updateSettings(() => setBackgroundMode(mode))} className={`h-10 rounded-lg px-2 text-xs font-black transition ${backgroundMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-black uppercase text-slate-500">Output</p>
+              <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+                {(["jpg", "pdf"] as OutputFormat[]).map((format) => (
+                  <button key={format} type="button" onClick={() => updateSettings(() => setOutputFormat(format))} className={`h-10 rounded-lg px-2 text-xs font-black uppercase transition ${outputFormat === format ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
+                    {format}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+              <button type="button" onClick={() => setIsAdvancedOpen((open) => !open)} className="flex h-10 w-full items-center justify-between rounded-xl bg-white px-3 text-xs font-black text-slate-800" aria-expanded={isAdvancedOpen}>
+                Advanced Settings
+                <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+              </button>
+              {isAdvancedOpen && (
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <label htmlFor="passport-photo-width-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
+                    Width mm
+                    <input id="passport-photo-width-mm-mobile" name="passport-photo-width-mm-mobile" type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  </label>
+                  <label htmlFor="passport-photo-height-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
+                    Height mm
+                    <input id="passport-photo-height-mm-mobile" name="passport-photo-height-mm-mobile" type="number" min={10} max={100} value={photoHeightMm} onChange={(event) => updateSettings(() => setPhotoHeightMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  </label>
+                  <label htmlFor="passport-photo-gap-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
+                    Gap mm
+                    <input id="passport-photo-gap-mm-mobile" name="passport-photo-gap-mm-mobile" type="number" min={0} max={20} step={0.5} value={gapMm} onChange={(event) => updateSettings(() => setGapMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
+                  </label>
+                  <label htmlFor="passport-photo-custom-background" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
+                    Custom bg
+                    <div className="mt-1 grid grid-cols-[1fr_3rem] gap-2">
+                      <button type="button" onClick={() => updateSettings(() => setBackgroundMode("custom"))} className={`h-11 rounded-xl border px-3 text-xs font-black transition ${backgroundMode === "custom" ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700"}`}>
+                        Use
+                      </button>
+                      <input id="passport-photo-custom-background" name="passport-photo-custom-background" type="color" value={customBackground} onChange={(event) => updateSettings(() => {
+                        setCustomBackground(event.target.value);
+                        setBackgroundMode("custom");
+                      })} className="h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
+                    </div>
+                  </label>
+                  <button type="button" onClick={() => updateSettings(() => setOutputFormat("png"))} className={`col-span-2 h-11 rounded-xl border px-3 text-xs font-black uppercase transition ${outputFormat === "png" ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700"}`}>
+                    PNG output
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (stage === "processing") {
     return (
@@ -623,7 +1047,7 @@ export function PassportPhotoMakerTool() {
     );
   }
 
-  if (stage === "upload" || !file || !enhancedUrl) {
+  if (stage === "upload" || !file || !enhancedUrl || !originalUrl) {
     return (
       <section ref={toolSectionRef} data-v0-managed-flow="true" id="passport-photo-maker-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
         <label
@@ -652,21 +1076,33 @@ export function PassportPhotoMakerTool() {
   }
 
   return (
-    <section ref={toolSectionRef} data-v0-managed-flow="true" data-passport-photo-workspace="true" id="passport-photo-maker-tool" className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+    <section ref={toolSectionRef} data-v0-managed-flow="true" data-passport-photo-workspace="true" id="passport-photo-maker-tool" className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
       <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-        <div ref={workAreaRef} data-passport-photo-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
-          <div className="mx-auto grid min-h-[calc(100vh-22rem)] max-w-[1600px] place-items-center pb-[28rem] sm:pb-64 lg:pb-48">
-            <div className="w-full max-w-4xl rounded-2xl bg-white p-4 shadow-sm sm:p-5">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-black text-slate-950">{sheetPreviewUrl ? "Passport photo sheet preview" : "Preparing sheet preview"}</p>
-                <p className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                  <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                  Auto enhanced HD
-                </p>
+        <input id="passport-photo-workspace-upload" name="passport-photo-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
+        <div ref={workAreaRef} data-passport-photo-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-2 pt-3 text-left sm:min-h-[calc(100vh-9rem)] sm:p-6 sm:pt-8">
+          <div className="mx-auto grid max-w-[1600px] place-items-center pb-[8.5rem] sm:min-h-[calc(100vh-22rem)] sm:pb-64 lg:pb-48">
+            <div className="w-full max-w-[calc(100vw-1rem)] rounded-xl bg-white p-3 shadow-sm sm:max-w-4xl sm:rounded-2xl sm:p-5">
+              <div className="mb-2 flex flex-col gap-1.5 sm:mb-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-slate-950">{sheetPreviewUrl ? "Passport photo sheet preview" : "Preparing sheet preview"}</p>
+                </div>
+                <div className="flex w-full max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden px-0.5 [scrollbar-width:none] sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
+                  <div className="flex shrink-0 items-center gap-1.5" aria-label="Compare original and enhanced photo">
+                    {(["original", "enhanced"] as PreviewMode[]).map((mode) => (
+                      <button key={mode} type="button" onClick={() => updatePreviewMode(mode)} className={`h-6 shrink-0 rounded-full border px-1.5 text-[0.6rem] font-black capitalize shadow-[0_2px_0_rgba(15,23,42,0.06),0_6px_12px_rgba(15,23,42,0.05)] transition active:translate-y-px active:shadow-sm sm:h-8 sm:px-3 sm:text-xs ${previewMode === mode ? (mode === "enhanced" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-[#FF2D2D]") : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}>
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={handleAiHdEnhancePlaceholder} className="inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-full border border-red-100 bg-white px-1.5 text-[0.6rem] font-black text-slate-800 shadow-[0_2px_0_rgba(255,45,45,0.12),0_6px_12px_rgba(15,23,42,0.05)] transition hover:border-red-200 hover:text-[#FF2D2D] active:translate-y-px active:shadow-sm sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs">
+                    <Sparkles className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
+                    AI HD Enhance
+                  </button>
+                </div>
               </div>
-              <div className="grid min-h-[26rem] place-items-center rounded-xl bg-slate-50 p-3">
+              <div className="grid aspect-[3/2] w-full place-items-center overflow-hidden rounded-xl bg-slate-50 p-2 sm:aspect-auto sm:min-h-[26rem] sm:p-3">
                 {sheetPreviewUrl ? (
-                  <img src={sheetPreviewUrl} alt="Passport photo sheet preview" className="max-h-[min(68vh,44rem)] max-w-full object-contain shadow-sm" />
+                  <img src={sheetPreviewUrl} alt="Passport photo sheet preview" className="h-full max-h-[42vh] w-full max-w-full object-contain shadow-sm sm:h-auto sm:max-h-[min(68vh,44rem)] sm:w-auto" />
                 ) : (
                   <div className="text-center">
                     <RefreshCw className="mx-auto h-8 w-8 animate-spin text-[#FF2D2D]" aria-hidden="true" />
@@ -674,17 +1110,48 @@ export function PassportPhotoMakerTool() {
                   </div>
                 )}
               </div>
-              <p className="mt-3 text-sm font-semibold text-slate-600">
-                {file.name} - {formatKb(file.size)} KB - {layout.count} photos fit on {selectedSheet.label}
-              </p>
+              {displayFileName && originalDimensions && (
+                <div className="mt-2 flex min-w-0 max-w-full items-center gap-2 sm:mt-3" title={file.name}>
+                  <p className="flex min-w-0 flex-1 items-baseline text-xs font-black leading-snug text-slate-950">
+                    <span className="min-w-0 truncate">{displayFileName.stem}</span>
+                    <span className="shrink-0">{displayFileName.extension}</span>
+                  </p>
+                  <p className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                    {formatKb(file.size)} KB {"\u2022"} {originalDimensions.width}
+                    {"\u00d7"}
+                    {originalDimensions.height} px
+                  </p>
+                </div>
+              )}
               {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
           </div>
         </div>
 
         {isActionBarVisible && (
-          <div ref={actionBarRef} data-passport-photo-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 max-h-[58vh] overflow-y-auto border-t border-slate-200 bg-slate-100/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-            <div className="mx-auto flex max-w-[1600px] flex-wrap items-end gap-2">
+          <div ref={actionBarRef} data-passport-photo-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:bg-slate-100/95 sm:px-6">
+            <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:hidden">
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="truncate text-sm font-black text-slate-950">1 image ready</p>
+                <button type="button" ref={mobileSettingsButtonRef} onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95" aria-expanded={isSettingsDrawerOpen} aria-controls="passport-photo-mobile-settings-drawer">
+                  <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                  Settings
+                </button>
+              </div>
+              <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2">
+                {renderChangePhotoButton()}
+                <button type="button" disabled={isCreatingSheet} onClick={() => void createPassportSheet()} className="inline-flex min-h-12 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-3 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:pointer-events-none disabled:opacity-70">
+                  {isCreatingSheet ? "Creating..." : "Create Sheet"}
+                  {isCreatingSheet ? <RefreshCw className="h-5 w-5 animate-spin" aria-hidden="true" /> : <IdCard className="h-5 w-5" aria-hidden="true" />}
+                </button>
+                <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
+                  Clear all
+                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="mx-auto hidden max-w-[1600px] items-end gap-2 sm:flex sm:flex-wrap">
                 <label htmlFor="passport-photo-width-mm" className="text-xs font-black text-slate-700">
                   Width mm
                   <input id="passport-photo-width-mm" name="passport-photo-width-mm" type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
@@ -716,7 +1183,7 @@ export function PassportPhotoMakerTool() {
                   ))}
                 </div>
                 {backgroundMode === "custom" && (
-                  <input id="passport-photo-custom-background" name="passport-photo-custom-background" type="color" value={customBackground} onChange={(event) => updateSettings(() => setCustomBackground(event.target.value))} className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
+                  <input id="passport-photo-custom-background-desktop" name="passport-photo-custom-background-desktop" type="color" value={customBackground} onChange={(event) => updateSettings(() => setCustomBackground(event.target.value))} className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
                 )}
                 <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
                   {(["jpg", "png", "pdf"] as OutputFormat[]).map((format) => (
@@ -725,17 +1192,18 @@ export function PassportPhotoMakerTool() {
                     </button>
                   ))}
                 </div>
-                <button type="button" disabled={isCreatingSheet} onClick={() => void createPassportSheet()} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:pointer-events-none disabled:opacity-70 sm:min-h-12 sm:min-w-[16rem] sm:px-5 sm:text-base lg:flex-none">
+                <button type="button" disabled={isCreatingSheet} onClick={() => void createPassportSheet()} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:pointer-events-none disabled:opacity-70 sm:min-w-[16rem] lg:flex-none">
                   {isCreatingSheet ? "Creating Sheet..." : "Create Passport Photo Sheet"}
                   {isCreatingSheet ? <RefreshCw className="h-5 w-5 animate-spin" aria-hidden="true" /> : <IdCard className="h-5 w-5" aria-hidden="true" />}
                 </button>
-                <button type="button" onClick={resetTool} className="inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-12 sm:gap-2 sm:px-4 sm:text-sm">
+                <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
                   Clear
                   <RotateCcw className="h-5 w-5" aria-hidden="true" />
                 </button>
             </div>
           </div>
         )}
+        {renderMobileSettingsDrawer()}
       </div>
     </section>
   );

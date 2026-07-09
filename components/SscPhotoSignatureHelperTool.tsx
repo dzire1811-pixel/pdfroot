@@ -1,9 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -41,6 +41,12 @@ function formatKb(bytes: number) {
 
 function cleanFileName(fileName: string) {
   return fileName.replace(/[\\/:*?"<>|]+/g, "-").replace(/\.[^.]+$/, "") || "ssc-signature";
+}
+
+function splitFileName(fileName: string) {
+  const match = fileName.match(/^(.*?)(\.[^.]+)$/);
+  if (!match) return { stem: fileName, extension: "" };
+  return { stem: match[1] || fileName, extension: match[2] };
 }
 
 function isSupportedImage(file: File) {
@@ -181,6 +187,10 @@ export function SscPhotoSignatureHelperTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -189,6 +199,10 @@ export function SscPhotoSignatureHelperTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
   const signaturesRef = useRef<SelectedSignature[]>([]);
   const outputsRef = useRef<OutputSignature[]>([]);
@@ -226,6 +240,13 @@ export function SscPhotoSignatureHelperTool() {
     setIsDragging(false);
     setDraggedId(null);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
     clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
@@ -409,6 +430,13 @@ export function SscPhotoSignatureHelperTool() {
   useEffect(() => {
     if (!signatures.length || stage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      settingsDrawerClosingRef.current = false;
       return;
     }
 
@@ -443,6 +471,142 @@ export function SscPhotoSignatureHelperTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [signatures.length, stage]);
+
+  useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.sscSignatureActiveWorkspace = "true";
+    } else {
+      delete page.dataset.sscSignatureActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.sscSignatureActiveWorkspace;
+    };
+  }, [stage]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => {
+        mobileSettingsButtonRef.current?.focus();
+      });
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      if (typeof clientY === "number") {
+        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = dragDistance;
+        setSettingsDrawerDragOffset(dragDistance);
+      }
+
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+
+      if (drawerDragOffsetRef.current >= 84) {
+        closeSettingsDrawer();
+        return;
+      }
+
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSettingsDrawer();
+    };
+
+    const onResize = () => {
+      if (window.innerWidth >= 640) closeSettingsDrawer();
+    };
+
+    const onPointerMove = (event: globalThis.PointerEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseMove = (event: globalThis.MouseEvent) => {
+      updateSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) updateSettingsDrawerDrag(touch.clientY);
+    };
+
+    const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    };
+
+    const onPointerEnd = (event: globalThis.PointerEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onMouseEnd = (event: globalThis.MouseEvent) => {
+      finishSettingsDrawerDrag(event.clientY);
+    };
+
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -530,6 +694,154 @@ export function SscPhotoSignatureHelperTool() {
     );
   }
 
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerOpen(true);
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
+  function renderActionButtons() {
+    return (
+      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+        {renderAddMoreButton()}
+        <button type="button" onClick={() => void processSignatures()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Resize Signature Now
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes sscSignatureDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="ssc-signature-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="SSC signature settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[sscSignatureDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            {renderRequirementStatus()}
+          </div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (stage === "processing") {
     return (
       <section
@@ -594,27 +906,15 @@ export function SscPhotoSignatureHelperTool() {
 
   if (stage === "workspace" && signatures.length) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ssc-signature-workspace="true" id="ssc-signature-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ssc-signature-workspace="true" id="ssc-signature-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ssc-signature-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+          <div ref={workAreaRef} data-ssc-signature-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
             <input id="ssc-add-signature-upload" name="ssc-add-signature-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
-            <div className="mx-auto grid w-full max-w-[1600px] gap-5 pb-[28rem] sm:pb-56 lg:pb-40">
-              <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-                  <p className="text-sm font-black text-slate-950">SSC signature preview</p>
-                  <p className="text-xs font-bold text-slate-500">Output keeps 3:1 ratio</p>
-                </div>
-                <div className="grid min-h-[min(54vh,32rem)] place-items-center rounded-xl bg-slate-50 p-4">
-                  <img src={signatures[0].previewUrl} alt="Uploaded SSC signature preview" className="max-h-[min(50vh,28rem)] max-w-full object-contain" />
-                </div>
-                <div className="mt-4">{renderRequirementStatus()}</div>
-                <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-                  Always verify the latest SSC signature rules from the official SSC notification before final submission.
-                </p>
-              </div>
+            <div data-ssc-signature-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+              {signatures.map((signature, index) => {
+                const displayName = splitFileName(signature.file.name);
 
-              <div data-ssc-signature-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
-                {signatures.map((signature, index) => (
+                return (
                   <article
                     key={signature.id}
                     draggable
@@ -627,27 +927,30 @@ export function SscPhotoSignatureHelperTool() {
                       draggedId === signature.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
                     }`}
                   >
-                    <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                    <div className="relative grid aspect-[3/4] max-sm:aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
                       <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
-                      <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                      <button type="button" onClick={() => removeSignature(signature.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${signature.file.name}`}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
                         <GripVertical className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <img src={signature.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
                     </div>
-                    <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-black text-slate-950">{signature.file.name}</p>
-                        <p className="mt-1 text-xs font-bold text-slate-500">
-                          {formatKb(signature.file.size)} KB - {signature.width} x {signature.height}px
-                        </p>
-                      </div>
-                      <button type="button" onClick={() => removeSignature(signature.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${signature.file.name}`}>
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
+                    <div className="mt-2 min-w-0">
+                      <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={signature.file.name}>
+                        <span className="min-w-0 truncate">{displayName.stem}</span>
+                        <span className="shrink-0">{displayName.extension}</span>
+                      </p>
+                      <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                        {formatKb(signature.file.size)} KB {"\u2022"} {signature.width}
+                        {"\u00d7"}
+                        {signature.height} px
+                      </p>
                     </div>
                   </article>
-                ))}
-              </div>
+                );
+              })}
               {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
           </div>
@@ -655,23 +958,34 @@ export function SscPhotoSignatureHelperTool() {
           {isActionBarVisible && (
             <div ref={actionBarRef} data-ssc-signature-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
               <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <p className="truncate text-sm font-black text-slate-950">
-                  {signatures.length} {signatures.length === 1 ? "signature" : "signatures"} ready
-                </p>
-                <div className="grid grid-cols-[3rem_minmax(11rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(15rem,1fr)_auto] lg:min-w-[38rem]">
-                  {renderAddMoreButton()}
-                  <button type="button" onClick={() => void processSignatures()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                    Resize Signature for SSC
-                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                    Clear all
-                    <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                  </button>
+                <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="truncate text-sm font-black text-slate-950">
+                      {signatures.length} {signatures.length === 1 ? "signature" : "signatures"} ready
+                    </p>
+                    <button
+                      ref={mobileSettingsButtonRef}
+                      type="button"
+                      onClick={openSettingsDrawer}
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                      aria-expanded={isSettingsDrawerOpen}
+                      aria-controls="ssc-signature-mobile-settings-drawer"
+                    >
+                      <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                      Settings
+                    </button>
+                  </div>
+                  <div className="hidden sm:block">
+                    {renderRequirementStatus()}
+                  </div>
+                </div>
+                <div className="min-w-0 lg:ml-auto">
+                  {renderActionButtons()}
                 </div>
               </div>
             </div>
           )}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );

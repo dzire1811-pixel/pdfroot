@@ -43,6 +43,17 @@ function safeBaseName(name: string) {
   return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot-image";
 }
 
+function compactFileName(fileName: string, maxLength = 30) {
+  if (fileName.length <= maxLength) return fileName;
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const available = Math.max(8, maxLength - extension.length - 3);
+  const headLength = Math.max(5, available - 4);
+  const tailLength = Math.max(0, available - headLength);
+  return `${baseName.slice(0, headLength)}...${tailLength ? baseName.slice(-tailLength) : ""}${extension}`;
+}
+
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -334,6 +345,21 @@ export function PngToJpgTool() {
   }, [zipUrl]);
 
   useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.pngToJpgActiveWorkspace = "true";
+    } else {
+      delete page.dataset.pngToJpgActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.pngToJpgActiveWorkspace;
+    };
+  }, [stage]);
+
+  useEffect(() => {
     if (stage !== "success" || !convertedFiles.length) return;
 
     window.requestAnimationFrame(() => {
@@ -385,13 +411,9 @@ export function PngToJpgTool() {
 
       const viewportHeight = window.innerHeight;
       const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
-      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
-      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
 
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(workAreaInView);
     };
 
     const scheduleUpdate = () => {
@@ -502,44 +524,64 @@ export function PngToJpgTool() {
 
   function renderWorkspacePreview() {
     return (
-      <div ref={workAreaRef} data-png-to-jpg-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+      <div ref={workAreaRef} data-png-to-jpg-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
         <input id="png-to-jpg-add-more" name="png-to-jpg-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onAddMoreInputChange} />
         <div data-png-to-jpg-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
-          {selectedImages.map((image, index) => (
-            <article
-              key={image.id}
-              draggable
-              onDragStart={() => setDraggedId(image.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDragEnter={() => reorderByDragEnter(image.id)}
-              onDrop={() => setDraggedId(null)}
-              onDragEnd={() => setDraggedId(null)}
-              className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
-                draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
-              }`}
-            >
-              <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
-                <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
-                  {index + 1}
-                </span>
-                <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
-                  <GripVertical className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
-              </div>
-              <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-slate-950">{image.file.name}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">
-                    {formatKb(image.file.size)} KB - {image.dimensions.width} x {image.dimensions.height}px
-                  </p>
+          {selectedImages.map((image, index) => {
+            const completedResult = convertedFiles.find((result) => result.id === image.id);
+
+            return (
+              <article
+                key={image.id}
+                draggable
+                onDragStart={() => setDraggedId(image.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDragEnter={() => reorderByDragEnter(image.id)}
+                onDrop={() => setDraggedId(null)}
+                onDragEnd={() => setDraggedId(null)}
+                className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
+                  draggedId === image.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
+                }`}
+              >
+                <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                  <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
+                    {index + 1}
+                  </span>
+                  <button type="button" onClick={() => removeImage(image.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
                 </div>
-                <button type="button" onClick={() => removeImage(image.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${image.file.name}`}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-            </article>
-          ))}
+                <div className="mt-2 min-w-0">
+                  <p className="truncate text-sm font-black leading-snug text-slate-950" title={image.file.name}>
+                    {compactFileName(image.file.name)}
+                  </p>
+                  <p className="sr-only">
+                    {formatKb(image.file.size)} KB - {image.dimensions.width}{"\u00d7"}{image.dimensions.height} px
+                  </p>
+                  <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                    {completedResult ? (
+                      <>
+                        <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(image.file.size)} KB</span>
+                        <span className="max-w-full truncate rounded-full bg-emerald-50 px-2 py-1 text-[0.68rem] font-bold leading-none text-emerald-700">
+                          {completedResult.sizeKb.toFixed(1)} KB
+                        </span>
+                      </>
+                    ) : (
+                      <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                        {formatKb(image.file.size)} KB {"\u2022"} {image.dimensions.width}
+                        {"\u00d7"}
+                        {image.dimensions.height} px
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </div>
     );
@@ -621,11 +663,11 @@ export function PngToJpgTool() {
 
   if (stage === "workspace" && selectedImages.length) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-png-to-jpg-workspace="true" id="png-to-jpg-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-png-to-jpg-workspace="true" id="png-to-jpg-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
-          {isActionBarVisible && (
+          {(isActionBarVisible || selectedImages.length > 0) && (
             <div ref={actionBarRef} data-png-to-jpg-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
               <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">

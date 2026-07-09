@@ -1410,7 +1410,11 @@ section[id$="-tool"] label {
   margin-left: auto !important;
   margin-right: auto !important;
   padding: clamp(1rem, 2vw, 1.5rem) !important;
-  padding-bottom: 20rem !important;
+  padding-bottom: 9rem !important;
+}
+
+.v0-tool-page[data-passport-photo-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
 }
 
 .v0-tool-page section[data-resize-image-workspace="true"] [data-resize-image-preview-area="true"][data-v0-result-screen="true"] {
@@ -1460,6 +1464,13 @@ section[id$="-tool"] label {
 
   .v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-preview-area="true"] {
     padding-bottom: 15rem !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-passport-photo-workspace="true"] [data-passport-photo-preview-area="true"] {
+    min-height: auto !important;
+    padding-bottom: calc(8.75rem + env(safe-area-inset-bottom)) !important;
   }
 }
 
@@ -1549,6 +1560,10 @@ section[id$="-tool"] label {
   padding: 0 !important;
 }
 
+.v0-tool-page[data-ssc-signature-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
 .v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"] {
   box-sizing: border-box !important;
   width: min(100%, 1600px) !important;
@@ -1556,6 +1571,16 @@ section[id$="-tool"] label {
   margin-right: auto !important;
   padding: clamp(1rem, 2vw, 1.5rem) !important;
   padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
 }
 
 .v0-tool-page section[data-ssc-signature-workspace="true"] [data-ssc-signature-preview-area="true"][data-v0-result-screen="true"] {
@@ -1612,6 +1637,10 @@ section[id$="-tool"] label {
   padding: 0 !important;
 }
 
+.v0-tool-page[data-rrb-signature-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
 .v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"] {
   box-sizing: border-box !important;
   width: min(100%, 1600px) !important;
@@ -1619,6 +1648,16 @@ section[id$="-tool"] label {
   margin-right: auto !important;
   padding: clamp(1rem, 2vw, 1.5rem) !important;
   padding-bottom: 18rem !important;
+}
+
+.v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
 }
 
 .v0-tool-page section[data-rrb-signature-workspace="true"] [data-rrb-signature-preview-area="true"][data-v0-result-screen="true"] {
@@ -1675,6 +1714,26 @@ section[id$="-tool"] label {
   padding: 0 !important;
 }
 
+.v0-tool-page[data-ibps-document-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page[data-ojas-photo-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page[data-gpsc-photo-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page[data-upsc-photo-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page[data-card-merge-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
 .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"] {
   box-sizing: border-box !important;
   width: min(100%, 1600px) !important;
@@ -1682,6 +1741,26 @@ section[id$="-tool"] label {
   margin-right: auto !important;
   padding: clamp(1rem, 2vw, 1.5rem) !important;
   padding-bottom: 22rem !important;
+}
+
+.v0-tool-page section[data-ibps-helper-workspace="true"] [data-ibps-document-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+.v0-tool-page section[data-ojas-photo-workspace="true"] [data-ojas-photo-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+.v0-tool-page section[data-gpsc-photo-workspace="true"] [data-gpsc-photo-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+.v0-tool-page section[data-upsc-photo-workspace="true"] [data-upsc-photo-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+.v0-tool-page section[data-card-merge-workspace="true"] [data-card-merge-preview-grid="true"] {
+  padding-bottom: 0 !important;
 }
 
 .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-preview-area="true"][data-v0-result-screen="true"] {
@@ -1705,6 +1784,26 @@ section[id$="-tool"] label {
   .v0-tool-page section[data-ibps-document-workspace="true"] [data-ibps-document-action-bar="true"] {
     padding-left: 1rem !important;
     padding-right: 1rem !important;
+  }
+
+  .v0-tool-page section[data-ibps-helper-workspace="true"] [data-ibps-document-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+
+  .v0-tool-page section[data-ojas-photo-workspace="true"] [data-ibps-document-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+
+  .v0-tool-page section[data-gpsc-photo-workspace="true"] [data-ibps-document-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+
+  .v0-tool-page section[data-upsc-photo-workspace="true"] [data-ibps-document-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+
+  .v0-tool-page section[data-card-merge-workspace="true"] [data-ibps-document-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
   }
 }
 
@@ -1800,6 +1899,16 @@ section[id$="-tool"] label {
   padding: clamp(1rem, 2vw, 1.5rem) !important;
 }
 
+.v0-tool-page[data-signature-resize-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    padding-bottom: clamp(2rem, 6vw, 2.75rem) !important;
+  }
+}
+
 .v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-area="true"][data-v0-result-screen="true"] {
   min-height: calc(100vh - 12.5rem) !important;
   padding-top: 0.5rem !important;
@@ -1807,12 +1916,12 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-grid="true"] {
-  padding-bottom: 12rem !important;
+  padding-bottom: 0 !important;
 }
 
 @media (min-width: 640px) {
   .v0-tool-page section[data-signature-resize-workspace="true"] [data-signature-resize-preview-grid="true"] {
-    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+    padding-bottom: 0 !important;
   }
 
   .v0-tool-page section[data-signature-resize-workspace="true"] article {
@@ -1900,6 +2009,75 @@ section[id$="-tool"] label {
 }
 
 .v0-tool-page section[data-jpg-to-png-workspace="true"] [data-jpg-to-png-action-bar="true"] > div {
+  padding: 0 !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  margin-left: calc(50% - 50vw) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: rgb(241 245 249) !important;
+  background-color: rgb(241 245 249) !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] > div {
+  padding: 0 !important;
+  background: rgb(241 245 249) !important;
+  background-color: rgb(241 245 249) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"] {
+  padding: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page[data-png-to-jpg-active-workspace="true"] [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-bottom: clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-area="true"][data-v0-result-screen="true"] {
+  min-height: calc(100vh - 12.5rem) !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-grid="true"] {
+  padding-bottom: 0 !important;
+}
+
+@media (min-width: 640px) {
+  .v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-preview-grid="true"] {
+    padding-bottom: 0 !important;
+  }
+
+  .v0-tool-page section[data-png-to-jpg-workspace="true"] article {
+    scroll-margin-bottom: clamp(7.5rem, 14vh, 9rem) !important;
+  }
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] article {
+  padding: 0.75rem !important;
+  scroll-margin-bottom: 12rem !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] article [class*="p-3"] {
+  padding: 0.75rem !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-action-bar="true"] {
+  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) !important;
+}
+
+.v0-tool-page section[data-png-to-jpg-workspace="true"] [data-png-to-jpg-action-bar="true"] > div {
   padding: 0 !important;
 }
 

@@ -1,8 +1,8 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Crop, Download, FileArchive, FileImage, ImageUp, Minus, PenLine, Plus, RefreshCw, RotateCcw, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Crop, Download, FileArchive, FileImage, GripVertical, ImageUp, Minus, PenLine, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
@@ -70,6 +70,16 @@ const GPSC_OJAS_CONFIGS: Record<GpscOjasType, GpscOjasConfig> = {
 
 function gpscCleanFileName(fileName: string) {
   return fileName.replace(/[\\/:*?"<>|]+/g, "-").replace(/\.[^.]+$/, "") || "gpsc-image";
+}
+
+function gpscFormatKb(bytes: number) {
+  return (bytes / 1024).toFixed(1);
+}
+
+function gpscSplitFileName(fileName: string) {
+  const match = fileName.match(/^(.*?)(\.[^.]+)$/);
+  if (!match) return { stem: fileName, extension: "" };
+  return { stem: match[1] || fileName, extension: match[2] };
 }
 
 function gpscFormatCm(value: number) {
@@ -208,6 +218,10 @@ function GpscOjasStyleTool() {
   const [actionBarHeight, setActionBarHeight] = useState(140);
   const [previewTop, setPreviewTop] = useState(320);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -217,6 +231,10 @@ function GpscOjasStyleTool() {
   const previewHostRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const cropFrameRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const shouldScrollToUploadRef = useRef(false);
 
@@ -261,6 +279,13 @@ function GpscOjasStyleTool() {
     setError(null);
     setIsDragging(false);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
     setCropStates({});
     setPhotoCaptureDate(formatDisplayDate(getTodayForInput(), "slash"));
     resetCrop();
@@ -298,6 +323,35 @@ function GpscOjasStyleTool() {
     setZoom(nextCrop.zoom);
     setOffset(nextCrop.offset);
     clearOutput();
+  }
+
+  function removeSelectedImage(id: string) {
+    const removeIndex = GpscSelectedImages.findIndex((image) => image.id === id);
+    if (removeIndex < 0) return;
+    const removed = GpscSelectedImages[removeIndex];
+    URL.revokeObjectURL(removed.previewUrl);
+    clearOutput();
+    const remainingImages = GpscSelectedImages.filter((image) => image.id !== id);
+    setCropStates((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+    setGpscSelectedImages(remainingImages);
+    if (!remainingImages.length) {
+      setGpscStage("upload");
+      setActiveImageIndex(0);
+      resetCrop();
+      clearNativeInputs();
+      shouldScrollToUploadRef.current = true;
+      return;
+    }
+    const nextIndex = Math.min(removeIndex, remainingImages.length - 1);
+    const nextImage = remainingImages[nextIndex];
+    const nextCrop = cropStates[nextImage.id] ?? { zoom: 1, offset: { x: 0, y: 0 } };
+    setActiveImageIndex(nextIndex);
+    setZoom(nextCrop.zoom);
+    setOffset(nextCrop.offset);
   }
 
   async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
@@ -583,6 +637,13 @@ function GpscOjasStyleTool() {
   useEffect(() => {
     if (!GpscSelectedImage || GpscStage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      settingsDrawerClosingRef.current = false;
       return;
     }
 
@@ -618,6 +679,126 @@ function GpscOjasStyleTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [GpscSelectedImage, GpscStage]);
+
+  useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (GpscStage === "workspace") {
+      page.dataset.gpscPhotoActiveWorkspace = "true";
+    } else {
+      delete page.dataset.gpscPhotoActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.gpscPhotoActiveWorkspace;
+    };
+  }, [GpscStage]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => {
+        mobileSettingsButtonRef.current?.focus();
+      });
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (drawerDragStartYRef.current === null) return;
+      if (typeof clientY === "number") {
+        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = dragDistance;
+        setSettingsDrawerDragOffset(dragDistance);
+      }
+
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+
+      if (drawerDragOffsetRef.current >= 84) {
+        closeSettingsDrawer();
+        return;
+      }
+
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSettingsDrawer();
+    };
+    const onResize = () => {
+      if (window.innerWidth >= 640) closeSettingsDrawer();
+    };
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) updateSettingsDrawerDrag(touch.clientY);
+    };
+    const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -668,7 +849,7 @@ function GpscOjasStyleTool() {
 
   function renderTypeSelector() {
     return (
-      <div className="flex min-w-max gap-1.5">
+      <div className="flex min-w-max flex-nowrap gap-2">
         {(["photo", "signature"] as GpscOjasType[]).map((type) => {
           const item = GPSC_OJAS_CONFIGS[type];
           const isSelected = selectedType === type;
@@ -677,16 +858,16 @@ function GpscOjasStyleTool() {
               key={type}
               type="button"
               onClick={() => selectType(type)}
-              className={`flex h-12 w-36 items-center gap-2 rounded-xl border px-2.5 text-left transition sm:w-40 ${
+              className={`flex min-h-14 w-[9.75rem] shrink-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition sm:w-44 ${
                 isSelected ? "border-[#FF2D2D] bg-red-50 text-slate-950 ring-2 ring-red-100" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50"
               }`}
             >
               <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${isSelected ? "bg-[#FF2D2D] text-white" : "bg-slate-100 text-slate-600"}`}>
                 <GpscDocumentIcon type={type} />
               </span>
-              <span>
-                <span className="block text-xs font-black leading-4">{item.label}</span>
-                <span className="mt-0.5 block text-[0.64rem] font-bold leading-3 text-slate-500">{gpscFormatCm(item.widthCm)} cm x {gpscFormatCm(item.heightCm)}, under 14 KB</span>
+              <span className="min-w-0 flex-1 overflow-hidden">
+                <span className="block whitespace-normal text-xs font-black leading-4">{item.label}</span>
+                <span className="mt-0.5 block whitespace-normal text-[0.64rem] font-bold leading-[0.82rem] text-slate-500">{gpscFormatCm(item.widthCm)} cm x {gpscFormatCm(item.heightCm)}, under 14 KB</span>
               </span>
             </button>
           );
@@ -726,6 +907,207 @@ function GpscOjasStyleTool() {
         <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{GpscSelectedImages.length}</span>
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
       </button>
+    );
+  }
+
+  function renderPhotoDateControl(controlId: string) {
+    if (selectedType !== "photo") return null;
+
+    return (
+      <label htmlFor={controlId} className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2 text-left">
+        <span className="shrink-0 text-[0.68rem] font-black leading-3 text-slate-800">Photo Date</span>
+        <input
+          id={controlId}
+          name={controlId}
+          aria-label="Photo Capture Date"
+          type="text"
+          inputMode="numeric"
+          value={photoCaptureDate}
+          onChange={(event) => {
+            setPhotoCaptureDate(event.target.value);
+            clearOutput();
+          }}
+          placeholder="DD/MM/YYYY"
+          className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-2 focus:ring-red-100"
+        />
+      </label>
+    );
+  }
+
+  function renderCropControls() {
+    return (
+      <div className="flex min-h-12 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2">
+        <span className="shrink-0 text-xs font-black text-slate-800">Crop</span>
+        <button type="button" onClick={resetCrop} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[0.68rem] font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
+          Reset
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => updateZoom(zoom - 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom out">
+          <Minus className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <input aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="min-w-0 flex-1 accent-[#FF2D2D]" />
+        <button type="button" onClick={() => updateZoom(zoom + 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom in">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerOpen(true);
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
+  function renderActionButtons() {
+    return (
+      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+        {renderAddButton()}
+        <button type="button" onClick={() => void processImage()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Create JPG
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes gpscPhotoDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="gpsc-photo-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="GPSC photo settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(68vh,34rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[gpscPhotoDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="grid gap-4">
+              <div className="overflow-x-auto pb-1">{renderTypeSelector()}</div>
+              <div className="grid gap-2 text-sm font-black text-slate-800">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">JPG under 14 KB</div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
+                  {gpscFormatCm(config.widthCm)} cm x {gpscFormatCm(config.heightCm)}
+                </div>
+              </div>
+              {renderPhotoDateControl("gpsc-photo-capture-date-drawer")}
+              {renderCropControls()}
+            </div>
+          </div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -802,6 +1184,7 @@ function GpscOjasStyleTool() {
   }
 
   if (GpscStage === "workspace" && GpscSelectedImage) {
+    const displayName = gpscSplitFileName(GpscSelectedImage.file.name);
     const cropRatio = config.widthPx / config.heightPx;
     const viewportWidthLimit = Math.max(160, viewportSize.width - 64);
     const previewBottomGap = viewportSize.width < 768 ? 44 : 56;
@@ -827,13 +1210,13 @@ function GpscOjasStyleTool() {
     };
 
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="gpsc-photo-signature-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-x-hidden overflow-y-visible border-0 bg-transparent p-0 text-left shadow-none">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-x-hidden overflow-y-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-gpsc-photo-workspace="true" id="gpsc-photo-signature-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
             <input id="gpsc-add-image-upload" name="gpsc-add-image-upload" ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
-            <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
-              <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                <div className="mb-4 flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+            <div data-gpsc-photo-preview-grid="true" className="mx-auto grid w-full max-w-[1600px] justify-center gap-5 sm:block" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
+              <div className="mx-auto w-full max-w-[14rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:max-w-5xl sm:p-5">
+                <div className="mb-4 hidden flex-col gap-2 text-center sm:flex sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-950">{config.label} preview</p>
                     <p className="mt-1 truncate text-xs font-bold text-slate-500">{activeImageIndex + 1} of {GpscSelectedImages.length}: {GpscSelectedImage.file.name}</p>
@@ -849,7 +1232,15 @@ function GpscOjasStyleTool() {
                     </div>
                   )}
                 </div>
-                <div ref={previewHostRef} className="grid place-items-center rounded-xl bg-slate-50 p-3 sm:p-4">
+                <div ref={previewHostRef} className="relative grid place-items-center overflow-visible rounded-xl border border-slate-100 bg-white p-3 sm:border-0 sm:bg-slate-50 sm:p-4">
+                  <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)] sm:hidden">{activeImageIndex + 1}</span>
+                  <button type="button" onClick={() => removeSelectedImage(GpscSelectedImage.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95 sm:hidden" aria-label={`Remove ${GpscSelectedImage.file.name}`}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm sm:hidden">
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <img src={GpscSelectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="block h-auto w-full rounded-lg object-contain sm:hidden" draggable={false} />
                   <div
                     ref={cropFrameRef}
                     role="application"
@@ -858,81 +1249,62 @@ function GpscOjasStyleTool() {
                     onPointerMove={onCropPointerMove}
                     onPointerUp={onCropPointerEnd}
                     onPointerCancel={onCropPointerEnd}
-                    className="relative grid touch-none cursor-move place-items-center overflow-hidden rounded-xl border-2 border-[#FF2D2D] bg-white shadow-inner"
+                    className="relative hidden touch-none cursor-move place-items-center overflow-hidden rounded-xl border-2 border-[#FF2D2D] bg-white shadow-inner sm:grid"
                     style={cropFrameStyle}
                   >
                     <img src={GpscSelectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="absolute left-1/2 top-1/2 block max-h-full max-w-full select-none" draggable={false} style={imageStyle} />
                     <div className="pointer-events-none absolute inset-0 border border-white/80" />
                   </div>
                 </div>
+                <div className="mt-2 min-w-0 sm:hidden">
+                  <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={GpscSelectedImage.file.name}>
+                    <span className="min-w-0 truncate">{displayName.stem}</span>
+                    <span className="shrink-0">{displayName.extension}</span>
+                  </p>
+                  <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                    {gpscFormatKb(GpscSelectedImage.file.size)} KB {"\u2022"} {GpscSelectedImage.width}
+                    {"\u00d7"}
+                    {GpscSelectedImage.height} px
+                  </p>
+                </div>
               </div>
-              <p className="mx-auto w-full max-w-5xl rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-slate-800">
-                GPSC-OJAS requirements may change. Please verify the latest instructions on the official GPSC-OJAS website before final upload.
-              </p>
               {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 overflow-x-hidden border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
-              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-                  <p className="truncate text-sm font-black text-slate-950">
-                    {GpscSelectedImages.length} {GpscSelectedImages.length === 1 ? "image" : "images"} ready
-                  </p>
-                  <div className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="truncate text-sm font-black text-slate-950">
+                      {GpscSelectedImages.length} {GpscSelectedImages.length === 1 ? "image" : "images"} ready
+                    </p>
+                    <button
+                      ref={mobileSettingsButtonRef}
+                      type="button"
+                      onClick={openSettingsDrawer}
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                      aria-expanded={isSettingsDrawerOpen}
+                      aria-controls="gpsc-photo-mobile-settings-drawer"
+                    >
+                      <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                      Settings
+                    </button>
+                  </div>
+                  <div className="hidden min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain sm:flex">
                     {renderTypeSelector()}
-                    {selectedType === "photo" && (
-                      <label htmlFor="gpsc-photo-capture-date-inline" className="flex h-12 min-w-[10.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 text-left">
-                        <span className="shrink-0 text-[0.62rem] font-black leading-3 text-slate-800">Photo Date</span>
-                        <input
-                          id="gpsc-photo-capture-date-inline"
-                          name="gpsc-photo-capture-date-inline"
-                          aria-label="Photo Capture Date"
-                          type="text"
-                          inputMode="numeric"
-                          value={photoCaptureDate}
-                          onChange={(event) => {
-                            setPhotoCaptureDate(event.target.value);
-                            clearOutput();
-                          }}
-                          placeholder="DD/MM/YYYY"
-                          className="h-9 w-24 rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-2 focus:ring-red-100"
-                        />
-                      </label>
-                    )}
-                    <div className="flex h-12 min-w-[15.5rem] shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2">
-                      <span className="shrink-0 text-xs font-black text-slate-800">Crop</span>
-                      <button type="button" onClick={resetCrop} className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[0.68rem] font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
-                        Reset
-                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={() => updateZoom(zoom - 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom out">
-                        <Minus className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                      <input id="gpsc-photo-zoom" name="gpsc-photo-zoom" aria-label="Zoom" type="range" min={1} max={4} step={0.01} value={zoom} onChange={(event) => updateZoom(Number(event.target.value))} className="w-20 min-w-16 accent-[#FF2D2D] sm:w-24" />
-                      <button type="button" onClick={() => updateZoom(zoom + 0.12)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Zoom in">
-                        <Plus className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
+                    <div className="w-[13rem] shrink-0">{renderPhotoDateControl("gpsc-photo-capture-date-inline")}</div>
+                    <div className="min-w-[18rem] shrink-0">{renderCropControls()}</div>
                   </div>
                 </div>
                 <div className="min-w-0 lg:ml-auto">
-                  <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(10rem,1fr)_auto] lg:w-auto lg:min-w-[25rem]">
-                    {renderAddButton()}
-                    <button type="button" onClick={() => void processImage()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                      Create JPG
-                      <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                    <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                      Clear all
-                      <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
+                  {renderActionButtons()}
                 </div>
               </div>
             </div>
           )}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );
@@ -1700,15 +2072,23 @@ function UpscOfficialPhotoSignatureTool() {
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const [actionBarHeight, setActionBarHeight] = useState(128);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const shouldScrollToUploadRef = useRef(false);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const documentRef = useRef<UpscSelectedDocument | null>(null);
   const outputRef = useRef<UpscOutputDocument | null>(null);
 
@@ -1741,6 +2121,27 @@ function UpscOfficialPhotoSignatureTool() {
     setError(null);
     setIsDragging(false);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    clearNativeInputs();
+    shouldScrollToUploadRef.current = true;
+  }
+
+  function removeDocument() {
+    revokeDocument();
+    clearOutput();
+    setDocument(null);
+    setError(null);
+    setStage("upload");
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
     clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
@@ -1877,6 +2278,13 @@ function UpscOfficialPhotoSignatureTool() {
   useEffect(() => {
     if (!document || stage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
       return;
     }
 
@@ -1912,6 +2320,122 @@ function UpscOfficialPhotoSignatureTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [document, stage]);
+
+  useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.upscPhotoActiveWorkspace = "true";
+    } else {
+      delete page.dataset.upscPhotoActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.upscPhotoActiveWorkspace;
+    };
+  }, [stage]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || settingsDrawerClosingRef.current) return;
+    settingsDrawerClosingRef.current = true;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(360);
+    window.setTimeout(() => {
+      settingsDrawerClosingRef.current = false;
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setSettingsDrawerDragOffset(0);
+      mobileSettingsButtonRef.current?.focus();
+    }, 240);
+  }, [isSettingsDrawerOpen]);
+
+  function openSettingsDrawer() {
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  const updateSettingsDrawerDrag = useCallback(
+    (clientY: number) => {
+      if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
+      const nextOffset = Math.max(0, clientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = nextOffset;
+      setSettingsDrawerDragOffset(nextOffset);
+    },
+    [isSettingsDrawerOpen],
+  );
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
+      const offset = typeof clientY === "number" ? Math.max(0, clientY - drawerDragStartYRef.current) : drawerDragOffsetRef.current;
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      setIsSettingsDrawerDragging(false);
+      if (offset > 80) {
+        closeSettingsDrawer();
+        return;
+      }
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer, isSettingsDrawerOpen],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeSettingsDrawer();
+    }
+
+    function onResize() {
+      if (window.innerWidth >= 640) closeSettingsDrawer();
+    }
+
+    function onMouseMove(event: globalThis.MouseEvent) {
+      updateSettingsDrawerDrag(event.clientY);
+    }
+
+    function onMouseUp(event: globalThis.MouseEvent) {
+      finishSettingsDrawerDrag(event.clientY);
+    }
+
+    function onTouchMove(event: globalThis.TouchEvent) {
+      const touch = event.touches[0];
+      if (touch && drawerDragStartYRef.current !== null) {
+        event.preventDefault();
+        updateSettingsDrawerDrag(touch.clientY);
+      }
+    }
+
+    function onTouchEnd(event: globalThis.TouchEvent) {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    }
+
+    globalThis.document.addEventListener("keydown", onKeyDown);
+    globalThis.document.addEventListener("mousemove", onMouseMove);
+    globalThis.document.addEventListener("mouseup", onMouseUp);
+    globalThis.document.addEventListener("touchmove", onTouchMove, { passive: false });
+    globalThis.document.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("resize", onResize);
+    return () => {
+      globalThis.document.removeEventListener("keydown", onKeyDown);
+      globalThis.document.removeEventListener("mousemove", onMouseMove);
+      globalThis.document.removeEventListener("mouseup", onMouseUp);
+      globalThis.document.removeEventListener("touchmove", onTouchMove);
+      globalThis.document.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -2015,6 +2539,151 @@ function UpscOfficialPhotoSignatureTool() {
     );
   }
 
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY - drawerDragOffsetRef.current;
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
+  function renderRequirementStatus() {
+    return (
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
+          JPG/JPEG {config.minKb}-{config.maxKb} KB
+        </div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
+          {config.hint}
+        </div>
+      </div>
+    );
+  }
+
+  function renderActionButtons() {
+    return (
+      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+        {renderAddButton()}
+        <button type="button" onClick={() => void processDocument()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Resize Now
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes upscPhotoDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="upsc-photo-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="UPSC photo settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[upscPhotoDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="grid gap-4">
+              <div className="overflow-x-auto pb-1">{renderStickyTypeSelector()}</div>
+              {renderRequirementStatus()}
+            </div>
+          </div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (stage === "processing") {
     return (
       <section
@@ -2075,21 +2744,49 @@ function UpscOfficialPhotoSignatureTool() {
   }
 
   if (stage === "workspace" && document) {
+    const displayName = gpscSplitFileName(document.file.name);
+
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="upsc-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-upsc-photo-workspace="true" id="upsc-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8">
             <input id="upsc-add-document-upload" name="upsc-add-document-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-            <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 88, 192)}px` }}>
-              <div className="mx-auto w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div data-upsc-photo-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:block sm:pb-72 lg:pb-56">
+              <article className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:hidden">
+                <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                  <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">1</span>
+                  <button type="button" onClick={removeDocument} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${document.file.name}`}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                    <GripVertical className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <img src={document.previewUrl} alt="" className="h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" />
+                </div>
+                <div className="mt-2 min-w-0">
+                  <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={document.file.name}>
+                    <span className="min-w-0 truncate">{displayName.stem}</span>
+                    <span className="shrink-0">{displayName.extension}</span>
+                  </p>
+                  <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                    {gpscFormatKb(document.file.size)} KB {"\u2022"} {document.width}
+                    {"\u00d7"}
+                    {document.height} px
+                  </p>
+                </div>
+              </article>
+              <div className="mx-auto hidden w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <p className="text-sm font-black text-slate-950">UPSC {config.label} preview</p>
                   <p className="text-xs font-bold text-slate-500">{config.hint}</p>
                 </div>
                 <div
-                  className="grid place-items-center overflow-visible rounded-xl bg-slate-50 p-3 sm:p-4"
+                  className="relative grid place-items-center overflow-visible rounded-xl bg-slate-50 p-3 sm:p-4"
                   style={{ minHeight: `min(30rem, max(16rem, calc(100vh - ${actionBarHeight + 340}px)))` }}
                 >
+                  <button type="button" onClick={removeDocument} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${document.file.name}`}>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
                   <img
                     src={document.previewUrl}
                     alt={`Uploaded UPSC ${config.label} preview`}
@@ -2103,28 +2800,47 @@ function UpscOfficialPhotoSignatureTool() {
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
-              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-                  <p className="truncate text-sm font-black text-slate-950">1 {config.shortLabel.toLowerCase()} selected</p>
-                  {renderStickyTypeSelector()}
+                  <div className="hidden shrink-0 sm:block">{renderStickyTypeSelector()}</div>
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="truncate text-sm font-black text-slate-950">1 {config.shortLabel.toLowerCase()} ready</p>
+                    <button
+                      ref={mobileSettingsButtonRef}
+                      type="button"
+                      onClick={openSettingsDrawer}
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                      aria-expanded={isSettingsDrawerOpen}
+                      aria-controls="upsc-photo-mobile-settings-drawer"
+                    >
+                      <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                      Settings
+                    </button>
+                  </div>
                 </div>
                 <div className="min-w-0 lg:ml-auto">
-                  <div className="grid grid-cols-[3rem_minmax(8.5rem,1fr)_minmax(5.5rem,0.72fr)] gap-2 sm:grid-cols-[3.5rem_minmax(13rem,1fr)_auto] lg:w-auto lg:min-w-[31rem]">
-                  {renderAddButton()}
-                  <button type="button" onClick={() => void processDocument()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                    {config.actionLabel}
-                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                    Clear all
-                    <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                  </button>
+                  <div className="hidden sm:block">
+                    <div className="grid grid-cols-[3.5rem_minmax(15rem,1fr)_auto] gap-2 lg:min-w-[38rem]">
+                      {renderAddButton()}
+                      <button type="button" onClick={() => void processDocument()} className="inline-flex min-h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600">
+                        {config.actionLabel}
+                        <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                      <button type="button" onClick={resetTool} className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
+                        Clear all
+                        <RotateCcw className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="sm:hidden">
+                    {renderActionButtons()}
                   </div>
                 </div>
               </div>
             </div>
           )}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );

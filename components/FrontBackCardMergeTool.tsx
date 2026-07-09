@@ -1,8 +1,8 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, Dispatch, DragEvent, RefObject, SetStateAction, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileImage, Plus, RefreshCw, RotateCw, UploadCloud } from "lucide-react";
+import { ChangeEvent, Dispatch, DragEvent, MouseEvent, PointerEvent, RefObject, SetStateAction, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileImage, GripVertical, Plus, RefreshCw, RotateCw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { ImageProcessingScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -29,6 +29,16 @@ type OutputState = {
 
 function isImage(file: File) {
   return ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
+}
+
+function formatKb(bytes: number) {
+  return (bytes / 1024).toFixed(1);
+}
+
+function splitFileName(fileName: string) {
+  const match = fileName.match(/^(.*?)(\.[^.]+)$/);
+  if (!match) return { stem: fileName, extension: "" };
+  return { stem: match[1] || fileName, extension: match[2] };
 }
 
 function loadImage(file: File) {
@@ -160,6 +170,10 @@ export function FrontBackCardMergeTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [layout, setLayout] = useState<LayoutMode>("horizontal");
@@ -175,7 +189,10 @@ export function FrontBackCardMergeTool() {
   const [, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
-  const [actionBarHeight, setActionBarHeight] = useState(128);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : front.file || back.file ? "workspace" : "upload";
 
   useImageToolStageEffects({
@@ -223,9 +240,29 @@ export function FrontBackCardMergeTool() {
     setStatus("Upload front and back side images to create a printable page.");
     setProgress(0);
     setIsProcessing(false);
+    setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
     if (frontInputRef.current) frontInputRef.current.value = "";
     if (backInputRef.current) backInputRef.current.value = "";
     shouldScrollToUploadRef.current = true;
+  }
+
+  function removeSide(side: Side) {
+    clearOutput();
+    const setter = side === "front" ? setFront : setBack;
+    setter((state) => {
+      if (state.url) URL.revokeObjectURL(state.url);
+      return { file: null, url: null, rotation: 0, isDragging: false, dimensions: null };
+    });
+    if (side === "front" && frontInputRef.current) frontInputRef.current.value = "";
+    if (side === "back" && backInputRef.current) backInputRef.current.value = "";
+    setStatus(`${side === "front" ? "Front" : "Back"} side removed.`);
   }
 
   function handleFile(side: Side, file: File | undefined) {
@@ -300,6 +337,13 @@ export function FrontBackCardMergeTool() {
   useEffect(() => {
     if (stage !== "workspace") {
       setIsActionBarVisible(false);
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      settingsDrawerClosingRef.current = false;
       return;
     }
 
@@ -315,7 +359,6 @@ export function FrontBackCardMergeTool() {
       const workAreaRect = workArea.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
       const barHeight = actionBarRef.current?.offsetHeight ?? 110;
-      setActionBarHeight(barHeight);
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
       const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
       setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
@@ -335,6 +378,122 @@ export function FrontBackCardMergeTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [stage, front.file, back.file]);
+
+  useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    if (!page) return;
+
+    if (stage === "workspace") {
+      page.dataset.cardMergeActiveWorkspace = "true";
+    } else {
+      delete page.dataset.cardMergeActiveWorkspace;
+    }
+
+    return () => {
+      delete page.dataset.cardMergeActiveWorkspace;
+    };
+  }, [stage]);
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || settingsDrawerClosingRef.current) return;
+    settingsDrawerClosingRef.current = true;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(360);
+    window.setTimeout(() => {
+      settingsDrawerClosingRef.current = false;
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setSettingsDrawerDragOffset(0);
+      mobileSettingsButtonRef.current?.focus();
+    }, 240);
+  }, [isSettingsDrawerOpen]);
+
+  function openSettingsDrawer() {
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
+    settingsDrawerClosingRef.current = false;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  const updateSettingsDrawerDrag = useCallback(
+    (clientY: number) => {
+      if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
+      const nextOffset = Math.max(0, clientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = nextOffset;
+      setSettingsDrawerDragOffset(nextOffset);
+    },
+    [isSettingsDrawerOpen],
+  );
+
+  const finishSettingsDrawerDrag = useCallback(
+    (clientY?: number) => {
+      if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
+      const offset = typeof clientY === "number" ? Math.max(0, clientY - drawerDragStartYRef.current) : drawerDragOffsetRef.current;
+      drawerDragStartYRef.current = null;
+      drawerDragOffsetRef.current = 0;
+      setIsSettingsDrawerDragging(false);
+      if (offset > 80) {
+        closeSettingsDrawer();
+        return;
+      }
+      setSettingsDrawerDragOffset(0);
+    },
+    [closeSettingsDrawer, isSettingsDrawerOpen],
+  );
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeSettingsDrawer();
+    }
+
+    function onResize() {
+      if (window.innerWidth >= 640) closeSettingsDrawer();
+    }
+
+    function onMouseMove(event: globalThis.MouseEvent) {
+      updateSettingsDrawerDrag(event.clientY);
+    }
+
+    function onMouseUp(event: globalThis.MouseEvent) {
+      finishSettingsDrawerDrag(event.clientY);
+    }
+
+    function onTouchMove(event: globalThis.TouchEvent) {
+      const touch = event.touches[0];
+      if (touch && drawerDragStartYRef.current !== null) {
+        event.preventDefault();
+        updateSettingsDrawerDrag(touch.clientY);
+      }
+    }
+
+    function onTouchEnd(event: globalThis.TouchEvent) {
+      const touch = event.changedTouches[0];
+      finishSettingsDrawerDrag(touch?.clientY);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   async function buildCanvas() {
     if (!front.file || !back.file) {
@@ -493,34 +652,54 @@ export function FrontBackCardMergeTool() {
 
   function renderPreviewCard(side: Side, label: string) {
     const state = side === "front" ? front : back;
+    const displayName = state.file ? splitFileName(state.file.name) : null;
+    const details = state.file && state.dimensions ? `${formatKb(state.file.size)} KB \u2022 ${state.dimensions.width}\u00d7${state.dimensions.height} px` : state.file ? `${formatKb(state.file.size)} KB` : "";
     return (
-      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-2 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <div className="min-w-0">
-            <p className="text-sm font-black text-slate-950">{label} preview</p>
-            <p className="mt-1 truncate text-xs font-bold text-slate-500">{state.file?.name ?? `${label} not uploaded`}</p>
-          </div>
-          <button type="button" onClick={() => rotate(side)} disabled={!state.file} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-40">
-            Rotate
-            <RotateCw className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-        <div
-          className="flex items-center justify-center overflow-hidden rounded-xl bg-slate-50 p-3 sm:p-4"
-          style={{ height: "clamp(16rem, 34vh, 26rem)" }}
-        >
+      <article className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:p-4">
+        <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white sm:aspect-[4/3]">
+          <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{side === "front" ? "F" : "B"}</span>
+          {state.file && (
+            <button type="button" onClick={() => removeSide(side)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${state.file.name}`}>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </span>
           {state.url ? (
             <img
               src={state.url}
               alt={`${label} card preview`}
               style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }}
-              className="block h-auto max-h-full w-auto max-w-full object-contain transition"
+              className="block h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]"
             />
           ) : (
-            <div className="text-center text-sm font-bold text-slate-500">{label} image needed</div>
+            <button type="button" onClick={() => (side === "front" ? frontInputRef.current : backInputRef.current)?.click()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-2 text-xs font-black text-[#FF2D2D] transition hover:border-red-200 hover:bg-red-100">
+              Add {label}
+              <UploadCloud className="h-4 w-4" aria-hidden="true" />
+            </button>
           )}
         </div>
-      </div>
+        <div className="mt-2 min-w-0">
+          {displayName ? (
+            <>
+              <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={state.file?.name}>
+                <span className="min-w-0 truncate">{displayName.stem}</span>
+                <span className="shrink-0">{displayName.extension}</span>
+              </p>
+              <p className="mt-1 inline-flex max-w-full items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{details}</p>
+            </>
+          ) : (
+            <p className="text-sm font-black leading-snug text-slate-950">{label} image needed</p>
+          )}
+          {state.file && (
+            <button type="button" onClick={() => rotate(side)} className="mt-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
+              Rotate
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </article>
     );
   }
 
@@ -556,6 +735,154 @@ export function FrontBackCardMergeTool() {
         <span className={`block h-4 w-1.5 rounded-[0.2rem] border ${cardClass}`} />
         <span className={`block h-4 w-1.5 rounded-[0.2rem] border ${cardClass}`} />
       </span>
+    );
+  }
+
+  function renderOutputLayoutControls() {
+    return (
+      <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+        <span className="text-xs font-black text-slate-600 sm:whitespace-nowrap">Output Layout</span>
+        <div className="grid grid-cols-2 gap-1 rounded-2xl border border-red-100 bg-red-50/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+          <button type="button" onClick={() => setOutputLayoutMode("side-by-side")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "side-by-side" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
+            {renderOutputLayoutIcon("side-by-side", outputLayout === "side-by-side")}
+            <span className="whitespace-nowrap">Side by Side</span>
+          </button>
+          <button type="button" onClick={() => setOutputLayoutMode("top-bottom")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "top-bottom" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
+            {renderOutputLayoutIcon("top-bottom", outputLayout === "top-bottom")}
+            <span className="whitespace-nowrap">Top &amp; Bottom</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderActionButtons() {
+    return (
+      <div className="grid grid-cols-[3rem_3rem_minmax(8rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_3.5rem_minmax(12rem,1fr)_auto] lg:min-w-[38rem]">
+        {renderAddReplaceButton("front")}
+        {renderAddReplaceButton("back")}
+        <button type="button" onClick={() => void createOutput()} disabled={isProcessing || !front.file || !back.file} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14 sm:px-5 sm:text-base">
+          {isProcessing ? "Merging..." : "Merge Card"}
+          <RefreshCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY - drawerDragOffsetRef.current;
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes cardMergeDrawerIn {
+            from {
+              transform: translateY(100%);
+            }
+            to {
+              transform: translateY(0);
+            }
+          }
+        `}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="card-merge-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Card merge settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[cardMergeDrawerIn_220ms_ease-out]"} ${
+            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
+          }`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            {renderOutputLayoutControls()}
+          </div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -625,57 +952,46 @@ export function FrontBackCardMergeTool() {
 
   if (stage === "workspace") {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-card-merge-workspace="true" id="front-back-card-merge-tool" className="mx-auto mt-8 w-full max-w-full scroll-mt-40 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-card-merge-workspace="true" id="front-back-card-merge-tool" className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
         <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-4 pt-6 text-left sm:p-6 sm:pt-8">
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8">
             <input id="front-card-upload" name="front-card-upload" ref={frontInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("front", event)} />
             <input id="back-card-upload" name="back-card-upload" ref={backInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("back", event)} />
-            <div className="mx-auto grid w-full max-w-[1600px] gap-5" style={{ paddingBottom: `${Math.max(actionBarHeight + 40, 144)}px` }}>
-              <div className="mx-auto grid w-full max-w-6xl gap-5 lg:grid-cols-2">
+            <div data-card-merge-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:grid-cols-2 sm:pb-72 lg:mx-auto lg:max-w-6xl lg:pb-56">
                 {renderPreviewCard("front", "Front Side")}
                 {renderPreviewCard("back", "Back Side")}
-              </div>
               {error && <p className="mx-auto w-full max-w-6xl rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-4">
-              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
-                  <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-                    <span className="text-xs font-black text-slate-600 sm:whitespace-nowrap">Output Layout</span>
-                    <div className="grid grid-cols-2 gap-1 rounded-2xl border border-red-100 bg-red-50/70 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-                      <button type="button" onClick={() => setOutputLayoutMode("side-by-side")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "side-by-side" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
-                        {renderOutputLayoutIcon("side-by-side", outputLayout === "side-by-side")}
-                        <span className="whitespace-nowrap">Side by Side</span>
-                      </button>
-                      <button type="button" onClick={() => setOutputLayoutMode("top-bottom")} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition duration-200 active:scale-[0.98] ${outputLayout === "top-bottom" ? "border-[#FF2D2D] bg-[#FF2D2D] text-white shadow-[0_10px_24px_rgba(255,45,45,0.28)]" : "border-red-100 bg-white text-[#FF2D2D] hover:border-[#FF2D2D] hover:bg-red-50 hover:shadow-sm"}`}>
-                        {renderOutputLayoutIcon("top-bottom", outputLayout === "top-bottom")}
-                        <span className="whitespace-nowrap">Top &amp; Bottom</span>
+                  <div className="hidden shrink-0 sm:block">{renderOutputLayoutControls()}</div>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <p className="truncate text-sm font-black text-slate-950">{selectedCount} of 2 images selected</p>
+                      <button
+                        ref={mobileSettingsButtonRef}
+                        type="button"
+                        onClick={openSettingsDrawer}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
+                        aria-expanded={isSettingsDrawerOpen}
+                        aria-controls="card-merge-mobile-settings-drawer"
+                      >
+                        <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                        Settings
                       </button>
                     </div>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">{selectedCount} of 2 images selected</p>
                     <p className="truncate text-xs font-bold text-slate-500">{[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-[3rem_3rem_minmax(9rem,1fr)_minmax(5.5rem,0.7fr)] gap-2 sm:grid-cols-[3.5rem_3.5rem_minmax(13rem,1fr)_auto] lg:min-w-[38rem]">
-                  {renderAddReplaceButton("front")}
-                  {renderAddReplaceButton("back")}
-                  <button type="button" onClick={() => void createOutput()} disabled={isProcessing || !front.file || !back.file} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-14 sm:px-5 sm:text-base">
-                    {isProcessing ? "Merging..." : "Merge Card"}
-                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                  <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                    Clear all
-                    <RotateCw className="h-5 w-5" aria-hidden="true" />
-                  </button>
-                </div>
+                <div className="min-w-0 lg:ml-auto">{renderActionButtons()}</div>
               </div>
             </div>
           )}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );
