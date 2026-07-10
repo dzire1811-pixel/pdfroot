@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { tools } from "@/lib/tools";
 
 const aliases: Record<string, string[]> = {
@@ -104,7 +105,6 @@ export function ToolSearch() {
           {results.length > 0 ? (
             <div className="max-h-96 overflow-y-auto p-2">
               {results.map((tool) => {
-                const Icon = tool.icon;
                 return (
                   <Link
                     key={tool.slug}
@@ -112,9 +112,7 @@ export function ToolSearch() {
                     onClick={() => setIsOpen(false)}
                     className="flex items-start gap-3 rounded-xl px-3 py-3 transition hover:bg-red-50"
                   >
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-[#FF2D2D]">
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
+                    <ToolDirectoryIcon tool={tool} size="search" />
                     <span className="min-w-0">
                       <span className="block text-sm font-black text-slate-950">{tool.name}</span>
                       <span className="mt-1 line-clamp-2 block text-sm leading-5 text-slate-600">{tool.description}</span>

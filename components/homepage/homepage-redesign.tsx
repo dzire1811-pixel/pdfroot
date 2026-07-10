@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, FileSearch, Search, ShieldCheck, Sparkles, UploadCloud, Workflow, Zap } from "lucide-react";
 import { BrandPhrase } from "@/components/Brand";
+import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { blogPosts } from "@/lib/blog";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
 
@@ -14,16 +15,12 @@ type FaqItem = {
 };
 
 function ToolTile({ tool, compact = false }: { tool: Tool; compact?: boolean }) {
-  const Icon = tool.icon;
-
   return (
     <Link
       href={`/${tool.slug}`}
       className="group flex min-h-[8.25rem] min-w-0 flex-col rounded-lg border border-border bg-card p-3 text-left transition hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md hover:shadow-foreground/5"
     >
-      <span className="grid h-9 w-9 place-items-center rounded-md bg-muted text-foreground transition group-hover:bg-primary group-hover:text-primary-foreground">
-        <Icon className="h-4.5 w-4.5" aria-hidden="true" />
-      </span>
+      <ToolDirectoryIcon tool={tool} />
       <span className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{tool.name}</span>
       {!compact && <span className="mt-2 line-clamp-2 text-xs font-medium leading-relaxed text-muted-foreground">{tool.description}</span>}
       <span className="mt-auto inline-flex items-center gap-1 pt-3 text-xs font-semibold text-primary opacity-0 transition group-hover:opacity-100">
@@ -130,12 +127,9 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
                 <div className="mt-2 grid gap-2 border-t border-border pt-2 sm:grid-cols-2">
                   {filteredTools.length ? (
                     filteredTools.map((tool) => {
-                      const Icon = tool.icon;
                       return (
                         <Link key={tool.slug} href={`/${tool.slug}`} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-muted">
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
-                            <Icon className="h-4 w-4" aria-hidden="true" />
-                          </span>
+                          <ToolDirectoryIcon tool={tool} />
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-semibold text-foreground">{tool.name}</span>
                             <span className="block truncate text-xs font-medium text-muted-foreground">{tool.category}</span>

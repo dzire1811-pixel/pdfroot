@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Check, Download, FileText, ShieldCheck, UploadCloud, Zap } from "lucide-react";
+import { Check, Download, FileCheck2, FileText, LockKeyhole, ShieldCheck, Smartphone, UploadCloud, Zap } from "lucide-react";
 import { BrandPhrase, BrandText, SectionHeading } from "@/components/Brand";
 import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
@@ -91,6 +91,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const categoryTools = tool.category === "PDF Tools" ? pdfTools : imageTools;
+  const mergeResultTrustCards = [
+    ["Files Processed Locally", LockKeyhole],
+    ["Fast & Free PDF & Image Tools", Zap],
+    ["Works on Mobile & Desktop", Smartphone],
+    ["Perfect for Government Forms & Document Uploads", FileCheck2],
+    ["Secure File Processing", ShieldCheck],
+  ] as const;
   const pageSchema = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
@@ -149,6 +156,45 @@ export default async function ToolPage({ params }: ToolPageProps) {
             {tool.government && <p data-tool-page-extra="recruitment-intro" className="mx-auto mt-3 max-w-2xl text-sm font-semibold leading-relaxed text-primary">{recruitmentCopy}</p>}
           </div>
         </section>
+
+        {tool.slug === "merge-pdf" && (
+          <>
+            <section data-merge-result-only="related" className="border-b border-border bg-background px-6 py-8 lg:px-8">
+              <div className="mx-auto max-w-[1200px]">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Related Tools</p>
+                    <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Continue working with your PDF</h2>
+                  </div>
+                </div>
+                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+                  {related.slice(0, 3).map((item) => (
+                    <ToolCard key={item.slug} tool={item} compact />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section data-merge-result-only="trust" className="bg-muted/40 px-6 py-8 lg:px-8">
+              <div className="mx-auto max-w-[1200px]">
+                <div className="text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">Why Choose PDFRoot?</p>
+                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Fast, secure tools for everyday documents</h2>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {mergeResultTrustCards.map(([title, TrustIcon]) => (
+                    <div key={title} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 lg:flex-col lg:text-center">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <TrustIcon className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <h3 className="text-sm font-semibold leading-snug text-foreground">{title}</h3>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </>
+        )}
 
         <section data-tool-page-extra="trust" className="border-b border-border bg-background px-6 py-5 lg:px-8">
           <div className="mx-auto flex max-w-[1800px] flex-wrap justify-center gap-3">

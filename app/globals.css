@@ -2167,6 +2167,20 @@ section[id$="-tool"] label {
   padding: clamp(1rem, 2vw, 1.5rem) !important;
 }
 
+/* Merge PDF keeps long-form page content on upload, hides it while files are
+   being arranged/merged, and replaces it with compact result-only content. */
+.v0-tool-page [data-merge-result-only] {
+  display: none !important;
+}
+
+.v0-tool-page:has(#merge-pdf-tool [data-merge-preview-area="true"]) [data-tool-page-extra] {
+  display: none !important;
+}
+
+.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) [data-merge-result-only] {
+  display: block !important;
+}
+
 .v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="arrange"] {
   padding-bottom: 12rem !important;
 }
