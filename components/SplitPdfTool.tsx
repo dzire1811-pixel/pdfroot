@@ -1,15 +1,21 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, GripVertical, Loader2, Plus, RotateCcw, Scissors, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileText, GripVertical, Loader2, Plus, RotateCcw, Scissors, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type SplitMode = "selected" | "ranges" | "every";
 
-type PreviewPage = {
-  pageNumber: number;
-  url: string;
+type RangePreview = {
+  id: string;
+  rangeNumber: number;
+  firstPage: number;
+  lastPage: number;
+  pageTotal: number;
+  firstUrl: string | null;
+  lastUrl: string | null;
 };
 
 type SplitFile = {
@@ -23,6 +29,17 @@ type WorkflowStep = "arrange" | "split" | "download";
 
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
+}
+
+function compactFileName(fileName: string, maxLength = 30) {
+  if (fileName.length <= maxLength) return fileName;
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const available = Math.max(8, maxLength - extension.length - 3);
+  const headLength = Math.max(5, available - 4);
+  const tailLength = Math.max(0, available - headLength);
+  return `${baseName.slice(0, headLength)}...${tailLength ? baseName.slice(-tailLength) : ""}${extension}`;
 }
 
 function isPdf(file: File) {
@@ -112,6 +129,34 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
+async function renderFirstPageThumbnail(file: File) {
+  const pdfjsLib = await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 0.55 });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Your browser does not support PDF preview rendering.");
+
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((thumbnailBlob) => {
+      if (thumbnailBlob) {
+        resolve(thumbnailBlob);
+        return;
+      }
+      reject(new Error("Could not create PDF preview."));
+    }, "image/jpeg", 0.82);
+  });
+
+  return URL.createObjectURL(blob);
+}
+
 export function SplitPdfTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [pageCounts, setPageCounts] = useState<number[]>([]);
@@ -119,7 +164,7 @@ export function SplitPdfTool() {
   const [mode, setMode] = useState<SplitMode>("selected");
   const [selectedPages, setSelectedPages] = useState("1");
   const [pageRanges, setPageRanges] = useState("1-1");
-  const [previews, setPreviews] = useState<PreviewPage[]>([]);
+  const [rangePreviews, setRangePreviews] = useState<RangePreview[]>([]);
   const [results, setResults] = useState<SplitFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -128,12 +173,18 @@ export function SplitPdfTool() {
   const [status, setStatus] = useState("Upload a PDF file to split.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<SplitFile[]>([]);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
@@ -151,8 +202,11 @@ export function SplitPdfTool() {
   }
 
   function clearPreviews() {
-    previews.forEach((preview) => URL.revokeObjectURL(preview.url));
-    setPreviews([]);
+    rangePreviews.forEach((preview) => {
+      if (preview.firstUrl) URL.revokeObjectURL(preview.firstUrl);
+      if (preview.lastUrl && preview.lastUrl !== preview.firstUrl) URL.revokeObjectURL(preview.lastUrl);
+    });
+    setRangePreviews([]);
   }
 
   function clearResults() {
@@ -172,6 +226,52 @@ export function SplitPdfTool() {
     setStatus("Upload a PDF file to split.");
     setIsProcessing(false);
     setWorkflowStep("arrange");
+    setIsSettingsDrawerOpen(false);
+  }
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    drawerDragStartYRef.current = null;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setSettingsDrawerDragOffset(0);
+      drawerCloseTimerRef.current = null;
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset;
+    setIsSettingsDrawerDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (drawerDragStartYRef.current === null) return;
+    setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current));
+  }
+
+  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
+    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    if (offset >= 84) {
+      closeSettingsDrawer();
+      return;
+    }
+    setSettingsDrawerDragOffset(0);
   }
 
   async function loadPdfs(nextFiles: File[]) {
@@ -267,6 +367,7 @@ export function SplitPdfTool() {
     clearResults();
     setError(null);
     setIsProcessing(true);
+    setIsSettingsDrawerOpen(false);
     setWorkflowStep("split");
     setProgress(0);
     scrollToolStageIntoView();
@@ -363,8 +464,32 @@ export function SplitPdfTool() {
   useEffect(() => {
     return () => {
       resultsRef.current.forEach((result) => URL.revokeObjectURL(result.url));
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSettingsDrawer();
+    };
+    const onResize = () => {
+      if (window.innerWidth >= 640) {
+        if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+        setIsSettingsDrawerOpen(false);
+        setIsSettingsDrawerClosing(false);
+        setSettingsDrawerDragOffset(0);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -372,10 +497,105 @@ export function SplitPdfTool() {
       return;
     }
 
-    const nextPreviewUrls = files.map((pdfFile) => URL.createObjectURL(pdfFile));
-    setPreviewUrls(nextPreviewUrls);
-    return () => nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    let cancelled = false;
+    const nextPreviewUrls: string[] = [];
+
+    async function createPreviews() {
+      const renderedUrls = await Promise.all(
+        files.map(async (pdfFile) => {
+          try {
+            return await renderFirstPageThumbnail(pdfFile);
+          } catch {
+            return "";
+          }
+        }),
+      );
+      if (cancelled) {
+        renderedUrls.filter(Boolean).forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      nextPreviewUrls.push(...renderedUrls.filter(Boolean));
+      setPreviewUrls(renderedUrls);
+    }
+
+    void createPreviews();
+    return () => {
+      cancelled = true;
+      nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
   }, [files, workflowStep]);
+
+  useEffect(() => {
+    if (mode !== "ranges" || files.length === 0 || workflowStep !== "arrange") {
+      setRangePreviews([]);
+      return;
+    }
+
+    let cancelled = false;
+    const createdUrls: string[] = [];
+
+    async function createThumbnail(pdf: Awaited<ReturnType<Awaited<ReturnType<typeof loadPdfJs>>["getDocument"]>["promise"]>, pageNumber: number) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 0.45 });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) return null;
+
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+      if (!blob) return null;
+      const url = URL.createObjectURL(blob);
+      createdUrls.push(url);
+      return url;
+    }
+
+    async function buildRangePreviews() {
+      const nextPreviews: RangePreview[] = [];
+      let rangeNumber = 0;
+
+      try {
+        const pdfjsLib = await loadPdfJs();
+        for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
+          const pdfFile = files[fileIndex];
+          const pageCount = pageCounts[fileIndex] || 1;
+          const ranges = parsePageRanges(pageRanges, pageCount);
+          const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await pdfFile.arrayBuffer()) }).promise;
+
+          for (const range of ranges) {
+            rangeNumber += 1;
+            const firstPage = range.pages[0];
+            const lastPage = range.pages[range.pages.length - 1];
+            const firstUrl = await createThumbnail(pdf, firstPage);
+            const lastUrl = lastPage === firstPage ? firstUrl : await createThumbnail(pdf, lastPage);
+            nextPreviews.push({
+              id: `${fileIndex}-${rangeNumber}-${range.label}`,
+              rangeNumber,
+              firstPage,
+              lastPage,
+              pageTotal: range.pages.length,
+              firstUrl,
+              lastUrl,
+            });
+          }
+        }
+
+        if (!cancelled) setRangePreviews(nextPreviews);
+      } catch {
+        if (!cancelled) setRangePreviews([]);
+      }
+    }
+
+    void buildRangePreviews();
+    return () => {
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [files, mode, pageCounts, pageRanges, workflowStep]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -462,32 +682,30 @@ export function SplitPdfTool() {
     const pageCount = pageCounts[index] || 0;
 
     return (
-      <article className="group relative flex h-full min-w-0 cursor-default flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-red-200 hover:shadow-md">
-        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+      <article className="group relative flex h-full min-w-0 cursor-default flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md">
+        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
-          <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+          <button type="button" onClick={() => removeFile(index)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${pdfFile.name}`}>
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
             <GripVertical className="h-4 w-4" aria-hidden="true" />
           </span>
           {previewUrl ? (
-            <object data={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0`} type="application/pdf" className="pointer-events-none h-full w-full bg-white">
-              <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
-                <FileText className="h-12 w-12" aria-hidden="true" />
-              </div>
-            </object>
+            <img src={previewUrl} alt="" className="h-full w-full object-contain" />
           ) : (
-            <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
+            <div className="grid h-full w-full place-items-center rounded-lg bg-white text-[#FF2D2D]">
               <FileText className="h-12 w-12" aria-hidden="true" />
             </div>
           )}
         </div>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">{pdfFile.name}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">{pageCount} page{pageCount === 1 ? "" : "s"} - {formatKb(pdfFile.size)} KB</p>
+        <div className="mt-2 min-w-0">
+          <p className="truncate text-sm font-black leading-snug text-slate-950" title={pdfFile.name}>{compactFileName(pdfFile.name)}</p>
+          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+              {pageCount} page{pageCount === 1 ? "" : "s"} {"\u2022"} {formatKb(pdfFile.size)} KB
+            </span>
           </div>
-          <button type="button" onClick={() => removeFile(index)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Remove ${pdfFile.name}`}>
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
         </div>
       </article>
     );
@@ -573,14 +791,16 @@ export function SplitPdfTool() {
     );
   }
 
-  function renderSplitInputs() {
+  function renderSplitInputs(idSuffix = "") {
     if (mode === "every") return null;
+
+    const inputId = `split-pages-input${idSuffix ? `-${idSuffix}` : ""}`;
 
     return (
       <div className="min-w-0 lg:min-w-[12rem]">
-        <label className="sr-only" htmlFor="split-pages-input">{mode === "selected" ? "Pages to extract" : "Page ranges"}</label>
+        <label className="sr-only" htmlFor={inputId}>{mode === "selected" ? "Pages to extract" : "Page ranges"}</label>
         <input
-          id="split-pages-input" name="split-pages-input"
+          id={inputId} name={inputId}
           value={mode === "selected" ? selectedPages : pageRanges}
           onChange={(event) => (mode === "selected" ? setSelectedPages(event.target.value) : setPageRanges(event.target.value))}
           placeholder={mode === "selected" ? "1,3,5-7" : "1-3,4-6"}
@@ -595,7 +815,7 @@ export function SplitPdfTool() {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {files.map((pdfFile, index) => (
                 <div key={`${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderPdfCard(pdfFile, index)}</div>
               ))}
@@ -613,9 +833,17 @@ export function SplitPdfTool() {
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderSplitOptions()}
-            {renderSplitInputs()}
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
+              <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="split-pdf-mobile-settings-drawer">
+                <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
+                Settings
+              </button>
+            </div>
+            <div className="hidden min-w-0 flex-1 flex-col gap-2 sm:flex xl:flex-row xl:items-center">
+              {renderSplitOptions()}
+              {renderSplitInputs()}
+            </div>
           </div>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
@@ -639,6 +867,55 @@ export function SplitPdfTool() {
     );
   }
 
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`
+          @keyframes splitPdfDrawerIn {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+          }
+        `}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="split-pdf-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Split PDF settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
+            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
+          } ${isSettingsDrawerClosing ? "" : "animate-[splitPdfDrawerIn_220ms_ease-out]"}`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerPointerDown}
+            onPointerMove={onDrawerPointerMove}
+            onPointerUp={finishDrawerDrag}
+            onPointerCancel={() => finishDrawerDrag()}
+            onLostPointerCapture={() => finishDrawerDrag()}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Split settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4">
+            {renderSplitOptions()}
+            {renderSplitInputs("mobile")}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section
       data-v0-managed-flow="true"
@@ -648,14 +925,15 @@ export function SplitPdfTool() {
       onDragLeave={onFileDragLeave}
       onDrop={onDrop}
       className={`mx-auto mt-6 max-w-full text-left ${
-        files.length > 0 ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+        files.length > 0 ? "w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}
     >
       {files.length > 0 ? (
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100 transition">
           <input id="split-pdf-add-more" name="split-pdf-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

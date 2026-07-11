@@ -2173,20 +2173,20 @@ section[id$="-tool"] label {
   display: none !important;
 }
 
-.v0-tool-page:has(#merge-pdf-tool [data-merge-preview-area="true"]) [data-tool-page-extra] {
+.v0-tool-page:has(:is(#merge-pdf-tool, #split-pdf-tool, #compress-pdf-tool, #pdf-to-word-tool, #pdf-to-excel-tool, #pdf-to-powerpoint-tool, #pdf-to-jpg-tool, #jpg-to-pdf-tool, #png-to-pdf-tool, #word-to-pdf-tool, #excel-to-pdf-tool, #powerpoint-to-pdf-tool, #rotate-pdf-tool, #organize-pdf-pages-tool, #delete-pdf-pages-tool) [data-merge-preview-area="true"]) [data-tool-page-extra] {
   display: none !important;
 }
 
-.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) [data-merge-result-only] {
+.v0-tool-page:has(:is(#merge-pdf-tool, #split-pdf-tool, #compress-pdf-tool, #pdf-to-word-tool, #pdf-to-excel-tool, #pdf-to-powerpoint-tool, #pdf-to-jpg-tool, #jpg-to-pdf-tool, #png-to-pdf-tool, #word-to-pdf-tool, #excel-to-pdf-tool, #powerpoint-to-pdf-tool, #rotate-pdf-tool, #organize-pdf-pages-tool, #delete-pdf-pages-tool) [data-workflow-step="download"]) [data-merge-result-only] {
   display: block !important;
 }
 
-.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) [data-tool-workspace-hero] {
+.v0-tool-page:has(:is(#merge-pdf-tool, #split-pdf-tool, #compress-pdf-tool, #pdf-to-word-tool, #pdf-to-excel-tool, #pdf-to-powerpoint-tool, #pdf-to-jpg-tool, #jpg-to-pdf-tool, #png-to-pdf-tool, #word-to-pdf-tool, #excel-to-pdf-tool, #powerpoint-to-pdf-tool, #rotate-pdf-tool, #organize-pdf-pages-tool, #delete-pdf-pages-tool) [data-workflow-step="download"]) [data-tool-workspace-hero] {
   border-bottom: 0 !important;
   padding-bottom: 26px !important;
 }
 
-.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) > main {
+.v0-tool-page:has(:is(#merge-pdf-tool, #split-pdf-tool, #compress-pdf-tool, #pdf-to-word-tool, #pdf-to-excel-tool, #pdf-to-powerpoint-tool, #pdf-to-jpg-tool, #jpg-to-pdf-tool, #png-to-pdf-tool, #word-to-pdf-tool, #excel-to-pdf-tool, #powerpoint-to-pdf-tool, #rotate-pdf-tool, #organize-pdf-pages-tool, #delete-pdf-pages-tool) [data-workflow-step="download"]) > main {
   overflow: visible !important;
 }
 
@@ -2204,6 +2204,23 @@ section[id$="-tool"] label {
   min-height: 0 !important;
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
+}
+
+@media (max-width: 639px) {
+  .v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="arrange"] {
+    height: auto !important;
+    min-height: 0 !important;
+    flex-grow: 0 !important;
+    overflow: visible !important;
+    padding-bottom: 8.5rem !important;
+  }
+
+  .v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-card-grid="true"] {
+    height: auto !important;
+    min-height: 0 !important;
+    flex-grow: 0 !important;
+    padding-bottom: 0 !important;
+  }
 }
 
 @media (min-width: 640px) {

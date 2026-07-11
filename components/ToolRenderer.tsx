@@ -43,7 +43,8 @@ export function ToolRenderer({ slug, name, description }: { slug: string; name: 
   if (slug === "background-remover") return <BackgroundRemoverTool />;
   if (slug === "crop-image") return <CropImageTool />;
   if (slug === "resize-image") return <ResizeImageTool />;
-  if (slug === "jpg-to-pdf" || slug === "png-to-pdf") return <JpgToPdfTool />;
+  if (slug === "jpg-to-pdf") return <JpgToPdfTool />;
+  if (slug === "png-to-pdf") return <JpgToPdfTool pngOnly />;
   if (slug === "pdf-to-jpg") return <PdfToJpgTool />;
   if (slug === "merge-pdf") return <MergePdfTool />;
   if (slug === "compress-pdf") return <CompressPdfTool />;

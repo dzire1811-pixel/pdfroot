@@ -1,7 +1,7 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileSpreadsheet, FileText, GripVertical, Loader2, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileSpreadsheet, FileText, GripVertical, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 
 type PdfResult = {
@@ -20,6 +20,11 @@ type SheetData = {
 };
 
 type WorkflowStep = "arrange" | "convert" | "download";
+type PageSize = "a4" | "letter";
+type Orientation = "landscape" | "portrait";
+type MarginSize = "small" | "normal" | "large";
+type ColumnFit = "readable" | "all";
+type SheetScope = "all" | "first";
 
 const EXCEL_ACCEPT = ".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -53,11 +58,22 @@ export function ExcelToPdfTool() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [pageSize, setPageSize] = useState<PageSize>("a4");
+  const [orientation, setOrientation] = useState<Orientation>("landscape");
+  const [marginSize, setMarginSize] = useState<MarginSize>("normal");
+  const [columnFit, setColumnFit] = useState<ColumnFit>("readable");
+  const [sheetScope, setSheetScope] = useState<SheetScope>("all");
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<PdfResult | null>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "Excel file" : "Excel files"} ready`;
 
@@ -88,6 +104,7 @@ export function ExcelToPdfTool() {
     setIsProcessing(false);
     setWorkflowStep("arrange");
     setDraggedIndex(null);
+    setIsSettingsDrawerOpen(false);
   }
 
   function removeFile(indexToRemove: number) {
@@ -137,6 +154,7 @@ export function ExcelToPdfTool() {
     clearResult();
     setError(null);
     setIsProcessing(true);
+    setIsSettingsDrawerOpen(false);
     setWorkflowStep("convert");
     setProgress(0);
     scrollToolStageIntoView();
@@ -151,7 +169,8 @@ export function ExcelToPdfTool() {
         const currentFile = files[fileIndex];
         setStatus(`Reading ${currentFile.name}...`);
         const workbook = read(await currentFile.arrayBuffer(), { type: "array", cellDates: true });
-        const sheets: SheetData[] = workbook.SheetNames.map((name) => ({
+        const selectedSheetNames = sheetScope === "first" ? workbook.SheetNames.slice(0, 1) : workbook.SheetNames;
+        const sheets: SheetData[] = selectedSheetNames.map((name) => ({
           name,
           rows: trimSheetRows(utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: false, defval: "" }) as unknown[][]),
         })).filter((sheet) => sheet.rows.length > 0);
@@ -160,10 +179,10 @@ export function ExcelToPdfTool() {
           throw new Error(`${currentFile.name} has no readable table data.`);
         }
 
-        const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+        const pdf = new jsPDF({ unit: "pt", format: pageSize, orientation });
         const pageWidth = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
-        const margin = 36;
+        const margin = marginSize === "small" ? 22 : marginSize === "large" ? 54 : 36;
         const maxWidth = pageWidth - margin * 2;
         const maxHeight = pageHeight - margin * 2;
         const rowHeight = 22;
@@ -181,12 +200,12 @@ export function ExcelToPdfTool() {
 
         function addSheet(sheet: SheetData, sheetIndex: number) {
           if (sheetIndex > 0) {
-            pdf.addPage("a4", "landscape");
+            pdf.addPage(pageSize, orientation);
           }
 
           addTitle(sheet.name, sheet.rows.length);
           const columnCount = Math.max(1, ...sheet.rows.map((row) => row.length));
-          const visibleColumns = Math.min(columnCount, 10);
+          const visibleColumns = columnFit === "all" ? columnCount : Math.min(columnCount, 10);
           const columnWidth = maxWidth / visibleColumns;
           let y = margin + 48;
 
@@ -195,7 +214,7 @@ export function ExcelToPdfTool() {
 
           sheet.rows.forEach((row, rowIndex) => {
             if (y + rowHeight > margin + maxHeight) {
-              pdf.addPage("a4", "landscape");
+              pdf.addPage(pageSize, orientation);
               addTitle(`${sheet.name} continued`, sheet.rows.length);
               y = margin + 48;
             }
@@ -282,8 +301,57 @@ export function ExcelToPdfTool() {
   useEffect(() => {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setSettingsDrawerDragOffset(0);
+      drawerCloseTimerRef.current = null;
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset;
+    setIsSettingsDrawerDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current));
+  }
+
+  function finishDrawerDrag() {
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    if (settingsDrawerDragOffset >= 84) closeSettingsDrawer();
+    else setSettingsDrawerDragOffset(0);
+  }
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => { if (innerWidth >= 640) setIsSettingsDrawerOpen(false); };
+    addEventListener("keydown", onKeyDown);
+    addEventListener("resize", onResize);
+    return () => { removeEventListener("keydown", onKeyDown); removeEventListener("resize", onResize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -390,29 +458,17 @@ export function ExcelToPdfTool() {
       >
         <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
-          <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
-            <GripVertical className="h-4 w-4" aria-hidden="true" />
-          </span>
+          <button type="button" onClick={(event) => { event.stopPropagation(); removeFile(index); }} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${excelFile.name}`}><Trash2 className="h-4 w-4" /></button>
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm"><GripVertical className="h-4 w-4" aria-hidden="true" /></span>
           <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
             <FileSpreadsheet className="h-16 w-16" aria-hidden="true" />
           </div>
         </div>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+        <div className="mt-2 min-w-0">
           <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">{excelFile.name}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(excelFile.size)} KB</p>
+            <p className="truncate text-sm font-black leading-snug text-slate-950" title={excelFile.name}>{excelFile.name}</p>
+            <p className="mt-1.5 inline-flex max-w-full rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(excelFile.size)} KB</p>
           </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              removeFile(index);
-            }}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-            aria-label={`Remove ${excelFile.name}`}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
         </div>
       </article>
     );
@@ -465,20 +521,24 @@ export function ExcelToPdfTool() {
     );
   }
 
-  function renderPdfNotice() {
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-snug text-amber-800 xl:w-[24rem]">
-        Basic PDF file generated. Complex layouts may not be fully preserved.
-      </div>
-    );
+  function renderSettings(desktop = false) {
+    const groups = [
+      { label: "Page size", value: pageSize, set: (v: string) => setPageSize(v as PageSize), options: [["a4", "A4"], ["letter", "Letter"]] },
+      { label: "Orientation", value: orientation, set: (v: string) => setOrientation(v as Orientation), options: [["landscape", "Landscape"], ["portrait", "Portrait"]] },
+      { label: "Margins", value: marginSize, set: (v: string) => setMarginSize(v as MarginSize), options: [["small", "Small"], ["normal", "Normal"], ["large", "Large"]] },
+      { label: "Columns", value: columnFit, set: (v: string) => setColumnFit(v as ColumnFit), options: [["readable", "Readable"], ["all", "Fit all"]] },
+      { label: "Sheets", value: sheetScope, set: (v: string) => setSheetScope(v as SheetScope), options: [["all", "All"], ["first", "First"]] },
+    ];
+    if (desktop) return <div className="flex min-w-max flex-nowrap items-end gap-2 pb-1">{groups.map((group) => <label key={group.label} className="w-[6rem] shrink-0"><span className="mb-1 block text-[0.62rem] font-black uppercase tracking-wide text-slate-500">{group.label}</span><select value={group.value} onChange={(event) => group.set(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-800 outline-none focus:border-[#FF2D2D]">{group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div>;
+    return <div className="grid gap-3">{groups.map((group) => <fieldset key={group.label}><legend className="mb-1 text-[0.68rem] font-black uppercase tracking-wide text-slate-500">{group.label}</legend><div className="flex flex-wrap gap-1.5">{group.options.map(([value, label]) => <button key={value} type="button" onClick={() => group.set(value)} className={`h-9 rounded-lg border px-2.5 text-xs font-black ${group.value === value ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-700"}`}>{label}</button>)}</div></fieldset>)}</div>;
   }
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {files.map((excelFile, index) => (
                 <div key={`${excelFile.name}-${excelFile.size}-${excelFile.lastModified}-${index}`}>{renderExcelCard(excelFile, index)}</div>
               ))}
@@ -494,13 +554,10 @@ export function ExcelToPdfTool() {
   function renderBottomActionBar() {
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderPdfNotice()}
-          </div>
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
-          <div className="min-w-0 xl:ml-auto">
+        <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center"><p className="truncate text-sm font-black text-slate-950">{readyLabel}</p><button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black sm:hidden"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button></div>
+          <div className="hidden min-w-0 overflow-x-auto overscroll-x-contain sm:block">{renderSettings(true)}</div>
+          <div className="min-w-0 sm:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
               <label htmlFor="excel-pdf-workspace-upload" aria-label="Add Excel files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
@@ -516,9 +573,15 @@ export function ExcelToPdfTool() {
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes excelDrawerIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} onClick={closeSettingsDrawer} aria-label="Close settings" /><div role="dialog" aria-modal="true" aria-label="Excel to PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[excelDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={finishDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">PDF settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderSettings()}</div></div></div>;
   }
 
   return (
@@ -535,6 +598,7 @@ export function ExcelToPdfTool() {
           <input id="excel-pdf-workspace-upload" name="excel-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept={EXCEL_ACCEPT} multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

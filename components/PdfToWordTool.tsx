@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FileText, FileType2, GripVertical, Loader2, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 import { Document, Packer, Paragraph, TextRun } from "docx";
@@ -27,12 +29,48 @@ function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
 }
 
+function compactFileName(fileName: string, maxLength = 30) {
+  if (fileName.length <= maxLength) return fileName;
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const available = Math.max(8, maxLength - extension.length - 3);
+  const headLength = Math.max(5, available - 4);
+  const tailLength = Math.max(0, available - headLength);
+  return `${baseName.slice(0, headLength)}...${tailLength ? baseName.slice(-tailLength) : ""}${extension}`;
+}
+
 function isPdf(file: File) {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 }
 
 function cleanFileName(name: string) {
   return name.replace(/\.pdf$/i, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot";
+}
+
+async function renderFirstPageThumbnail(file: File) {
+  const pdfjsLib = await loadPdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 0.55 });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("Your browser does not support PDF preview rendering.");
+
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((thumbnailBlob) => {
+      if (thumbnailBlob) return resolve(thumbnailBlob);
+      reject(new Error("Could not create PDF preview."));
+    }, "image/jpeg", 0.82);
+  });
+
+  return URL.createObjectURL(blob);
 }
 
 function normalizePageText(items: TextItemWithString[]) {
@@ -110,11 +148,11 @@ export function PdfToWordTool() {
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<WordResult | null>(null);
-  const previewUrlsRef = useRef<string[]>([]);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
@@ -139,10 +177,6 @@ export function PdfToWordTool() {
   function resetTool() {
     clearResult();
     setFiles([]);
-    setPreviewUrls((current) => {
-      current.forEach((url) => URL.revokeObjectURL(url));
-      return [];
-    });
     setError(null);
     setProgress(0);
     setStatus("Upload a PDF file to convert into editable Word.");
@@ -154,12 +188,6 @@ export function PdfToWordTool() {
   function removeFile(indexToRemove: number) {
     clearResult();
     setFiles((current) => current.filter((_, index) => index !== indexToRemove));
-    setPreviewUrls((current) => {
-      const next = [...current];
-      const [removedUrl] = next.splice(indexToRemove, 1);
-      if (removedUrl) URL.revokeObjectURL(removedUrl);
-      return next;
-    });
     setError(null);
     setProgress(0);
     setWorkflowStep("arrange");
@@ -179,7 +207,6 @@ export function PdfToWordTool() {
     }
 
     setFiles((current) => [...current, ...nextFiles]);
-    setPreviewUrls((current) => [...current, ...nextFiles.map((nextFile) => URL.createObjectURL(nextFile))]);
     setWorkflowStep("arrange");
     setStatus("PDF loaded. Convert when ready.");
     scrollToolStageIntoView();
@@ -302,15 +329,44 @@ export function PdfToWordTool() {
   }, [result]);
 
   useEffect(() => {
-    previewUrlsRef.current = previewUrls;
-  }, [previewUrls]);
-
-  useEffect(() => {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
-      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
+
+  useEffect(() => {
+    if (files.length === 0 || workflowStep !== "arrange") {
+      setPreviewUrls([]);
+      return;
+    }
+
+    let cancelled = false;
+    const nextPreviewUrls: string[] = [];
+
+    async function createPreviews() {
+      const renderedUrls = await Promise.all(
+        files.map(async (pdfFile) => {
+          try {
+            return await renderFirstPageThumbnail(pdfFile);
+          } catch {
+            return "";
+          }
+        }),
+      );
+      if (cancelled) {
+        renderedUrls.filter(Boolean).forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      nextPreviewUrls.push(...renderedUrls.filter(Boolean));
+      setPreviewUrls(renderedUrls);
+    }
+
+    void createPreviews();
+    return () => {
+      cancelled = true;
+      nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [files, workflowStep]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -370,16 +426,6 @@ export function PdfToWordTool() {
       setDraggedIndex(targetIndex);
       return next;
     });
-    setPreviewUrls((current) => {
-      if (draggedIndex < 0 || targetIndex < 0 || draggedIndex >= current.length || targetIndex >= current.length) {
-        return current;
-      }
-
-      const next = [...current];
-      const [draggedUrl] = next.splice(draggedIndex, 1);
-      next.splice(targetIndex, 0, draggedUrl);
-      return next;
-    });
     setProgress(0);
     setWorkflowStep("arrange");
     setStatus("Order updated. Convert when ready.");
@@ -422,41 +468,37 @@ export function PdfToWordTool() {
         onDragEnter={() => reorderByDragEnter(index)}
         onDrop={() => setDraggedIndex(null)}
         onDragEnd={() => setDraggedIndex(null)}
-        className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:border-red-200 active:cursor-grabbing"
+        className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md active:cursor-grabbing"
       >
-        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
-          <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
-            <GripVertical className="h-4 w-4" aria-hidden="true" />
-          </span>
-          {previewUrl ? (
-            <object data={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0`} type="application/pdf" className="pointer-events-none h-full w-full bg-white">
-              <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
-                <FileText className="h-12 w-12" aria-hidden="true" />
-              </div>
-            </object>
-          ) : (
-            <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
-              <FileText className="h-12 w-12" aria-hidden="true" />
-            </div>
-          )}
-        </div>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">{pdfFile.name}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(pdfFile.size)} KB</p>
-          </div>
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
               removeFile(index);
             }}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
+            className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]"
             aria-label={`Remove ${pdfFile.name}`}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </span>
+          {previewUrl ? (
+            <img src={previewUrl} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <div className="grid h-full w-full place-items-center rounded-lg bg-white text-[#FF2D2D]">
+              <FileText className="h-12 w-12" aria-hidden="true" />
+            </div>
+          )}
+        </div>
+        <div className="mt-2 min-w-0">
+          <p className="truncate text-sm font-black leading-snug text-slate-950" title={pdfFile.name}>{compactFileName(pdfFile.name)}</p>
+          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(pdfFile.size)} KB</span>
+          </div>
         </div>
       </article>
     );
@@ -522,7 +564,7 @@ export function PdfToWordTool() {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {files.map((pdfFile, index) => (
                 <div key={previewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderPdfCard(pdfFile, index)}</div>
               ))}
@@ -537,7 +579,7 @@ export function PdfToWordTool() {
 
   function renderBottomActionBar() {
     return (
-      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+      <div ref={actionBarRef} data-merge-action-bar="true" data-pdf-to-word-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
             <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
@@ -546,10 +588,10 @@ export function PdfToWordTool() {
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-              <label htmlFor="pdf-word-workspace-upload" aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
+              <button type="button" onClick={() => addMoreInputRef.current?.click()} aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
                 <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-              </label>
+              </button>
               <button type="button" onClick={() => void convertToWord()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
                 {isProcessing ? "Converting..." : "Convert to Word"}
                 <FileType2 className="h-5 w-5" aria-hidden="true" />
@@ -574,12 +616,12 @@ export function PdfToWordTool() {
       onDragLeave={onFileDragLeave}
       onDrop={onDrop}
       className={`mx-auto mt-6 max-w-full text-left ${
-        files.length > 0 ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+        files.length > 0 ? "w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}
     >
       {files.length > 0 ? (
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input id="pdf-word-workspace-upload" name="pdf-word-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
+        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100 transition">
+          <input id="pdf-word-workspace-upload" name="pdf-word-workspace-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, GripVertical, Loader2, PanelTop, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileText, GripVertical, Loader2, PanelTop, Plus, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 
 type PdfResult = {
@@ -48,6 +48,9 @@ type SlideData = {
 };
 
 type WorkflowStep = "arrange" | "convert" | "download";
+type SlideScope = "all" | "odd" | "even";
+type PageLayout = "original" | "a4";
+type PageOrientation = "auto" | "landscape" | "portrait";
 
 const EMU_PER_POINT = 12700;
 const POWERPOINT_ACCEPT = ".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation";
@@ -213,11 +216,21 @@ export function PowerPointToPdfTool() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [slideScope, setSlideScope] = useState<SlideScope>("all");
+  const [pageLayout, setPageLayout] = useState<PageLayout>("original");
+  const [pageOrientation, setPageOrientation] = useState<PageOrientation>("auto");
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<PdfResult | null>(null);
+  const processingRef = useRef(false);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PowerPoint file" : "PowerPoint files"} ready`;
 
@@ -248,6 +261,7 @@ export function PowerPointToPdfTool() {
     setIsProcessing(false);
     setWorkflowStep("arrange");
     setDraggedIndex(null);
+    setIsSettingsDrawerOpen(false);
   }
 
   function removeFile(indexToRemove: number) {
@@ -289,6 +303,8 @@ export function PowerPointToPdfTool() {
   }
 
   async function convertToPdf() {
+    if (processingRef.current || isProcessing) return;
+
     if (files.length === 0) {
       setError("Please upload a PowerPoint file first.");
       return;
@@ -302,12 +318,17 @@ export function PowerPointToPdfTool() {
 
     clearResult();
     setError(null);
+    processingRef.current = true;
     setIsProcessing(true);
+    setIsSettingsDrawerOpen(false);
     setWorkflowStep("convert");
     setProgress(0);
     scrollToolStageIntoView();
 
     try {
+      if (typeof window === "undefined") {
+        throw new Error("PowerPoint conversion is available only in your browser.");
+      }
       const { jsPDF } = await import("jspdf");
       const convertedFiles: Array<{ fileName: string; blob: Blob }> = [];
       let totalSlides = 0;
@@ -316,9 +337,10 @@ export function PowerPointToPdfTool() {
         const currentFile = files[fileIndex];
         setStatus(`Reading ${currentFile.name}...`);
         const zip = await JSZip.loadAsync(await currentFile.arrayBuffer());
-        const slidePaths = Object.keys(zip.files)
+        const allSlidePaths = Object.keys(zip.files)
           .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
           .sort((a, b) => slideSortKey(a) - slideSortKey(b));
+        const slidePaths = allSlidePaths.filter((_, index) => slideScope === "all" || (slideScope === "odd" ? index % 2 === 0 : index % 2 === 1));
 
         if (!slidePaths.length) {
           throw new Error(`${currentFile.name} has no readable slides.`);
@@ -329,23 +351,26 @@ export function PowerPointToPdfTool() {
         const sldSz = presentationDoc?.querySelector("p\\:sldSz, sldSz");
         const slideWidthPt = attrNumber(sldSz ?? null, "cx", 12192000) / EMU_PER_POINT;
         const slideHeightPt = attrNumber(sldSz ?? null, "cy", 6858000) / EMU_PER_POINT;
-        const orientation = slideWidthPt >= slideHeightPt ? "landscape" : "portrait";
+        const orientation = pageOrientation === "auto" ? (slideWidthPt >= slideHeightPt ? "landscape" : "portrait") : pageOrientation;
+        const originalLandscape = orientation === "landscape";
+        const pageWidth = pageLayout === "a4" ? (originalLandscape ? 842 : 595) : (originalLandscape === (slideWidthPt >= slideHeightPt) ? slideWidthPt : slideHeightPt);
+        const pageHeight = pageLayout === "a4" ? (originalLandscape ? 595 : 842) : (originalLandscape === (slideWidthPt >= slideHeightPt) ? slideHeightPt : slideWidthPt);
         const pdf = new jsPDF({
           unit: "pt",
-          format: [slideWidthPt, slideHeightPt],
+          format: [pageWidth, pageHeight],
           orientation,
         });
-        const pageScale = 1;
+        const pageScale = Math.min(pageWidth / slideWidthPt, pageHeight / slideHeightPt);
 
         for (let index = 0; index < slidePaths.length; index += 1) {
           if (index > 0) {
-            pdf.addPage([slideWidthPt, slideHeightPt], orientation);
+            pdf.addPage([pageWidth, pageHeight], orientation);
           }
 
           setStatus(`Converting ${currentFile.name} slide ${index + 1} of ${slidePaths.length}...`);
           const slide = await parseSlide(zip, slidePaths[index], pageScale);
           pdf.setFillColor(255, 255, 255);
-          pdf.rect(0, 0, slideWidthPt, slideHeightPt, "F");
+          pdf.rect(0, 0, pageWidth, pageHeight, "F");
 
           slide.shapes.forEach((shape) => {
             if (shape.fill) {
@@ -406,11 +431,13 @@ export function PowerPointToPdfTool() {
       setStatus("PowerPoint converted to PDF. Slide layout is preserved as much as possible.");
       setWorkflowStep("download");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not convert this PowerPoint file to PDF. Please try another PPTX file.");
+      const message = err instanceof Error ? err.message : "";
+      setError(/loading chunk|chunkloaderror/i.test(message) ? "The PDF converter could not be loaded. Please refresh the page and try again." : message || "Could not convert this PowerPoint file to PDF. Please try another PPTX file.");
       setStatus("Conversion failed.");
       setProgress(0);
       setWorkflowStep("arrange");
     } finally {
+      processingRef.current = false;
       setIsProcessing(false);
     }
   }
@@ -422,8 +449,32 @@ export function PowerPointToPdfTool() {
   useEffect(() => {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
+  function finishDrawerDrag() { drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (settingsDrawerDragOffset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0); }
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const resize = () => { if (innerWidth >= 640) setIsSettingsDrawerOpen(false); };
+    addEventListener("keydown", key); addEventListener("resize", resize);
+    return () => { removeEventListener("keydown", key); removeEventListener("resize", resize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -530,29 +581,17 @@ export function PowerPointToPdfTool() {
       >
         <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
-          <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
-            <GripVertical className="h-4 w-4" aria-hidden="true" />
-          </span>
+          <button type="button" onClick={(event) => { event.stopPropagation(); removeFile(index); }} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${powerPointFile.name}`}><Trash2 className="h-4 w-4" /></button>
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm"><GripVertical className="h-4 w-4" /></span>
           <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
             <PanelTop className="h-16 w-16" aria-hidden="true" />
           </div>
         </div>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+        <div className="mt-2 min-w-0">
           <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">{powerPointFile.name}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(powerPointFile.size)} KB</p>
+            <p className="truncate text-sm font-black leading-snug text-slate-950" title={powerPointFile.name}>{powerPointFile.name}</p>
+            <p className="mt-1.5 inline-flex max-w-full rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(powerPointFile.size)} KB</p>
           </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              removeFile(index);
-            }}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-            aria-label={`Remove ${powerPointFile.name}`}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
         </div>
       </article>
     );
@@ -605,20 +644,22 @@ export function PowerPointToPdfTool() {
     );
   }
 
-  function renderPowerPointNotice() {
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-snug text-amber-800 xl:w-[24rem]">
-        PPTX works best in-browser. Legacy .ppt files may need to be saved as .pptx first.
-      </div>
-    );
+  function renderSettings(desktop = false) {
+    const groups = [
+      { label: "Slides", value: slideScope, set: (v: string) => setSlideScope(v as SlideScope), options: [["all", "All"], ["odd", "Odd"], ["even", "Even"]] },
+      { label: "Page", value: pageLayout, set: (v: string) => setPageLayout(v as PageLayout), options: [["original", "Original"], ["a4", "A4"]] },
+      { label: "Orientation", value: pageOrientation, set: (v: string) => setPageOrientation(v as PageOrientation), options: [["auto", "Auto"], ["landscape", "Landscape"], ["portrait", "Portrait"]] },
+    ];
+    if (desktop) return <div className="flex min-w-max flex-nowrap items-end gap-2 pb-1">{groups.map((group) => <label key={group.label} className="w-[7rem] shrink-0"><span className="mb-1 block text-[0.62rem] font-black uppercase tracking-wide text-slate-500">{group.label}</span><select value={group.value} onChange={(event) => group.set(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-800 outline-none focus:border-[#FF2D2D]">{group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div>;
+    return <div className="grid gap-3">{groups.map((group) => <fieldset key={group.label}><legend className="mb-1 text-[0.68rem] font-black uppercase tracking-wide text-slate-500">{group.label}</legend><div className="flex flex-wrap gap-1.5">{group.options.map(([value, label]) => <button key={value} type="button" onClick={() => group.set(value)} className={`h-9 rounded-lg border px-2.5 text-xs font-black ${group.value === value ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-700"}`}>{label}</button>)}</div></fieldset>)}</div>;
   }
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
               {files.map((powerPointFile, index) => (
                 <div key={`${powerPointFile.name}-${powerPointFile.size}-${powerPointFile.lastModified}-${index}`}>{renderPowerPointCard(powerPointFile, index)}</div>
               ))}
@@ -634,13 +675,10 @@ export function PowerPointToPdfTool() {
   function renderBottomActionBar() {
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderPowerPointNotice()}
-          </div>
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
-          <div className="min-w-0 xl:ml-auto">
+        <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center"><p className="truncate text-sm font-black text-slate-950">{readyLabel}</p><button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black sm:hidden"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button></div>
+          <div className="hidden min-w-0 overflow-x-auto overscroll-x-contain sm:block">{renderSettings(true)}</div>
+          <div className="min-w-0 sm:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
               <label htmlFor="powerpoint-pdf-workspace-upload" aria-label="Add PowerPoint files" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
@@ -656,9 +694,15 @@ export function PowerPointToPdfTool() {
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes pptDrawerIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} onClick={closeSettingsDrawer} aria-label="Close settings" /><div role="dialog" aria-modal="true" aria-label="PowerPoint to PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[pptDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={finishDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">PDF settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderSettings()}</div></div></div>;
   }
 
   return (
@@ -675,6 +719,7 @@ export function PowerPointToPdfTool() {
           <input id="powerpoint-pdf-workspace-upload" name="powerpoint-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept={POWERPOINT_ACCEPT} multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

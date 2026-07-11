@@ -93,6 +93,48 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const Icon = tool.icon;
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
+  const usesApprovedPdfResultPage = tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages";
+  const resultPrimaryActions = tool.slug === "split-pdf"
+    ? [
+        ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+        ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
+      ]
+    : tool.slug === "compress-pdf"
+      ? [
+          ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+          ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+          ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
+        ]
+    : tool.slug === "pdf-to-word"
+      ? [
+          ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+          ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+          ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ]
+    : tool.slug === "pdf-to-excel"
+      ? [
+          ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+          ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+          ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ]
+    : tool.slug === "pdf-to-powerpoint"
+      ? [
+          ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+          ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+          ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ]
+    : tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages"
+      ? [
+          ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
+          ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+          ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ]
+    : [
+        ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+        ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+        ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
+      ];
   const categoryTools = tool.category === "PDF Tools" ? pdfTools : imageTools;
   const mergeResultTrustCards = [
     ["Files Processed Locally", FileLock2],
@@ -160,7 +202,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        {tool.slug === "merge-pdf" && (
+        {usesApprovedPdfResultPage && (
           <>
             <section data-merge-result-only="related" className="h-auto overflow-visible bg-muted/40 px-4 pb-2 pt-2 sm:px-6 lg:px-8">
               <div className="mx-auto h-auto max-w-[1040px] overflow-visible rounded-2xl border border-border bg-card px-4 py-4 shadow-sm shadow-foreground/[0.03] sm:px-5">
@@ -168,11 +210,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
                   What would you like to do next?
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  {[
-                    ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
-                    ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
-                    ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
-                  ].map(([itemSlug, label, description]) => {
+                  {resultPrimaryActions.map(([itemSlug, label, description]) => {
                     const item = related.find((relatedTool) => relatedTool.slug === itemSlug);
                     if (!item) return null;
 
@@ -195,7 +233,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2.5">
                   {related
-                    .filter((item) => !["compress-pdf", "split-pdf", "pdf-to-word"].includes(item.slug))
+                    .filter((item) => !resultPrimaryActions.some(([itemSlug]) => itemSlug === item.slug))
                     .map((item) => (
                       <Link
                         key={item.slug}
@@ -212,7 +250,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
               </div>
             </section>
 
-            <section data-merge-result-only="trust" className="bg-muted/40 px-6 pb-[72px] pt-14 lg:px-8">
+            <section data-merge-result-only="trust" className="bg-muted/40 px-6 pb-4 pt-14 lg:px-8">
               <div className="mx-auto max-w-[1100px]">
                 <div className="text-center">
                   <p className="text-xs font-semibold uppercase tracking-wider text-primary">Why Choose PDFRoot?</p>
@@ -353,7 +391,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           <WhyChoosePdfRoot />
         </div>
       </main>
-      {tool.slug === "merge-pdf" && (
+      {usesApprovedPdfResultPage && (
         <div data-merge-result-only="footer">
           <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
         </div>

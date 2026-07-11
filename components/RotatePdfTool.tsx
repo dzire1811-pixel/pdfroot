@@ -1,8 +1,8 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, Loader2, Plus, RotateCcw, RotateCw, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, GripVertical, Loader2, Plus, RotateCcw, RotateCw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { degrees } from "pdf-lib";
 import { loadPdfJs } from "@/lib/pdfjsClient";
 
@@ -44,12 +44,20 @@ export function RotatePdfTool() {
   const [result, setResult] = useState<RotateResult | null>(null);
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [draggedPage, setDraggedPage] = useState<number | null>(null);
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const previewsRef = useRef<PagePreview[]>([]);
   const resultRef = useRef<RotateResult | null>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyLabel = file ? `${previews.length} ${previews.length === 1 ? "page" : "pages"} ready` : "PDF ready";
 
   function scrollToolStageIntoView() {
@@ -86,6 +94,7 @@ export function RotatePdfTool() {
     setProgress(0);
     setStatus("Upload a PDF to rotate pages.");
     setWorkflowStep("arrange");
+    setIsSettingsDrawerOpen(false);
   }
 
   async function renderPreviews(nextFile: File) {
@@ -94,7 +103,7 @@ export function RotatePdfTool() {
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bytes) });
     const pdf = await loadingTask.promise;
     const rendered: PagePreview[] = [];
-    const maxPreviewPages = Math.min(pdf.numPages, 30);
+    const maxPreviewPages = pdf.numPages;
 
     for (let pageNumber = 1; pageNumber <= maxPreviewPages; pageNumber += 1) {
       setStatus(`Creating preview ${pageNumber} of ${pdf.numPages}...`);
@@ -116,7 +125,7 @@ export function RotatePdfTool() {
       setProgress(Math.round((pageNumber / maxPreviewPages) * 85));
     }
 
-    setStatus(pdf.numPages > maxPreviewPages ? `Previewing first ${maxPreviewPages} pages. Rotation will still apply to all pages if selected.` : "PDF loaded. Rotate pages, then download.");
+    setStatus("PDF loaded. Rotate and reorder pages, then download.");
     return rendered;
   }
 
@@ -180,8 +189,38 @@ export function RotatePdfTool() {
     setStatus(direction > 0 ? `Page ${selectedPage} rotated right.` : `Page ${selectedPage} rotated left.`);
   }
 
+  function resetRotations() {
+    clearResult();
+    setPreviews((current) => current.map((page) => ({ ...page, rotation: 0 })));
+    setStatus("All page rotations reset.");
+  }
+
+  function removePage(pageNumber: number) {
+    clearResult();
+    setPreviews((current) => {
+      const removed = current.find((page) => page.pageNumber === pageNumber);
+      if (removed) URL.revokeObjectURL(removed.url);
+      return current.filter((page) => page.pageNumber !== pageNumber);
+    });
+    setStatus(`Page ${pageNumber} removed.`);
+  }
+
+  function reorderPage(targetPage: number) {
+    if (draggedPage === null || draggedPage === targetPage) return;
+    setPreviews((current) => {
+      const from = current.findIndex((page) => page.pageNumber === draggedPage);
+      const to = current.findIndex((page) => page.pageNumber === targetPage);
+      if (from < 0 || to < 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setStatus("Page order updated.");
+  }
+
   async function downloadRotatedPdf() {
-    if (!file) {
+    if (!file || previews.length === 0) {
       setError("Please upload a PDF first.");
       return;
     }
@@ -191,20 +230,20 @@ export function RotatePdfTool() {
     clearResult();
     setProgress(0);
     setWorkflowStep("convert");
+    setIsSettingsDrawerOpen(false);
     setStatus("Applying rotations...");
     scrollToolStageIntoView();
 
     try {
       const { PDFDocument } = await import("pdf-lib");
       const bytes = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-      const previewRotationByPage = new Map(previews.map((page) => [page.pageNumber - 1, page.rotation]));
-      const pages = pdfDoc.getPages();
-
-      pages.forEach((page, index) => {
+      const sourcePdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+      const pdfDoc = await PDFDocument.create();
+      const copiedPages = await pdfDoc.copyPages(sourcePdf, previews.map((page) => page.pageNumber - 1));
+      copiedPages.forEach((page, index) => {
         const currentAngle = page.getRotation().angle;
-        const extraRotation = previewRotationByPage.get(index) ?? 0;
-        page.setRotation(degrees((currentAngle + extraRotation + 360) % 360));
+        page.setRotation(degrees((currentAngle + previews[index].rotation + 360) % 360));
+        pdfDoc.addPage(page);
       });
 
       setProgress(85);
@@ -241,8 +280,32 @@ export function RotatePdfTool() {
     return () => {
       previewsRef.current.forEach((preview) => URL.revokeObjectURL(preview.url));
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
+  function finishDrawerDrag() { drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (settingsDrawerDragOffset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0); }
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const resize = () => { if (innerWidth >= 640) setIsSettingsDrawerOpen(false); };
+    addEventListener("keydown", key); addEventListener("resize", resize);
+    return () => { removeEventListener("keydown", key); removeEventListener("resize", resize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (!file || workflowStep !== "arrange") {
@@ -319,32 +382,29 @@ export function RotatePdfTool() {
   function renderPageCard(page: PagePreview) {
     return (
       <article
+        draggable
+        onDragStart={() => setDraggedPage(page.pageNumber)}
+        onDragOver={(event) => event.preventDefault()}
+        onDragEnter={() => reorderPage(page.pageNumber)}
+        onDrop={() => setDraggedPage(null)}
+        onDragEnd={() => setDraggedPage(null)}
         className={`group relative flex h-full min-w-0 flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md ${
-          selectedPage === page.pageNumber ? "border-[#FF2D2D] ring-4 ring-red-100" : "border-slate-200 hover:border-red-200"
+          draggedPage === page.pageNumber ? "border-red-300 opacity-70" : selectedPage === page.pageNumber ? "border-[#FF2D2D] ring-4 ring-red-100" : "border-slate-200 hover:border-red-200"
         }`}
       >
-        <button type="button" onClick={() => setSelectedPage(page.pageNumber)} className="text-left">
-          <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+        <div onClick={() => setSelectedPage(page.pageNumber)} className="cursor-pointer text-left">
+          <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
             <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{page.pageNumber}</span>
-            <img src={page.url} alt={`PDF page ${page.pageNumber} preview`} className="max-h-full max-w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]" style={{ transform: `rotate(${page.rotation}deg)` }} />
+            <button type="button" onClick={(event) => { event.stopPropagation(); removePage(page.pageNumber); }} className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Delete page ${page.pageNumber}`}><Trash2 className="h-4 w-4" /></button>
+            <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm"><GripVertical className="h-4 w-4" /></span>
+            <img src={page.url} alt={`PDF page ${page.pageNumber} preview`} className="h-full w-full object-contain transition duration-200" style={{ transform: `rotate(${page.rotation}deg) scale(${page.rotation % 180 === 0 ? 1 : 0.72})` }} />
           </div>
-        </button>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">Page {page.pageNumber}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">Rotation: {page.rotation} deg</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedPage(page.pageNumber);
-              rotateSelected(90);
-            }}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-            aria-label={`Rotate page ${page.pageNumber} right`}
-          >
-            <RotateCw className="h-4 w-4" aria-hidden="true" />
-          </button>
+        </div>
+        <div className="mt-2 min-w-0">
+          <p className="truncate text-sm font-black leading-snug text-slate-950" title={file?.name}>{file?.name}</p>
+          <p className="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{file ? `${(file.size / 1024).toFixed(1)} KB` : ""}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => { setSelectedPage(page.pageNumber); setPreviews((current) => current.map((item) => item.pageNumber === page.pageNumber ? { ...item, rotation: (item.rotation + 270) % 360 } : item)); }} className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-black text-slate-700 hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Rotate page ${page.pageNumber} left`}><RotateCcw className="h-4 w-4" />Left</button><button type="button" onClick={() => { setSelectedPage(page.pageNumber); setPreviews((current) => current.map((item) => item.pageNumber === page.pageNumber ? { ...item, rotation: (item.rotation + 90) % 360 } : item)); }} className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 text-xs font-black text-slate-700 hover:border-red-200 hover:text-[#FF2D2D]" aria-label={`Rotate page ${page.pageNumber} right`}><RotateCw className="h-4 w-4" />Right</button></div>
+          <p className="mt-1 text-center text-[0.68rem] font-bold text-slate-400">Page {page.pageNumber} · {page.rotation}°</p>
         </div>
       </article>
     );
@@ -397,10 +457,10 @@ export function RotatePdfTool() {
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
+            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[32rem] sm:gap-5 sm:pb-60 lg:pb-44 xl:pb-32">
               {previews.map((page) => (
                 <div key={page.pageNumber}>{renderPageCard(page)}</div>
               ))}
@@ -415,22 +475,21 @@ export function RotatePdfTool() {
 
   function renderRotationOptions() {
     return (
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:w-[34rem]">
-        <button type="button" onClick={() => rotateAll(-90)} disabled={isProcessing} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
-          Rotate All Left
+      <div className="flex min-w-max flex-wrap items-center gap-2">
+        <button type="button" onClick={() => applyToAll ? rotateAll(-90) : rotateSelected(-90)} disabled={isProcessing} className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:opacity-60">
+          Rotate Left
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
         </button>
-        <button type="button" onClick={() => rotateAll(90)} disabled={isProcessing} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
-          Rotate All Right
+        <button type="button" onClick={() => applyToAll ? rotateAll(90) : rotateSelected(90)} disabled={isProcessing} className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:opacity-60">
+          Rotate Right
           <RotateCw className="h-4 w-4" aria-hidden="true" />
         </button>
-        <button type="button" onClick={() => rotateSelected(-90)} disabled={isProcessing || !previews.length} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
-          Selected Left
-          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+        <button type="button" onClick={() => setApplyToAll((current) => !current)} className={`flex h-10 items-center justify-center rounded-xl border px-3 text-xs font-black transition ${applyToAll ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-950 hover:border-red-200"}`}>
+          Apply to All Pages
         </button>
-        <button type="button" onClick={() => rotateSelected(90)} disabled={isProcessing || !previews.length} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
-          Selected Right
-          <RotateCw className="h-4 w-4" aria-hidden="true" />
+        <button type="button" onClick={resetRotations} className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-950 transition hover:border-red-200 hover:text-[#FF2D2D]">
+          Reset Rotation
+          <RotateCcw className="h-4 w-4" />
         </button>
       </div>
     );
@@ -439,21 +498,18 @@ export function RotatePdfTool() {
   function renderBottomActionBar() {
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderRotationOptions()}
-          </div>
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
-          <div className="min-w-0 xl:ml-auto">
+        <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+          <div className="flex min-w-0 items-center justify-between gap-3"><p className="truncate text-sm font-black text-slate-950">{readyLabel}</p><button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black sm:hidden"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button></div>
+          <div className="hidden min-w-0 overflow-x-auto sm:block">{renderRotationOptions()}</div>
+          <div className="min-w-0 sm:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
               <label htmlFor="rotate-pdf-workspace-upload" aria-label="Change PDF file" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
                 <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">1</span>
                 <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
               </label>
               <button type="button" onClick={() => void downloadRotatedPdf()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
-                {isProcessing ? "Processing..." : "Download Rotated PDF"}
-                <Download className="h-5 w-5" aria-hidden="true" />
+                {isProcessing ? "Processing..." : "Rotate PDF"}
+                <RotateCw className="h-5 w-5" aria-hidden="true" />
               </button>
               <button type="button" onClick={resetTool} disabled={isProcessing} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
                 Clear all
@@ -461,9 +517,15 @@ export function RotatePdfTool() {
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes rotateDrawerIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} onClick={closeSettingsDrawer} aria-label="Close settings" /><div role="dialog" aria-modal="true" aria-label="Rotate PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[rotateDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={finishDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Rotation settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{renderRotationOptions()}</div></div></div>;
   }
 
   return (
@@ -480,6 +542,7 @@ export function RotatePdfTool() {
           <input id="rotate-pdf-workspace-upload" name="rotate-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

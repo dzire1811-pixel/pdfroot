@@ -1,8 +1,8 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, GripVertical, ImageUp, Loader2, Plus, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileText, GripVertical, ImageUp, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type ImageItem = {
@@ -21,6 +21,13 @@ type PdfResult = {
 };
 
 type WorkflowStep = "arrange" | "convert" | "download";
+type PageSize = "a4" | "letter";
+type Orientation = "auto" | "portrait" | "landscape";
+type MarginSize = "none" | "small" | "large";
+type ImageFit = "contain" | "cover";
+type PageOrder = "current" | "reverse";
+
+type PdfSettings = { pageSize: PageSize; orientation: Orientation; margin: MarginSize; imageFit: ImageFit; pageOrder: PageOrder };
 
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
@@ -88,25 +95,27 @@ function dataUrlToBytes(dataUrl: string) {
   return bytes;
 }
 
-function buildPdf(items: ImageItem[]) {
+function buildPdf(items: ImageItem[], settings: PdfSettings) {
   const encoder = new TextEncoder();
   const parts: BlobPart[] = [];
   const offsets: number[] = [0];
   let position = 0;
   let objectId = 1;
   const pageObjectIds: number[] = [];
-  const pageData = items.map((item) => {
+  const orderedItems = settings.pageOrder === "reverse" ? [...items].reverse() : items;
+  const pageData = orderedItems.map((item) => {
     const ratio = item.width / item.height;
-    const pageWidth = ratio >= 1 ? 842 : 595;
-    const pageHeight = ratio >= 1 ? 595 : 842;
-    const margin = 28;
+    const landscape = settings.orientation === "landscape" || (settings.orientation === "auto" && ratio >= 1);
+    const base = settings.pageSize === "letter" ? [612, 792] : [595, 842];
+    const pageWidth = landscape ? base[1] : base[0];
+    const pageHeight = landscape ? base[0] : base[1];
+    const margin = settings.margin === "none" ? 0 : settings.margin === "large" ? 56 : 28;
     const maxWidth = pageWidth - margin * 2;
     const maxHeight = pageHeight - margin * 2;
     const imageRatio = item.width / item.height;
     let drawWidth = maxWidth;
     let drawHeight = drawWidth / imageRatio;
-
-    if (drawHeight > maxHeight) {
+    if (settings.imageFit === "contain" ? drawHeight > maxHeight : drawHeight < maxHeight) {
       drawHeight = maxHeight;
       drawWidth = drawHeight * imageRatio;
     }
@@ -174,7 +183,7 @@ function buildPdf(items: ImageItem[]) {
   return new Blob(parts, { type: "application/pdf" });
 }
 
-export function JpgToPdfTool() {
+export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
   const [items, setItems] = useState<ImageItem[]>([]);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -183,17 +192,29 @@ export function JpgToPdfTool() {
   const [status, setStatus] = useState("Upload images to convert into PDF.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("arrange");
   const [result, setResult] = useState<PdfResult | null>(null);
+  const [pageSize, setPageSize] = useState<PageSize>("a4");
+  const [orientation, setOrientation] = useState<Orientation>("auto");
+  const [margin, setMargin] = useState<MarginSize>("small");
+  const [imageFit, setImageFit] = useState<ImageFit>("contain");
+  const [pageOrder, setPageOrder] = useState<PageOrder>("current");
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<ImageItem[]>([]);
   const resultRef = useRef<PdfResult | null>(null);
-  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function scrollToolStageIntoView() {
     window.requestAnimationFrame(() => {
-      const toolSection = document.getElementById("jpg-to-pdf-tool");
+      const toolSection = document.getElementById(pngOnly ? "png-to-pdf-tool" : "jpg-to-pdf-tool");
       const headingBlock = toolSection?.closest(".max-w-4xl");
       const target = headingBlock ?? workAreaRef.current;
       if (!target) return;
@@ -211,6 +232,25 @@ export function JpgToPdfTool() {
     setResult(null);
   }
 
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
+  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
+    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false);
+    if (offset >= 84) return closeSettingsDrawer(); setSettingsDrawerDragOffset(0);
+  }
+
   async function addFiles(files: FileList | File[]) {
     setError(null);
     clearResult();
@@ -218,10 +258,10 @@ export function JpgToPdfTool() {
 
     if (!nextFiles.length) return;
 
-    const invalid = nextFiles.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name));
+    const invalid = nextFiles.find((file) => pngOnly ? file.type !== "image/png" && !/\.png$/i.test(file.name) : !["image/jpeg", "image/png", "image/webp"].includes(file.type) && !/\.(jpe?g|png|webp)$/i.test(file.name));
 
     if (invalid) {
-      setError(`"${invalid.name}" is not supported. Please upload JPG, JPEG, PNG, or WEBP images only.`);
+      setError(`"${invalid.name}" is not supported. Please upload ${pngOnly ? "PNG images" : "JPG, JPEG, PNG, or WEBP images"} only.`);
       return;
     }
 
@@ -319,7 +359,7 @@ export function JpgToPdfTool() {
       setStatus(`Converting ${items.length} image${items.length === 1 ? "" : "s"} into PDF...`);
       await new Promise((resolve) => window.setTimeout(resolve, 60));
       setProgress(70);
-      const blob = buildPdf(items);
+      const blob = buildPdf(items, { pageSize, orientation, margin, imageFit, pageOrder });
       setStatus("Preparing PDF download...");
       setResult({
         blob,
@@ -365,8 +405,17 @@ export function JpgToPdfTool() {
       if (resultRef.current?.url) {
         URL.revokeObjectURL(resultRef.current.url);
       }
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => { if (window.innerWidth >= 640) { if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current); setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); } };
+    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (workflowStep === "convert" || workflowStep === "download") {
@@ -375,54 +424,32 @@ export function JpgToPdfTool() {
   }, [workflowStep]);
 
   useEffect(() => {
-    if (!items.length || workflowStep !== "arrange") {
+    if (!pngOnly || items.length === 0 || workflowStep !== "arrange") {
       setIsActionBarVisible(false);
       return;
     }
-
     let frame = 0;
-
-    const updateActionBarVisibility = () => {
+    const update = () => {
       const workspace = workspaceRef.current;
       const workArea = workAreaRef.current;
-
-      if (!workspace || !workArea) {
-        setIsActionBarVisible(false);
-        return;
-      }
-
-      const viewportHeight = window.innerHeight;
-      const workAreaRect = workArea.getBoundingClientRect();
+      if (!workspace || !workArea) return setIsActionBarVisible(false);
+      const barHeight = actionBarRef.current?.offsetHeight ?? (window.innerWidth < 640 ? 120 : 96);
+      const workRect = workArea.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
-      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
-      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(workRect.bottom > 0 && workRect.top < window.innerHeight && workspaceRect.bottom > window.innerHeight - barHeight - 8);
     };
-
-    const scheduleUpdate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(updateActionBarVisibility);
-    };
-
-    scheduleUpdate();
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [items.length, workflowStep]);
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("scroll", schedule); window.removeEventListener("resize", schedule); };
+  }, [items.length, pngOnly, workflowStep]);
 
   function renderUploadBox() {
     return (
       <label
         data-primary-upload="true"
-        htmlFor="jpg-pdf-upload"
+        htmlFor={pngOnly ? "png-pdf-upload" : "jpg-pdf-upload"}
         onDragOver={(event) => {
           event.preventDefault();
           setIsDragging(true);
@@ -433,14 +460,14 @@ export function JpgToPdfTool() {
           isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
       >
-        <input id="jpg-pdf-upload" name="jpg-pdf-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
+        <input id={pngOnly ? "png-pdf-upload" : "jpg-pdf-upload"} name={pngOnly ? "png-pdf-upload" : "jpg-pdf-upload"} ref={fileInputRef} className="sr-only" type="file" accept={pngOnly ? "image/png,.png" : "image/jpeg,image/png,image/webp"} multiple onChange={onInputChange} />
         <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
           <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
         </span>
         <span className="sr-only">Drag and drop images</span>
         <span className="sr-only">Upload JPG, JPEG, PNG, or WEBP images, reorder them, and convert into one PDF document.</span>
         <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
-          Choose Images
+          {pngOnly ? "Choose PNG Files" : "Choose Images"}
           <UploadCloud className="h-5 w-5" aria-hidden="true" />
         </span>
       </label>
@@ -502,7 +529,7 @@ export function JpgToPdfTool() {
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
           <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your PDF is ready!</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">File Size: {result ? formatResultSize(result.sizeKb) : "Ready"}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">{result ? `${items.length} ${items.length === 1 ? "image" : "images"} - ${formatResultSize(result.sizeKb)}` : "Ready"}</p>
           {result && (
             <a
               href={result.url}
@@ -518,7 +545,7 @@ export function JpgToPdfTool() {
             onClick={clearAll}
             className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"
           >
-            Process another file
+            {pngOnly ? "Convert more PNG files" : "Process another file"}
             <RotateCcw className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
@@ -526,13 +553,35 @@ export function JpgToPdfTool() {
     );
   }
 
+  function renderSettings() {
+    const groups = [
+      { label: "Page size", value: pageSize, set: (v: string) => setPageSize(v as PageSize), options: [["a4", "A4"], ["letter", "Letter"]] },
+      { label: "Orientation", value: orientation, set: (v: string) => setOrientation(v as Orientation), options: [["auto", "Auto"], ["portrait", "Portrait"], ["landscape", "Landscape"]] },
+      { label: "Margins", value: margin, set: (v: string) => setMargin(v as MarginSize), options: [["none", "None"], ["small", "Small"], ["large", "Large"]] },
+      { label: "Image fit", value: imageFit, set: (v: string) => setImageFit(v as ImageFit), options: [["contain", "Fit"], ["cover", "Fill"]] },
+      { label: "Page order", value: pageOrder, set: (v: string) => setPageOrder(v as PageOrder), options: [["current", "Current"], ["reverse", "Reverse"]] },
+    ];
+    return <div className="grid min-w-0 gap-3">{groups.map((group) => <fieldset key={group.label} className="min-w-0"><legend className="mb-1 text-[0.68rem] font-black uppercase tracking-wide text-slate-500">{group.label}</legend><div className="flex flex-wrap gap-1.5">{group.options.map(([value, label]) => <button key={value} type="button" onClick={() => group.set(value)} className={`h-9 rounded-lg border px-2.5 text-xs font-black transition ${group.value === value ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-700 hover:border-red-200"}`}>{label}</button>)}</div></fieldset>)}</div>;
+  }
+
+  function renderDesktopSettings() {
+    const groups = [
+      { label: "Size", value: pageSize, set: (v: string) => setPageSize(v as PageSize), options: [["a4", "A4"], ["letter", "Letter"]] },
+      { label: "Orientation", value: orientation, set: (v: string) => setOrientation(v as Orientation), options: [["auto", "Auto"], ["portrait", "Portrait"], ["landscape", "Landscape"]] },
+      { label: "Margins", value: margin, set: (v: string) => setMargin(v as MarginSize), options: [["none", "None"], ["small", "Small"], ["large", "Large"]] },
+      { label: "Fit", value: imageFit, set: (v: string) => setImageFit(v as ImageFit), options: [["contain", "Fit"], ["cover", "Fill"]] },
+      { label: "Order", value: pageOrder, set: (v: string) => setPageOrder(v as PageOrder), options: [["current", "Current"], ["reverse", "Reverse"]] },
+    ];
+    return <div className="flex min-w-max flex-nowrap items-end gap-2 pb-1">{groups.map((group) => <label key={group.label} className="w-[5.75rem] shrink-0"><span className="mb-1 block text-[0.62rem] font-black uppercase tracking-wide text-slate-500">{group.label}</span><select value={group.value} onChange={(event) => group.set(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-800 outline-none transition focus:border-[#FF2D2D] focus:ring-2 focus:ring-red-100">{group.options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>)}</div>;
+  }
+
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5">
-              {items.map((item, index) => (
+            <div data-merge-card-grid="true" className={`grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5 ${pngOnly ? "pb-[28rem] sm:pb-56 lg:pb-40 xl:pb-28" : ""}`}>
+                {items.map((item, index) => (
                 <article
                   key={item.id}
                   draggable
@@ -545,31 +594,24 @@ export function JpgToPdfTool() {
                     draggedId === item.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
                   }`}
                 >
-                  <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
+                  <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
                       {index + 1}
                     </span>
-                    <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                    <button type="button" onClick={() => removeItem(item.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${item.file.name}`}><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                    <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
                       <GripVertical className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div className="h-full w-full transition duration-200 group-hover:scale-[1.035]">{renderImagePreview(item)}</div>
                   </div>
-                  <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
+                  <div className="mt-2 min-w-0">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">{item.file.name}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(item.file.size)} KB</p>
+                      <p className="truncate text-sm font-black leading-snug text-slate-950" title={item.file.name}>{item.file.name}</p>
+                      <p className="mt-1.5 inline-flex max-w-full rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(item.file.size)} KB</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-                      aria-label={`Remove ${item.file.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
                   </div>
                 </article>
-              ))}
+                ))}
             </div>
           )}
           {workflowStep === "convert" && renderProcessingCard()}
@@ -583,17 +625,16 @@ export function JpgToPdfTool() {
     const isConverting = workflowStep === "convert";
 
     return (
-      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">
-              {items.length} {items.length === 1 ? "image" : "images"} ready
-            </p>
+      <div ref={actionBarRef} data-merge-action-bar="true" data-jpg-to-pdf-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+        <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center">
+            <p className="truncate text-sm font-black text-slate-950">{items.length} {items.length === 1 ? "image" : "images"} ready</p>
+            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-controls="jpg-to-pdf-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
           </div>
 
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
+          <div className="hidden min-w-0 overflow-x-auto overscroll-x-contain sm:block">{renderDesktopSettings()}</div>
 
-          <div className="min-w-0 xl:ml-auto">
+          <div className="min-w-0 sm:ml-auto">
             <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
               {renderAddMoreButton(isConverting)}
               <button
@@ -617,25 +658,32 @@ export function JpgToPdfTool() {
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes jpgToPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div id="jpg-to-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="JPG to PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(58vh,30rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[jpgToPdfDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">PDF settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderSettings()}</div></div></div>;
   }
 
   return (
     <section
       data-v0-managed-flow="true"
       data-merge-pdf-workspace={items.length ? "true" : undefined}
-      id="jpg-to-pdf-tool"
+      id={pngOnly ? "png-to-pdf-tool" : "jpg-to-pdf-tool"}
       className={`mx-auto mt-6 max-w-full text-left ${
-        items.length ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
+        items.length ? "w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}
     >
       {items.length ? (
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <input id="jpg-pdf-workspace-upload" name="jpg-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onInputChange} />
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${workflowStep === "arrange" ? "min-h-[calc(100dvh-9rem)]" : ""}`}>
+          <input id="jpg-pdf-workspace-upload" name="jpg-pdf-workspace-upload" ref={addMoreInputRef} className="sr-only" type="file" accept={pngOnly ? "image/png,.png" : "image/jpeg,image/png,image/webp"} multiple onChange={onInputChange} />
           {renderWorkspace()}
-          {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "arrange" && (!pngOnly || isActionBarVisible) && renderBottomActionBar()}
+          {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>
