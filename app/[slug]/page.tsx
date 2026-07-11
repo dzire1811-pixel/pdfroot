@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Download, FileCheck2, FileText, LockKeyhole, ShieldCheck, Smartphone, UploadCloud, Zap } from "lucide-react";
+import { Check, ClipboardList, Download, FileLock2, FileText, MonitorSmartphone, ShieldCheck, UploadCloud, Zap } from "lucide-react";
 import { BrandPhrase, BrandText, SectionHeading } from "@/components/Brand";
 import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
+import { MergeResultExploreButton } from "@/components/MergeResultExploreButton";
 import { ToolCard } from "@/components/ToolCard";
+import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { ToolRenderer } from "@/components/ToolRenderer";
 import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
@@ -92,10 +95,10 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const categoryTools = tool.category === "PDF Tools" ? pdfTools : imageTools;
   const mergeResultTrustCards = [
-    ["Files Processed Locally", LockKeyhole],
+    ["Files Processed Locally", FileLock2],
     ["Fast & Free PDF & Image Tools", Zap],
-    ["Works on Mobile & Desktop", Smartphone],
-    ["Perfect for Government Forms & Document Uploads", FileCheck2],
+    ["Works on Mobile & Desktop", MonitorSmartphone],
+    ["Perfect for Government Forms & Document Uploads", ClipboardList],
     ["Secure File Processing", ShieldCheck],
   ] as const;
   const pageSchema = {
@@ -136,7 +139,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
       <ToolUploadFlowEnhancer />
       <HomepageSiteHeader />
       <main className={supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}>
-        <section className={`relative border-b border-border bg-background px-6 pb-12 pt-10 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
+        <section data-tool-workspace-hero className={`relative border-b border-border bg-background px-6 pb-12 pt-10 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
@@ -159,35 +162,69 @@ export default async function ToolPage({ params }: ToolPageProps) {
 
         {tool.slug === "merge-pdf" && (
           <>
-            <section data-merge-result-only="related" className="border-b border-border bg-background px-6 py-8 lg:px-8">
-              <div className="mx-auto max-w-[1200px]">
-                <div className="flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-primary">Related Tools</p>
-                    <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Continue working with your PDF</h2>
-                  </div>
+            <section data-merge-result-only="related" className="h-auto overflow-visible bg-muted/40 px-4 pb-2 pt-2 sm:px-6 lg:px-8">
+              <div className="mx-auto h-auto max-w-[1040px] overflow-visible rounded-2xl border border-border bg-card px-4 py-4 shadow-sm shadow-foreground/[0.03] sm:px-5">
+                <div role="heading" aria-level={2} className="text-lg font-semibold leading-snug tracking-tight text-foreground">
+                  What would you like to do next?
                 </div>
-                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3">
-                  {related.slice(0, 3).map((item) => (
-                    <ToolCard key={item.slug} tool={item} compact />
-                  ))}
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  {[
+                    ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
+                    ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
+                    ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
+                  ].map(([itemSlug, label, description]) => {
+                    const item = related.find((relatedTool) => relatedTool.slug === itemSlug);
+                    if (!item) return null;
+
+                    return (
+                      <Link
+                        key={item.slug}
+                        href={`/${item.slug}`}
+                        className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background p-3 transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[#F3F4F6] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      >
+                        <span className="shrink-0">
+                          <ToolDirectoryIcon tool={item} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold leading-tight text-foreground">{label}</span>
+                          <span className="mt-1 block text-xs leading-snug text-muted-foreground">{description}</span>
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2.5">
+                  {related
+                    .filter((item) => !["compress-pdf", "split-pdf", "pdf-to-word"].includes(item.slug))
+                    .map((item) => (
+                      <Link
+                        key={item.slug}
+                        href={`/${item.slug}`}
+                        className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[#F3F4F6] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      >
+                        {item.name}
+                      </Link>
+                    ))}
+                </div>
+                <div className="mt-4 flex justify-center">
+                  <MergeResultExploreButton />
                 </div>
               </div>
             </section>
 
-            <section data-merge-result-only="trust" className="bg-muted/40 px-6 py-8 lg:px-8">
-              <div className="mx-auto max-w-[1200px]">
+            <section data-merge-result-only="trust" className="bg-muted/40 px-6 pb-[72px] pt-14 lg:px-8">
+              <div className="mx-auto max-w-[1100px]">
                 <div className="text-center">
                   <p className="text-xs font-semibold uppercase tracking-wider text-primary">Why Choose PDFRoot?</p>
                   <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Fast, secure tools for everyday documents</h2>
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
                   {mergeResultTrustCards.map(([title, TrustIcon]) => (
-                    <div key={title} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 lg:flex-col lg:text-center">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <TrustIcon className="h-5 w-5" aria-hidden="true" />
+                    <div key={title} className="flex min-h-[76px] items-center gap-2.5 rounded-lg border border-border bg-card p-3 lg:min-h-[96px] lg:flex-col lg:justify-center lg:gap-2 lg:px-2.5 lg:py-3 lg:text-center">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center text-primary">
+                        <TrustIcon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                       </span>
-                      <h3 className="text-sm font-semibold leading-snug text-foreground">{title}</h3>
+                      <h3 className="text-xs font-semibold leading-snug text-foreground">{title}</h3>
                     </div>
                   ))}
                 </div>
@@ -316,6 +353,11 @@ export default async function ToolPage({ params }: ToolPageProps) {
           <WhyChoosePdfRoot />
         </div>
       </main>
+      {tool.slug === "merge-pdf" && (
+        <div data-merge-result-only="footer">
+          <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
+        </div>
+      )}
       <div data-tool-page-extra="footer">
         <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={tools.filter((item) => item.government)} />
       </div>

@@ -24,6 +24,17 @@ function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
 }
 
+function compactFileName(fileName: string, maxLength = 30) {
+  if (fileName.length <= maxLength) return fileName;
+  const extensionMatch = fileName.match(/(\.[^.]+)$/);
+  const extension = extensionMatch?.[1] ?? "";
+  const baseName = extension ? fileName.slice(0, -extension.length) : fileName;
+  const available = Math.max(8, maxLength - extension.length - 3);
+  const headLength = Math.max(5, available - 4);
+  const tailLength = Math.max(0, available - headLength);
+  return `${baseName.slice(0, headLength)}...${tailLength ? baseName.slice(-tailLength) : ""}${extension}`;
+}
+
 function formatResultSize(sizeKb: number) {
   return sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(2)} MB` : `${sizeKb.toFixed(1)} KB`;
 }
@@ -507,24 +518,23 @@ export function MergePdfTool() {
                     <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
                       {index + 1}
                     </span>
-                    <span className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
+                    <button type="button" onClick={() => removeItem(item.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${item.file.name}`}>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm">
                       <GripVertical className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <div className="h-full w-full transition duration-200 group-hover:scale-[1.035]">{renderPdfPreview(item)}</div>
                   </div>
-                  <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">{item.file.name}</p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(item.file.size)} KB</p>
+                  <div className="mt-2 min-w-0">
+                    <p className="truncate text-sm font-black leading-snug text-slate-950" title={item.file.name}>
+                      {compactFileName(item.file.name)}
+                    </p>
+                    <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
+                        {formatKb(item.file.size)} KB
+                      </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-                      aria-label={`Remove ${item.file.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
                   </div>
                 </article>
               ))}

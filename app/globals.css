@@ -2181,15 +2181,29 @@ section[id$="-tool"] label {
   display: block !important;
 }
 
+.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) [data-tool-workspace-hero] {
+  border-bottom: 0 !important;
+  padding-bottom: 26px !important;
+}
+
+.v0-tool-page:has(#merge-pdf-tool [data-workflow-step="download"]) > main {
+  overflow: visible !important;
+}
+
 .v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="arrange"] {
   padding-bottom: 12rem !important;
 }
 
-.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="merge"],
-.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="download"] {
+.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="merge"] {
   min-height: calc(100vh - 12.5rem) !important;
   padding-top: 0.5rem !important;
   padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
+}
+
+.v0-tool-page section[data-merge-pdf-workspace="true"] [data-merge-preview-area="true"][data-workflow-step="download"] {
+  min-height: 0 !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
 }
 
 @media (min-width: 640px) {
