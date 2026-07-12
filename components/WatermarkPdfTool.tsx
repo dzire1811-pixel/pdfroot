@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, RotateCcw, SlidersHorizontal, Stamp, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
@@ -113,12 +113,14 @@ export function WatermarkPdfTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<WatermarkResult | null>(null);
   const sourcePreviewUrlsRef = useRef<string[]>([]);
   const imageWatermarkPreviewRef = useRef<string | null>(null);
   const draggedIndexRef = useRef<number | null>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
@@ -127,23 +129,23 @@ export function WatermarkPdfTool() {
   }
 
   function openSettingsDrawer() {
-    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    if (window.innerWidth < 640 && workAreaRef.current) { const y = workAreaRef.current.getBoundingClientRect().top + window.scrollY - 12; window.scrollTo({ top: Math.max(0, y), behavior: "auto" }); }
     setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+    settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0;
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
-    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(420);
-    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const distance = Math.max(window.innerHeight, 420); settingsDrawerClosingRef.current = true; drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(distance); drawerDragOffsetRef.current = distance;
+    window.setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0); settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0; window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus()); }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
-  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
-  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
-    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
-    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false);
-    if (offset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0);
-  }
+  const updateDrawerDrag = useCallback((clientY: number) => { if (drawerDragStartYRef.current !== null) { const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance); } }, []);
+  const finishDrawerDrag = useCallback((value?: number | PointerEvent<HTMLButtonElement>) => { const clientY = typeof value === "number" ? value : value?.clientY; if (drawerDragStartYRef.current === null) return; if (typeof clientY === "number") { const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance); } drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (drawerDragOffsetRef.current >= 84) return closeSettingsDrawer(); drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); }, [closeSettingsDrawer]);
+  function beginDrawerDrag(clientY: number) { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = clientY; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(true); } }
+  function clearDrawerDrag() { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = null; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); } }
+  function onDrawerPointerDown(event: PointerEvent<HTMLButtonElement>) { beginDrawerDrag(event.clientY); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: PointerEvent<HTMLButtonElement>) { updateDrawerDrag(event.clientY); }
 
   async function renderPdfThumbnails(file: File, fileIndex: number) {
     const pdfjs = await loadPdfJs();
@@ -469,17 +471,18 @@ export function WatermarkPdfTool() {
         if (url) URL.revokeObjectURL(url);
       });
       if (imageWatermarkPreviewRef.current) URL.revokeObjectURL(imageWatermarkPreviewRef.current);
-      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (!isSettingsDrawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
-    const onResize = () => { if (window.innerWidth >= 640) { setIsSettingsDrawerOpen(false); setSettingsDrawerDragOffset(0); } };
-    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+    const onResize = () => { if (window.innerWidth >= 640) closeSettingsDrawer(); };
+    const pointerMove = (event: globalThis.PointerEvent) => updateDrawerDrag(event.clientY); const mouseMove = (event: globalThis.MouseEvent) => updateDrawerDrag(event.clientY); const touchMove = (event: globalThis.TouchEvent) => { if (event.touches[0]) updateDrawerDrag(event.touches[0].clientY); };
+    const pointerEnd = (event: globalThis.PointerEvent) => finishDrawerDrag(event.clientY); const mouseEnd = (event: globalThis.MouseEvent) => finishDrawerDrag(event.clientY); const touchEnd = (event: globalThis.TouchEvent) => finishDrawerDrag(event.changedTouches[0]?.clientY);
+    document.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize); window.addEventListener("pointermove", pointerMove); window.addEventListener("pointerup", pointerEnd); window.addEventListener("pointercancel", clearDrawerDrag); window.addEventListener("mousemove", mouseMove); window.addEventListener("mouseup", mouseEnd); window.addEventListener("touchmove", touchMove, { passive: true }); window.addEventListener("touchend", touchEnd); window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => { document.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); window.removeEventListener("pointermove", pointerMove); window.removeEventListener("pointerup", pointerEnd); window.removeEventListener("pointercancel", clearDrawerDrag); window.removeEventListener("mousemove", mouseMove); window.removeEventListener("mouseup", mouseEnd); window.removeEventListener("touchmove", touchMove); window.removeEventListener("touchend", touchEnd); window.removeEventListener("touchcancel", clearDrawerDrag); };
+  }, [closeSettingsDrawer, finishDrawerDrag, isSettingsDrawerOpen, updateDrawerDrag]);
 
   useEffect(() => {
     if (workflowStep === "process" || workflowStep === "download") {
@@ -512,7 +515,7 @@ export function WatermarkPdfTool() {
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
       const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
 
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : workAreaInView && workspaceStillCoversBar);
     };
 
     const scheduleUpdate = () => {
@@ -964,7 +967,7 @@ export function WatermarkPdfTool() {
         <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
           <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center">
             <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+            <button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="watermark-pdf-mobile-settings-drawer"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
           </div>
           <div className="hidden min-w-0 overflow-hidden sm:block">{renderWatermarkSettings()}</div>
           <div className="min-w-0 sm:ml-auto sm:shrink-0">
@@ -998,6 +1001,7 @@ export function WatermarkPdfTool() {
 
   function renderMobileSettingsDrawer() {
     if (!isSettingsDrawerOpen) return null;
+    if (isSettingsDrawerOpen) return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes watermarkApprovedDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div id="watermark-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="Watermark settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[watermarkApprovedDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={clearDrawerDrag} onLostPointerCapture={clearDrawerDrag} onMouseDown={(event: MouseEvent<HTMLButtonElement>) => beginDrawerDrag(event.clientY)} onMouseUp={(event: MouseEvent<HTMLButtonElement>) => finishDrawerDrag(event.clientY)} onTouchStart={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && beginDrawerDrag(event.touches[0].clientY)} onTouchMove={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && updateDrawerDrag(event.touches[0].clientY)} onTouchEnd={(event: TouchEvent<HTMLButtonElement>) => finishDrawerDrag(event.changedTouches[0]?.clientY)} onTouchCancel={clearDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black text-slate-950">Watermark settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderWatermarkSettings(true)}</div><div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"><div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(5.5rem,0.75fr)] gap-2">{renderAddMoreButton(false)}<button type="button" onClick={() => void addWatermark()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white">Add Watermark<Stamp className="h-5 w-5" aria-hidden="true" /></button><button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800">Clear All<RotateCcw className="h-5 w-5" aria-hidden="true" /></button></div></div></div></div>;
     return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes watermarkDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div role="dialog" aria-modal="true" aria-label="Watermark settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(62vh,34rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[watermarkDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Watermark settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderWatermarkSettings(true)}</div></div></div>;
   }
 

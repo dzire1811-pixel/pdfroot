@@ -37,7 +37,7 @@ import { FrontBackCardMergeTool } from "@/components/FrontBackCardMergeTool";
 
 export function ToolRenderer({ slug, name, description }: { slug: string; name: string; description: string }) {
   if (slug === "resize-image-to-exact-kb") return <ResizeImageExactKbTool />;
-  if (slug === "compress-image" || slug === "image-compressor-for-government-forms") return <CompressImageTool />;
+  if (slug === "compress-image" || slug === "image-compressor-for-government-forms") return <CompressImageTool governmentForms={slug === "image-compressor-for-government-forms"} />;
   if (slug === "jpg-to-png") return <JpgToPngTool />;
   if (slug === "png-to-jpg") return <PngToJpgTool />;
   if (slug === "background-remover") return <BackgroundRemoverTool />;

@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FileText, GripVertical, ImageUp, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
@@ -207,10 +207,12 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const itemsRef = useRef<ImageItem[]>([]);
   const resultRef = useRef<PdfResult | null>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
 
   function scrollToolStageIntoView() {
     window.requestAnimationFrame(() => {
@@ -233,23 +235,57 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
   }
 
   function openSettingsDrawer() {
-    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    if (window.innerWidth < 640 && workAreaRef.current) {
+      const y = workAreaRef.current.getBoundingClientRect().top + window.scrollY - 12;
+      window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+    }
     setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
-    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(360);
-    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus());
+    }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
-  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
-  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
-    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishApprovedDrawerDrag = useCallback((clientY?: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    if (typeof clientY === "number") {
+      const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = dragDistance;
+      setSettingsDrawerDragOffset(dragDistance);
+    }
     drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false);
-    if (offset >= 84) return closeSettingsDrawer(); setSettingsDrawerDragOffset(0);
+    if (drawerDragOffsetRef.current >= 84) return closeSettingsDrawer();
+    drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0);
+  }, [closeSettingsDrawer]);
+
+  function beginApprovedDrawerDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(true);
   }
+  function onApprovedPointerDown(event: PointerEvent<HTMLButtonElement>) { beginApprovedDrawerDrag(event.clientY); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onApprovedPointerMove(event: PointerEvent<HTMLButtonElement>) { updateSettingsDrawerDrag(event.clientY); }
+  function onApprovedMouseDown(event: MouseEvent<HTMLButtonElement>) { beginApprovedDrawerDrag(event.clientY); }
+  function onApprovedTouchStart(event: TouchEvent<HTMLButtonElement>) { if (event.touches[0]) beginApprovedDrawerDrag(event.touches[0].clientY); }
+  function onApprovedTouchMove(event: TouchEvent<HTMLButtonElement>) { if (event.touches[0]) updateSettingsDrawerDrag(event.touches[0].clientY); }
+  function clearApprovedDrawerDrag() { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); } }
 
   async function addFiles(files: FileList | File[]) {
     setError(null);
@@ -405,17 +441,30 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
       if (resultRef.current?.url) {
         URL.revokeObjectURL(resultRef.current.url);
       }
-      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     if (!isSettingsDrawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
-    const onResize = () => { if (window.innerWidth >= 640) { if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current); setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); } };
-    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+    const onApprovedResize = () => { if (window.innerWidth >= 640) closeSettingsDrawer(); };
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => { if (event.touches[0]) updateSettingsDrawerDrag(event.touches[0].clientY); };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishApprovedDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishApprovedDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => finishApprovedDrawerDrag(event.changedTouches[0]?.clientY);
+    document.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onApprovedResize);
+    window.addEventListener("pointermove", onPointerMove); window.addEventListener("pointerup", onPointerEnd); window.addEventListener("pointercancel", clearApprovedDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove); window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true }); window.addEventListener("touchend", onTouchEnd); window.addEventListener("touchcancel", clearApprovedDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onApprovedResize);
+      window.removeEventListener("pointermove", onPointerMove); window.removeEventListener("pointerup", onPointerEnd); window.removeEventListener("pointercancel", clearApprovedDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove); window.removeEventListener("touchend", onTouchEnd); window.removeEventListener("touchcancel", clearApprovedDrawerDrag);
+    };
+  }, [closeSettingsDrawer, finishApprovedDrawerDrag, isSettingsDrawerOpen, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     if (workflowStep === "convert" || workflowStep === "download") {
@@ -424,7 +473,7 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
   }, [workflowStep]);
 
   useEffect(() => {
-    if (!pngOnly || items.length === 0 || workflowStep !== "arrange") {
+    if (items.length === 0 || workflowStep !== "arrange") {
       setIsActionBarVisible(false);
       return;
     }
@@ -433,10 +482,12 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
       const workspace = workspaceRef.current;
       const workArea = workAreaRef.current;
       if (!workspace || !workArea) return setIsActionBarVisible(false);
-      const barHeight = actionBarRef.current?.offsetHeight ?? (window.innerWidth < 640 ? 120 : 96);
+      const barHeight = actionBarRef.current?.offsetHeight ?? (window.innerWidth < 640 && pngOnly ? 120 : 96);
       const workRect = workArea.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
-      setIsActionBarVisible(workRect.bottom > 0 && workRect.top < window.innerHeight && workspaceRect.bottom > window.innerHeight - barHeight - 8);
+      const workAreaInView = workRect.bottom > 0 && workRect.top < window.innerHeight;
+      const desktopOrPngVisibility = workAreaInView && workspaceRect.bottom > window.innerHeight - barHeight - 8;
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : (!pngOnly ? true : desktopOrPngVisibility));
     };
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
     schedule();
@@ -580,7 +631,7 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div data-merge-card-grid="true" className={`grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5 ${pngOnly ? "pb-[28rem] sm:pb-56 lg:pb-40 xl:pb-28" : ""}`}>
+            <div data-merge-card-grid="true" className={`grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 sm:gap-5 ${pngOnly ? "pb-[28rem] sm:pb-56 lg:pb-40 xl:pb-28" : "pb-[28rem] sm:pb-0"}`}>
                 {items.map((item, index) => (
                 <article
                   key={item.id}
@@ -621,6 +672,22 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
     );
   }
 
+  function renderActionButtons(isConverting: boolean) {
+    return (
+      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+        {renderAddMoreButton(isConverting)}
+        <button type="button" onClick={() => void convertToPdf()} disabled={isConverting} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
+          {isConverting ? "Converting..." : "Convert to PDF"}
+          <FileText className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={clearAll} disabled={isConverting} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   function renderBottomActionBar() {
     const isConverting = workflowStep === "convert";
 
@@ -629,34 +696,13 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
         <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
           <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center">
             <p className="truncate text-sm font-black text-slate-950">{items.length} {items.length === 1 ? "image" : "images"} ready</p>
-            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-controls="jpg-to-pdf-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+            <button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-controls={pngOnly ? "png-to-pdf-mobile-settings-drawer" : "jpg-to-pdf-mobile-settings-drawer"} aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
           </div>
 
           <div className="hidden min-w-0 overflow-x-auto overscroll-x-contain sm:block">{renderDesktopSettings()}</div>
 
           <div className="min-w-0 sm:ml-auto">
-            <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-              {renderAddMoreButton(isConverting)}
-              <button
-                type="button"
-                onClick={() => void convertToPdf()}
-                disabled={isConverting}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
-              >
-                {isConverting ? "Converting..." : "Convert to PDF"}
-                <FileText className="h-5 w-5" aria-hidden="true" />
-              </button>
-
-              <button
-                type="button"
-                onClick={clearAll}
-                disabled={isConverting}
-                className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
-              >
-                Clear all
-                <RotateCcw className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
+            {renderActionButtons(isConverting)}
           </div>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
@@ -666,7 +712,18 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
 
   function renderMobileSettingsDrawer() {
     if (!isSettingsDrawerOpen) return null;
-    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes jpgToPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div id="jpg-to-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="JPG to PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(58vh,30rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[jpgToPdfDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">PDF settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderSettings()}</div></div></div>;
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`@keyframes jpgToPdfApprovedDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div id={pngOnly ? "png-to-pdf-mobile-settings-drawer" : "jpg-to-pdf-mobile-settings-drawer"} role="dialog" aria-modal="true" aria-label={pngOnly ? "PNG to PDF settings" : "JPG to PDF settings"} style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[jpgToPdfApprovedDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}>
+          <button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing" aria-label="Drag down to close settings" onPointerDown={onApprovedPointerDown} onPointerMove={onApprovedPointerMove} onPointerUp={(event) => finishApprovedDrawerDrag(event.clientY)} onPointerCancel={clearApprovedDrawerDrag} onLostPointerCapture={clearApprovedDrawerDrag} onMouseDown={onApprovedMouseDown} onMouseUp={(event) => finishApprovedDrawerDrag(event.clientY)} onTouchStart={onApprovedTouchStart} onTouchMove={onApprovedTouchMove} onTouchEnd={(event) => finishApprovedDrawerDrag(event.changedTouches[0]?.clientY)} onTouchCancel={clearApprovedDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" /></button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black text-slate-950">PDF settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings"><X className="h-4 w-4" /></button></div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderSettings()}</div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">{renderActionButtons(false)}</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -682,7 +739,7 @@ export function JpgToPdfTool({ pngOnly = false }: { pngOnly?: boolean } = {}) {
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${workflowStep === "arrange" ? "min-h-[calc(100dvh-9rem)]" : ""}`}>
           <input id="jpg-pdf-workspace-upload" name="jpg-pdf-workspace-upload" ref={addMoreInputRef} className="sr-only" type="file" accept={pngOnly ? "image/png,.png" : "image/jpeg,image/png,image/webp"} multiple onChange={onInputChange} />
           {renderWorkspace()}
-          {workflowStep === "arrange" && (!pngOnly || isActionBarVisible) && renderBottomActionBar()}
+          {workflowStep === "arrange" && isActionBarVisible && renderBottomActionBar()}
           {workflowStep === "arrange" && renderMobileSettingsDrawer()}
         </div>
       ) : (

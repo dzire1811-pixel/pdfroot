@@ -1,9 +1,9 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
@@ -85,6 +85,10 @@ export function PngToJpgTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -93,6 +97,10 @@ export function PngToJpgTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const convertedFilesRef = useRef<ConvertResult[]>([]);
@@ -131,9 +139,50 @@ export function PngToJpgTool() {
     setIsDragging(false);
     setDraggedId(null);
     setIsActionBarVisible(false);
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
     clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
+
+  function openSettingsDrawer() {
+    if (window.innerWidth < 640 && workAreaRef.current) {
+      const y = workAreaRef.current.getBoundingClientRect().top + window.scrollY - 12;
+      window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+    }
+    setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0; setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true; drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(closeDistance); drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
+      setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus());
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance);
+  }, []);
+  const finishSettingsDrawerDrag = useCallback((clientY?: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    if (typeof clientY === "number") { const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance); }
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false);
+    if (drawerDragOffsetRef.current >= 84) return closeSettingsDrawer();
+    drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0);
+  }, [closeSettingsDrawer]);
+  function beginDrawerDrag(clientY: number) { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = clientY; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(true); } }
+  function clearDrawerDrag() { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = null; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); } }
 
   async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
     setError(null);
@@ -393,6 +442,28 @@ export function PngToJpgTool() {
   }, [stage]);
 
   useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => { if (window.innerWidth >= 640) closeSettingsDrawer(); };
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => { if (event.touches[0]) updateSettingsDrawerDrag(event.touches[0].clientY); };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => finishSettingsDrawerDrag(event.changedTouches[0]?.clientY);
+    document.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove); window.addEventListener("pointerup", onPointerEnd); window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove); window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true }); window.addEventListener("touchend", onTouchEnd); window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove); window.removeEventListener("pointerup", onPointerEnd); window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove); window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove); window.removeEventListener("touchend", onTouchEnd); window.removeEventListener("touchcancel", clearDrawerDrag);
+    };
+  }, [closeSettingsDrawer, finishSettingsDrawerDrag, isSettingsDrawerOpen, updateSettingsDrawerDrag]);
+
+  useEffect(() => {
     if (!selectedImages.length || stage !== "workspace") {
       setIsActionBarVisible(false);
       return;
@@ -413,7 +484,7 @@ export function PngToJpgTool() {
       const workAreaRect = workArea.getBoundingClientRect();
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
 
-      setIsActionBarVisible(workAreaInView);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : true);
     };
 
     const scheduleUpdate = () => {
@@ -459,6 +530,15 @@ export function PngToJpgTool() {
     }
 
     const heroSection = toolSection.parentElement?.closest("section");
+    const hadHeroBorder = heroSection?.classList.contains("border-b") ?? false;
+    const hadHeroBorderColor = heroSection?.classList.contains("border-border") ?? false;
+    const heroPaddingBottom = heroSection instanceof HTMLElement ? heroSection.style.paddingBottom : "";
+
+    if (stage === "success" && heroSection instanceof HTMLElement) {
+      heroSection.classList.remove("border-b", "border-border");
+      heroSection.style.paddingBottom = "26px";
+    }
+
     let sibling = heroSection?.nextElementSibling ?? null;
     while (sibling) {
       hideElement(sibling);
@@ -469,6 +549,11 @@ export function PngToJpgTool() {
       hiddenElements.forEach(({ element, display }) => {
         element.style.display = display;
       });
+      if (heroSection instanceof HTMLElement) {
+        if (hadHeroBorder) heroSection.classList.add("border-b");
+        if (hadHeroBorderColor) heroSection.classList.add("border-border");
+        heroSection.style.paddingBottom = heroPaddingBottom;
+      }
     };
   }, [stage]);
 
@@ -520,6 +605,15 @@ export function PngToJpgTool() {
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
       </button>
     );
+  }
+
+  function renderActionButtons() {
+    return <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">{renderAddMoreButton()}<button type="button" onClick={() => void convertToJpg()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">Convert to JPG<RefreshCw className="h-5 w-5" aria-hidden="true" /></button><button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">Clear all<RotateCcw className="h-5 w-5" aria-hidden="true" /></button></div>;
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes pngToJpgDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div id="png-to-jpg-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="PNG to JPG settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[pngToJpgDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing" aria-label="Drag down to close settings" onPointerDown={(event: PointerEvent<HTMLButtonElement>) => { beginDrawerDrag(event.clientY); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event: PointerEvent<HTMLButtonElement>) => updateSettingsDrawerDrag(event.clientY)} onPointerUp={(event: PointerEvent<HTMLButtonElement>) => finishSettingsDrawerDrag(event.clientY)} onPointerCancel={clearDrawerDrag} onLostPointerCapture={clearDrawerDrag} onMouseDown={(event: MouseEvent<HTMLButtonElement>) => beginDrawerDrag(event.clientY)} onMouseUp={(event: MouseEvent<HTMLButtonElement>) => finishSettingsDrawerDrag(event.clientY)} onTouchStart={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && beginDrawerDrag(event.touches[0].clientY)} onTouchMove={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && updateSettingsDrawerDrag(event.touches[0].clientY)} onTouchEnd={(event: TouchEvent<HTMLButtonElement>) => finishSettingsDrawerDrag(event.changedTouches[0]?.clientY)} onTouchCancel={clearDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black text-slate-950">Conversion settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"><div className="grid gap-3"><div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5"><p className="text-xs font-black text-slate-950">JPG quality</p><p className="mt-1 text-xs font-semibold text-slate-500">90% quality</p></div><div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"><p className="text-xs font-black text-slate-950">Background handling</p><p className="mt-1 text-xs font-semibold text-slate-500">Transparent areas use a white background</p></div><div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"><p className="text-xs font-black text-slate-950">Output format</p><p className="mt-1 text-xs font-semibold text-slate-500">JPG image</p></div></div></div><div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">{renderActionButtons()}</div></div></div>;
   }
 
   function renderWorkspacePreview() {
@@ -599,13 +693,13 @@ export function PngToJpgTool() {
           successSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
-        data-png-to-jpg-workspace="true"
+        data-crop-image-workspace="true"
         id="png-to-jpg-tool"
-        className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
         <input id="png-to-jpg-success-upload" name="png-to-jpg-success-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/png,.png" multiple onChange={onInputChange} />
         <div className="relative min-w-0 overflow-visible bg-slate-100">
-          <div data-png-to-jpg-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
@@ -667,30 +761,19 @@ export function PngToJpgTool() {
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
-          {(isActionBarVisible || selectedImages.length > 0) && (
+          {isActionBarVisible && (
             <div ref={actionBarRef} data-png-to-jpg-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
               <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-                  <p className="truncate text-sm font-black text-slate-950">
-                    {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
-                  </p>
+                  <div className="flex min-w-0 items-center justify-between gap-3"><p className="truncate text-sm font-black text-slate-950">{selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready</p><button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="png-to-jpg-mobile-settings-drawer"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />Settings</button></div>
                 </div>
                 <div className="min-w-0 lg:ml-auto">
-                  <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-                    {renderAddMoreButton()}
-                    <button type="button" onClick={() => void convertToJpg()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-                      Convert to JPG
-                      <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                    <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                      Clear all
-                      <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
+                  {renderActionButtons()}
                 </div>
               </div>
             </div>
           )}
+          {renderMobileSettingsDrawer()}
         </div>
       </section>
     );

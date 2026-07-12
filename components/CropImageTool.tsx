@@ -1573,13 +1573,13 @@ export function CropImageTool() {
       >
         <input id="crop-image-success-upload" name="crop-image-success-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <div className="relative min-w-0 overflow-visible bg-slate-100">
-        <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+        <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
           <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
             <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
               <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
                 <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
               </div>
-              <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Crop Complete</h3>
+              <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your image is ready!</h3>
               <p className="mt-2 text-sm font-semibold text-slate-500">File Size: {resultSizeLabel}</p>
               {singleResult && (
                 <a
@@ -1587,7 +1587,7 @@ export function CropImageTool() {
                   download={singleResult.fileName}
                   className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
                 >
-                  Download Cropped Image
+                  Download Image
                   <Download className="h-5 w-5" aria-hidden="true" />
                 </a>
               )}

@@ -632,6 +632,15 @@ export function ResizeImageTool() {
     }
 
     const heroSection = toolSection.parentElement?.closest("section");
+    const hadHeroBorder = heroSection?.classList.contains("border-b") ?? false;
+    const hadHeroBorderColor = heroSection?.classList.contains("border-border") ?? false;
+    const heroPaddingBottom = heroSection instanceof HTMLElement ? heroSection.style.paddingBottom : "";
+
+    if (stage === "success" && heroSection instanceof HTMLElement) {
+      heroSection.classList.remove("border-b", "border-border");
+      heroSection.style.paddingBottom = "26px";
+    }
+
     let sibling = heroSection?.nextElementSibling ?? null;
     while (sibling) {
       hideElement(sibling);
@@ -642,6 +651,11 @@ export function ResizeImageTool() {
       hiddenElements.forEach(({ element, display }) => {
         element.style.display = display;
       });
+      if (heroSection instanceof HTMLElement) {
+        if (hadHeroBorder) heroSection.classList.add("border-b");
+        if (hadHeroBorderColor) heroSection.classList.add("border-border");
+        heroSection.style.paddingBottom = heroPaddingBottom;
+      }
     };
   }, [stage]);
 
@@ -1081,13 +1095,13 @@ export function ResizeImageTool() {
           successSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
-        data-resize-image-workspace="true"
+        data-crop-image-workspace="true"
         id="resize-image-tool"
-        className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
         <input id="resize-image-success-upload" name="resize-image-success-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onInputChange} />
         <div className="relative min-w-0 overflow-visible bg-slate-100">
-          <div data-resize-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">

@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Download, GripVertical, Image as ImageIcon, Loader2, Plus, RefreshCcw, RotateCcw, RotateCw, Rows3, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { loadPdfJs } from "@/lib/pdfjsClient";
 
@@ -64,10 +64,12 @@ export function OrganizePdfPagesTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const pageItemsRef = useRef<PageItem[]>([]);
   const resultRef = useRef<OrganizeResult | null>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const readyLabel = `${pageItems.length} ${pageItems.length === 1 ? "page" : "pages"} from ${files.length} ${files.length === 1 ? "PDF" : "PDFs"}`;
 
   function scrollToolStageIntoView() {
@@ -107,6 +109,7 @@ export function OrganizePdfPagesTool() {
     setStatus("Upload a PDF file to organize pages.");
     setWorkflowStep("arrange");
     setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0); settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0;
   }
 
   async function renderPageItems(nextFile: File, totalPages: number, fileIndex: number, startId: number, existingItems: PageItem[]) {
@@ -379,32 +382,35 @@ export function OrganizePdfPagesTool() {
         if (page.url) URL.revokeObjectURL(page.url);
       });
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
-      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
 
   function openSettingsDrawer() {
-    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    if (window.innerWidth < 640 && workAreaRef.current) { const y = workAreaRef.current.getBoundingClientRect().top + window.scrollY - 12; window.scrollTo({ top: Math.max(0, y), behavior: "auto" }); }
     setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+    settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0;
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
-    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(360);
-    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const distance = Math.max(window.innerHeight, 420); settingsDrawerClosingRef.current = true; drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(distance); drawerDragOffsetRef.current = distance;
+    window.setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerDragging(false); setSettingsDrawerDragOffset(0); settingsDrawerClosingRef.current = false; drawerDragOffsetRef.current = 0; window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus()); }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
-  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
-  function finishDrawerDrag() { drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (settingsDrawerDragOffset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0); }
+  const updateDrawerDrag = useCallback((clientY: number) => { if (drawerDragStartYRef.current !== null) { const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance); } }, []);
+  const finishDrawerDrag = useCallback((clientY?: number) => { if (drawerDragStartYRef.current === null) return; if (typeof clientY === "number") { const distance = Math.max(0, clientY - drawerDragStartYRef.current); drawerDragOffsetRef.current = distance; setSettingsDrawerDragOffset(distance); } drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (drawerDragOffsetRef.current >= 84) return closeSettingsDrawer(); drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); }, [closeSettingsDrawer]);
+  function beginDrawerDrag(clientY: number) { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = clientY; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(true); } }
+  function clearDrawerDrag() { if (!settingsDrawerClosingRef.current) { drawerDragStartYRef.current = null; drawerDragOffsetRef.current = 0; setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); } }
 
   useEffect(() => {
     if (!isSettingsDrawerOpen) return;
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
-    const resize = () => { if (innerWidth >= 640) setIsSettingsDrawerOpen(false); };
-    addEventListener("keydown", key); addEventListener("resize", resize);
-    return () => { removeEventListener("keydown", key); removeEventListener("resize", resize); };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+    const resize = () => { if (innerWidth >= 640) closeSettingsDrawer(); };
+    const pointerMove = (event: globalThis.PointerEvent) => updateDrawerDrag(event.clientY); const mouseMove = (event: globalThis.MouseEvent) => updateDrawerDrag(event.clientY); const touchMove = (event: globalThis.TouchEvent) => { if (event.touches[0]) updateDrawerDrag(event.touches[0].clientY); };
+    const pointerEnd = (event: globalThis.PointerEvent) => finishDrawerDrag(event.clientY); const mouseEnd = (event: globalThis.MouseEvent) => finishDrawerDrag(event.clientY); const touchEnd = (event: globalThis.TouchEvent) => finishDrawerDrag(event.changedTouches[0]?.clientY);
+    document.addEventListener("keydown", key); window.addEventListener("resize", resize); window.addEventListener("pointermove", pointerMove); window.addEventListener("pointerup", pointerEnd); window.addEventListener("pointercancel", clearDrawerDrag); window.addEventListener("mousemove", mouseMove); window.addEventListener("mouseup", mouseEnd); window.addEventListener("touchmove", touchMove, { passive: true }); window.addEventListener("touchend", touchEnd); window.addEventListener("touchcancel", clearDrawerDrag);
+    return () => { document.removeEventListener("keydown", key); window.removeEventListener("resize", resize); window.removeEventListener("pointermove", pointerMove); window.removeEventListener("pointerup", pointerEnd); window.removeEventListener("pointercancel", clearDrawerDrag); window.removeEventListener("mousemove", mouseMove); window.removeEventListener("mouseup", mouseEnd); window.removeEventListener("touchmove", touchMove); window.removeEventListener("touchend", touchEnd); window.removeEventListener("touchcancel", clearDrawerDrag); };
+  }, [closeSettingsDrawer, finishDrawerDrag, isSettingsDrawerOpen, updateDrawerDrag]);
 
   useEffect(() => {
     if (!files.length || workflowStep !== "arrange") {
@@ -431,7 +437,7 @@ export function OrganizePdfPagesTool() {
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
       const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
 
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : workAreaInView && workspaceStillCoversBar);
     };
 
     const scheduleUpdate = () => {
@@ -611,6 +617,10 @@ export function OrganizePdfPagesTool() {
     );
   }
 
+  function renderActionButtons() {
+    return <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]"><label htmlFor="organize-pdf-pages-workspace-upload" aria-label="Change PDF file" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14"><span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{files.length}</span><Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" /></label><button type="button" onClick={() => void downloadOrganizedPdf()} disabled={!files.length || !pageItems.length || isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">{isProcessing ? "Processing..." : "Organize PDF"}<Rows3 className="h-5 w-5" aria-hidden="true" /></button><button type="button" onClick={resetTool} disabled={isProcessing} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">Clear all<RotateCcw className="h-5 w-5" aria-hidden="true" /></button></div>;
+  }
+
   function renderBottomActionBar() {
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
@@ -618,23 +628,10 @@ export function OrganizePdfPagesTool() {
           <div className="flex min-w-0 items-center justify-between gap-3"><div className="min-w-0">
               <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
               <p className="mt-1 truncate text-xs font-bold text-slate-500">{selectedPages.length} selected</p>
-            </div><button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black sm:hidden"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Controls</button></div>
+            </div><button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black sm:hidden" aria-controls="organize-pdf-pages-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button></div>
           <div className="hidden min-w-0 overflow-x-auto sm:block">{renderOrganizeOptions()}</div>
           <div className="min-w-0 sm:ml-auto">
-            <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-              <label htmlFor="organize-pdf-pages-workspace-upload" aria-label="Change PDF file" className="relative inline-grid h-12 w-12 shrink-0 cursor-pointer place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
-                <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{files.length}</span>
-                <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-              </label>
-              <button type="button" onClick={() => void downloadOrganizedPdf()} disabled={!files.length || !pageItems.length || isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base">
-                {isProcessing ? "Processing..." : "Organize PDF"}
-                <Rows3 className="h-5 w-5" aria-hidden="true" />
-              </button>
-              <button type="button" onClick={resetTool} disabled={isProcessing} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-                Clear all
-                <RotateCcw className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
+            {renderActionButtons()}
           </div>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
@@ -644,7 +641,7 @@ export function OrganizePdfPagesTool() {
 
   function renderMobileSettingsDrawer() {
     if (!isSettingsDrawerOpen) return null;
-    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes organizeDrawerIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} onClick={closeSettingsDrawer} aria-label="Close controls" /><div role="dialog" aria-modal="true" aria-label="Organize PDF controls" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[organizeDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={finishDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Page controls</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{renderOrganizeOptions()}</div></div></div>;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes organizeDrawerIn{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} onClick={closeSettingsDrawer} aria-label="Close controls backdrop" /><div id="organize-pdf-pages-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="Organize PDF controls" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[organizeDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing" aria-label="Drag down to close controls" onPointerDown={(event: PointerEvent<HTMLButtonElement>) => { beginDrawerDrag(event.clientY); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event: PointerEvent<HTMLButtonElement>) => updateDrawerDrag(event.clientY)} onPointerUp={(event: PointerEvent<HTMLButtonElement>) => finishDrawerDrag(event.clientY)} onPointerCancel={clearDrawerDrag} onLostPointerCapture={clearDrawerDrag} onMouseDown={(event: MouseEvent<HTMLButtonElement>) => beginDrawerDrag(event.clientY)} onMouseUp={(event: MouseEvent<HTMLButtonElement>) => finishDrawerDrag(event.clientY)} onTouchStart={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && beginDrawerDrag(event.touches[0].clientY)} onTouchMove={(event: TouchEvent<HTMLButtonElement>) => event.touches[0] && updateDrawerDrag(event.touches[0].clientY)} onTouchEnd={(event: TouchEvent<HTMLButtonElement>) => finishDrawerDrag(event.changedTouches[0]?.clientY)} onTouchCancel={clearDrawerDrag}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black text-slate-950">Page controls</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close controls"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderOrganizeOptions()}</div><div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">{renderActionButtons()}</div></div></div>;
   }
 
   return (

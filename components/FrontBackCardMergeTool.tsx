@@ -901,6 +901,8 @@ export function FrontBackCardMergeTool() {
 
   if (stage === "success" && output) {
     const outputTypeLabel = outputFormat.toUpperCase();
+    const outputLayoutLabel = outputLayout === "side-by-side" ? "Side by Side" : "Top & Bottom";
+    const resultDetails = `${formatKb(output.blob.size)} KB • ${outputTypeLabel} • ${outputLayoutLabel} • High quality • ${output.width} × ${output.height} px`;
 
     return (
       <section
@@ -909,7 +911,6 @@ export function FrontBackCardMergeTool() {
           successSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
-        data-v0-result-screen="true"
         data-crop-image-workspace="true"
         id="front-back-card-merge-tool"
         className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
@@ -926,14 +927,17 @@ export function FrontBackCardMergeTool() {
           </h1>
         </div>
         <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
-          <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </div>
-                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Card Merge Ready</h3>
-                <p className="mt-2 text-sm font-semibold text-slate-500">1 {outputTypeLabel} file created</p>
+                <div data-card-merge-result-details="true" className="mx-auto flex w-full flex-col items-center justify-center text-center">
+                  <h3 className="mx-auto mt-5 w-full text-center text-2xl font-black tracking-tight text-slate-950">Card Merge Ready</h3>
+                  <p className="mx-auto mt-2 w-full truncate text-center text-sm font-black text-slate-950" title={output.fileName}>{output.fileName}</p>
+                  <p className="mx-auto mt-2 flex w-full flex-wrap items-center justify-center text-center text-sm font-semibold leading-relaxed text-slate-500">{resultDetails}</p>
+                </div>
                 <a href={output.url} download={output.fileName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
                   Download Merged Card
                   <Download className="h-5 w-5" aria-hidden="true" />

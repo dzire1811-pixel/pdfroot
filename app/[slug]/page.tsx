@@ -93,8 +93,98 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const Icon = tool.icon;
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
-  const usesApprovedPdfResultPage = tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
-  const resultPrimaryActions = tool.slug === "split-pdf"
+  const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-photo-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
+  const resultPrimaryActions = tool.slug === "upsc-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop photos for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "gpsc-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop photos for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "ojas-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop photos for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "ibps-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop documents for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "rrb-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop signatures for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "ssc-photo-resize"
+    ? [
+        ["crop-image", "Crop Image", "Crop signatures for online forms."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+      ]
+    : tool.slug === "image-compressor-for-government-forms"
+    ? [
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+      ]
+    : tool.slug === "signature-resize-tool"
+    ? [
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+      ]
+    : tool.slug === "passport-photo-maker"
+    ? [
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+      ]
+    : tool.slug === "png-to-jpg"
+    ? [
+        ["jpg-to-png", "JPG to PNG", "Convert JPG photos into PNG images."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["resize-image", "Resize Image", "Change image width and height."],
+      ]
+    : tool.slug === "jpg-to-png"
+    ? [
+        ["png-to-jpg", "PNG to JPG", "Convert PNG images into JPG format."],
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["resize-image", "Resize Image", "Change image width and height."],
+      ]
+    : tool.slug === "resize-image"
+    ? [
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+      ]
+    : tool.slug === "crop-image" || tool.slug === "front-back-card-merge"
+    ? [
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["resize-image", "Resize Image", "Change image width and height."],
+      ]
+    : tool.slug === "compress-image"
+    ? [
+        ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+        ["resize-image", "Resize Image", "Change image width and height."],
+      ]
+    : tool.slug === "resize-image-to-exact-kb"
+    ? [
+        ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
+        ["crop-image", "Crop Image", "Crop photos for forms and documents."],
+        ["resize-image", "Resize Image", "Change image width and height."],
+      ]
+    : tool.slug === "split-pdf"
     ? [
         ["merge-pdf", "Merge PDF", "Combine PDF files into one document."],
         ["compress-pdf", "Compress PDF", "Reduce file size for easier sharing."],
@@ -178,6 +268,154 @@ export default async function ToolPage({ params }: ToolPageProps) {
 
   return (
     <div className="v0-homepage v0-tool-page min-h-screen bg-background text-foreground">
+      {tool.slug === "resize-image" && (
+        <style>{`
+          .v0-tool-page:has(#resize-image-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#resize-image-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "front-back-card-merge" && (
+        <style>{`
+          .v0-tool-page:has(#front-back-card-merge-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#front-back-card-merge-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+          .v0-tool-page:has(#front-back-card-merge-tool [data-workflow-step="download"]) [data-tool-workspace-hero] {
+            border-bottom: 0 !important;
+            padding-bottom: 26px !important;
+          }
+          .v0-tool-page:has(#front-back-card-merge-tool [data-workflow-step="download"]) > main {
+            overflow: visible !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "jpg-to-png" && (
+        <style>{`
+          .v0-tool-page:has(#jpg-to-png-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#jpg-to-png-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "png-to-jpg" && (
+        <style>{`
+          .v0-tool-page:has(#png-to-jpg-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#png-to-jpg-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "passport-photo-maker" && (
+        <style>{`
+          .v0-tool-page:has(#passport-photo-maker-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#passport-photo-maker-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "signature-resize-tool" && (
+        <style>{`
+          .v0-tool-page:has(#signature-resize-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#signature-resize-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "image-compressor-for-government-forms" && (
+        <style>{`
+          .v0-tool-page:has(#government-image-compressor-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#government-image-compressor-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "ssc-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#ssc-signature-resize-tool [data-workflow-step="download"]) main > [data-tool-page-extra],
+          .v0-tool-page:has(#ssc-signature-resize-tool [data-workflow-step="download"]) > [data-tool-page-extra="footer"] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#ssc-signature-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="intro"],
+          .v0-tool-page:has(#ssc-signature-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="recruitment-intro"] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#ssc-signature-resize-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "rrb-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) main > [data-tool-page-extra],
+          .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) > [data-tool-page-extra="footer"],
+          .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="intro"],
+          .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="recruitment-intro"] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "ibps-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#ibps-document-resize-tool [data-workflow-step="download"]) main > [data-tool-page-extra],
+          .v0-tool-page:has(#ibps-document-resize-tool [data-workflow-step="download"]) > [data-tool-page-extra="footer"],
+          .v0-tool-page:has(#ibps-document-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="intro"],
+          .v0-tool-page:has(#ibps-document-resize-tool [data-workflow-step="download"]) [data-tool-page-extra="recruitment-intro"] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#ibps-document-resize-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "ojas-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#ojas-photo-signature-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#ojas-photo-signature-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "gpsc-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#gpsc-photo-signature-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#gpsc-photo-signature-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
+      {tool.slug === "upsc-photo-resize" && (
+        <style>{`
+          .v0-tool-page:has(#upsc-document-resize-tool [data-workflow-step="download"]) [data-tool-page-extra] {
+            display: none !important;
+          }
+          .v0-tool-page:has(#upsc-document-resize-tool [data-workflow-step="download"]) [data-merge-result-only] {
+            display: block !important;
+          }
+        `}</style>
+      )}
       <ToolUploadFlowEnhancer />
       <HomepageSiteHeader />
       <main className={supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}>

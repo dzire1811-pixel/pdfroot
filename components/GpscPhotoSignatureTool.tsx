@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Crop, Download, FileArchive, FileImage, GripVertical, ImageUp, Minus, PenLine, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Download, FileArchive, FileImage, GripVertical, ImageUp, Minus, PenLine, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
@@ -813,12 +813,27 @@ function GpscOjasStyleTool() {
 
     const toolShell = toolSection.parentElement;
     if (toolShell) {
+      let reachedToolSection = false;
       Array.from(toolShell.children).forEach((child) => {
+        if (child === toolSection) {
+          reachedToolSection = true;
+          return;
+        }
+        if (GpscStage === "success" && !reachedToolSection) {
+          return;
+        }
         if (child !== toolSection) hideElement(child);
       });
     }
 
     const heroSection = toolSection.parentElement?.closest("section");
+    const hadHeroBorder = heroSection?.classList.contains("border-b") ?? false;
+    const hadHeroBorderColor = heroSection?.classList.contains("border-border") ?? false;
+    const heroPaddingBottom = heroSection instanceof HTMLElement ? heroSection.style.paddingBottom : "";
+    if (GpscStage === "success" && heroSection instanceof HTMLElement) {
+      heroSection.classList.remove("border-b", "border-border");
+      heroSection.style.paddingBottom = "26px";
+    }
     let sibling = heroSection?.nextElementSibling ?? null;
     while (sibling) {
       hideElement(sibling);
@@ -829,6 +844,11 @@ function GpscOjasStyleTool() {
       hiddenElements.forEach(({ element, display }) => {
         element.style.display = display;
       });
+      if (heroSection instanceof HTMLElement) {
+        if (hadHeroBorder) heroSection.classList.add("border-b");
+        if (hadHeroBorderColor) heroSection.classList.add("border-border");
+        heroSection.style.paddingBottom = heroPaddingBottom;
+      }
     };
   }, [GpscStage]);
 
@@ -1137,19 +1157,8 @@ function GpscOjasStyleTool() {
 
     return (
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-v0-result-screen="true" data-crop-image-workspace="true" id="gpsc-photo-signature-tool" className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left">
-        <div className="relative mx-auto max-w-4xl pt-6 text-center sm:pt-8">
-          <div className="mx-auto flex max-w-3xl justify-center">
-            <div className="relative -top-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
-              <Crop className="h-3.5 w-3.5" aria-hidden="true" />
-              Image Tools
-            </div>
-          </div>
-          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            GPSC Photo Resize Online
-          </h1>
-        </div>
-        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
-          <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
@@ -2450,12 +2459,27 @@ function UpscOfficialPhotoSignatureTool() {
 
     const toolShell = toolSection.parentElement;
     if (toolShell) {
+      let reachedToolSection = false;
       Array.from(toolShell.children).forEach((child) => {
+        if (child === toolSection) {
+          reachedToolSection = true;
+          return;
+        }
+        if (stage === "success" && !reachedToolSection) {
+          return;
+        }
         if (child !== toolSection) hideElement(child);
       });
     }
 
     const heroSection = toolSection.parentElement?.closest("section");
+    const hadHeroBorder = heroSection?.classList.contains("border-b") ?? false;
+    const hadHeroBorderColor = heroSection?.classList.contains("border-border") ?? false;
+    const heroPaddingBottom = heroSection instanceof HTMLElement ? heroSection.style.paddingBottom : "";
+    if (stage === "success" && heroSection instanceof HTMLElement) {
+      heroSection.classList.remove("border-b", "border-border");
+      heroSection.style.paddingBottom = "26px";
+    }
     let sibling = heroSection?.nextElementSibling ?? null;
     while (sibling) {
       hideElement(sibling);
@@ -2466,6 +2490,11 @@ function UpscOfficialPhotoSignatureTool() {
       hiddenElements.forEach(({ element, display }) => {
         element.style.display = display;
       });
+      if (heroSection instanceof HTMLElement) {
+        if (hadHeroBorder) heroSection.classList.add("border-b");
+        if (hadHeroBorderColor) heroSection.classList.add("border-border");
+        heroSection.style.paddingBottom = heroPaddingBottom;
+      }
     };
   }, [stage]);
 
@@ -2707,31 +2736,20 @@ function UpscOfficialPhotoSignatureTool() {
   if (stage === "success" && output) {
     return (
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-v0-result-screen="true" data-crop-image-workspace="true" id="upsc-document-resize-tool" className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left">
-        <div className="relative mx-auto max-w-4xl pt-6 text-center sm:pt-8">
-          <div className="mx-auto flex max-w-3xl justify-center">
-            <div className="relative -top-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
-              <Crop className="h-3.5 w-3.5" aria-hidden="true" />
-              Image Tools
-            </div>
-          </div>
-          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            UPSC Photo Resize Online
-          </h1>
-        </div>
-        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
-          <div data-crop-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
-              <div className="w-full max-w-[40rem] rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
-                <div className="mx-auto grid h-[4.5rem] w-[4.5rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 className="h-10 w-10" aria-hidden="true" />
+              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </div>
-                <h3 className="mt-7 text-xl font-black tracking-tight text-slate-950">{config.successTitle}</h3>
-                <p className="mt-3 text-lg font-black text-slate-500">File Size: {output.sizeKb.toFixed(1)} KB</p>
-                <a href={output.url} download={output.fileName} className="mt-9 inline-flex min-h-16 w-full items-center justify-center gap-3 rounded-xl bg-[#FF2D2D] px-8 py-4 text-lg font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
+                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">{config.successTitle}</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-500">File Size: {output.sizeKb.toFixed(1)} KB</p>
+                <a href={output.url} download={output.fileName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
                   {config.downloadLabel}
-                  <Download className="h-6 w-6" aria-hidden="true" />
+                  <Download className="h-5 w-5" aria-hidden="true" />
                 </a>
-                <button type="button" onClick={resetTool} className="mt-4 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-xl border border-red-100 bg-red-50 px-6 py-3 text-base font-black text-[#FF2D2D] transition hover:border-red-200 hover:bg-red-100">
+                <button type="button" onClick={resetTool} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]">
                   Resize Another UPSC Image
                   <RotateCcw className="h-5 w-5" aria-hidden="true" />
                 </button>

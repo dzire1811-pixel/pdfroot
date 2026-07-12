@@ -498,6 +498,25 @@ export function IbpsPhotoSignatureHelperTool() {
     };
   }, [stage]);
 
+  useEffect(() => {
+    if (stage !== "success" || !output) return;
+
+    const heroSection = toolSectionRef.current?.parentElement?.closest("section");
+    if (!(heroSection instanceof HTMLElement)) return;
+
+    const hadHeroBorder = heroSection.classList.contains("border-b");
+    const hadHeroBorderColor = heroSection.classList.contains("border-border");
+    const heroPaddingBottom = heroSection.style.paddingBottom;
+    heroSection.classList.remove("border-b", "border-border");
+    heroSection.style.paddingBottom = "26px";
+
+    return () => {
+      if (hadHeroBorder) heroSection.classList.add("border-b");
+      if (hadHeroBorderColor) heroSection.classList.add("border-border");
+      heroSection.style.paddingBottom = heroPaddingBottom;
+    };
+  }, [output, stage]);
+
   const closeSettingsDrawer = useCallback(() => {
     if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
     const closeDistance = Math.max(window.innerHeight, 420);
@@ -906,9 +925,9 @@ export function IbpsPhotoSignatureHelperTool() {
 
   if (stage === "success" && output) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" id="ibps-document-resize-tool" className="mx-auto mt-6 w-full max-w-full overflow-visible bg-transparent p-0 text-left">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-crop-image-workspace="true" id="ibps-document-resize-tool" className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left">
         <div className="relative min-w-0 overflow-visible bg-slate-100">
-          <div data-ibps-document-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">

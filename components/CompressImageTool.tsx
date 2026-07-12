@@ -144,7 +144,7 @@ async function compressOneImage(image: SelectedImage, level: CompressionLevel, q
   };
 }
 
-export function CompressImageTool() {
+export function CompressImageTool({ governmentForms = false }: { governmentForms?: boolean }) {
   const [stage, setStage] = useState<Stage>("upload");
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [level, setLevel] = useState<CompressionLevel>("medium");
@@ -614,12 +614,21 @@ export function CompressImageTool() {
 
     const toolShell = toolSection.parentElement;
     if (toolShell) {
-      Array.from(toolShell.children).forEach((child) => {
-        if (child !== toolSection) hideElement(child);
-      });
+      if (!(governmentForms && stage === "success")) {
+        Array.from(toolShell.children).forEach((child) => {
+          if (child !== toolSection) hideElement(child);
+        });
+      }
     }
 
     const heroSection = toolSection.parentElement?.closest("section");
+    const hadHeroBorder = heroSection?.classList.contains("border-b") ?? false;
+    const hadHeroBorderColor = heroSection?.classList.contains("border-border") ?? false;
+    const heroPaddingBottom = heroSection instanceof HTMLElement ? heroSection.style.paddingBottom : "";
+    if (governmentForms && stage === "success" && heroSection instanceof HTMLElement) {
+      heroSection.classList.remove("border-b", "border-border");
+      heroSection.style.paddingBottom = "26px";
+    }
     let sibling = heroSection?.nextElementSibling ?? null;
     while (sibling) {
       hideElement(sibling);
@@ -630,8 +639,13 @@ export function CompressImageTool() {
       hiddenElements.forEach(({ element, display }) => {
         element.style.display = display;
       });
+      if (governmentForms && heroSection instanceof HTMLElement) {
+        if (hadHeroBorder) heroSection.classList.add("border-b");
+        if (hadHeroBorderColor) heroSection.classList.add("border-border");
+        heroSection.style.paddingBottom = heroPaddingBottom;
+      }
     };
-  }, [stage]);
+  }, [governmentForms, stage]);
 
   useEffect(() => {
     return () => {
@@ -992,11 +1006,12 @@ export function CompressImageTool() {
           successSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
-        data-compress-image-workspace="true"
-        id="compress-image-tool"
-        className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none"
+        data-compress-image-workspace={governmentForms ? undefined : "true"}
+        data-crop-image-workspace={governmentForms ? "true" : undefined}
+        id={governmentForms ? "government-image-compressor-tool" : "compress-image-tool"}
+        className={governmentForms ? "mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left" : "mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-3"}
       >
-        <div data-compress-image-success-title="true" className="relative mx-auto max-w-4xl pt-6 text-center sm:pt-8">
+        {!governmentForms && <div data-compress-image-success-title="true" className="relative mx-auto max-w-4xl scroll-mt-24 pt-6 text-center sm:pt-8">
           <div className="mx-auto flex max-w-3xl justify-center">
             <div className="relative -top-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1006,17 +1021,17 @@ export function CompressImageTool() {
           <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
             Compress Image Online
           </h1>
-        </div>
-        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
-          <div data-compress-image-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
-            <div className="grid w-full justify-items-center px-2 py-1 transition sm:px-4 sm:py-2">
+        </div>}
+        <div className={governmentForms ? "relative min-w-0 overflow-visible bg-slate-100" : "relative mt-4 min-w-0 overflow-visible bg-slate-100"}>
+          <div data-compress-image-preview-area={governmentForms ? undefined : "true"} data-crop-image-preview-area={governmentForms ? "true" : undefined} data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div data-v0-flow-extra="true" data-v0-result-screen="true" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </div>
-                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Compression Complete</h3>
+                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your image is ready!</h3>
                 <p className="mt-2 text-sm font-semibold text-slate-500">
-                  {results.length === 1 ? `Compressed to ${results[0].compressedKb.toFixed(1)} KB` : `${results.length} images compressed`}
+                  {results.length === 1 ? `File Size: ${results[0].compressedKb.toFixed(1)} KB` : `${results.length} images ready`}
                 </p>
                 {shouldShowZipDownload ? (
                   <a href={zipUrl} download="PDFRoot-compressed-images.zip" className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">

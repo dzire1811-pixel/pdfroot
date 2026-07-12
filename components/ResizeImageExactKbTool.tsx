@@ -907,7 +907,7 @@ export function ResizeImageExactKbTool() {
     const ratioId = `${idPrefix}-maintain-ratio`;
 
     return (
-      <div className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}>
+      <div data-exact-kb-desktop-settings={idPrefix === "exact-kb" ? "true" : undefined} className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}>
         <label htmlFor={targetKbId} className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700">
           Target KB
           <input
@@ -983,7 +983,7 @@ export function ResizeImageExactKbTool() {
 
   function renderActionButtons(className = "") {
     return (
-      <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem] ${className}`}>
+      <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[27rem] ${className}`}>
         {renderAddMoreButton()}
         <button type="button" onClick={() => void processImages()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
           Resize Image Now
@@ -1162,9 +1162,9 @@ export function ResizeImageExactKbTool() {
         data-v0-managed-flow="true"
         data-exact-kb-workspace="true"
         id="resize-tool"
-        className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none"
+        className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-3"
       >
-        <div data-exact-kb-success-title="true" className="relative mx-auto max-w-4xl pt-6 text-center sm:pt-8">
+        <div data-exact-kb-success-title="true" className="relative mx-auto max-w-4xl scroll-mt-24 pt-6 text-center sm:pt-8">
           <div className="mx-auto flex max-w-3xl justify-center">
             <div className="relative -top-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
               <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1175,15 +1175,17 @@ export function ResizeImageExactKbTool() {
             Resize Image to Exact KB Online
           </h1>
         </div>
-        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
-          <div data-exact-kb-preview-area="true" data-v0-result-screen="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
-            <div className="grid w-full justify-items-center px-2 py-1 transition sm:px-4 sm:py-2">
+        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100 sm:mt-1">
+          <div data-exact-kb-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div data-v0-flow-extra="true" data-v0-result-screen="true" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
-          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Resize Complete</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">Resized to {targetKb} KB</p>
+          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your image is ready!</h3>
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            {resizedFiles.length === 1 ? `File Size: ${resizedFiles[0].sizeKb.toFixed(1)} KB` : `${resizedFiles.length} images ready`}
+          </p>
           {shouldShowZipDownload ? (
             <a href={zipUrl} download="PDFRoot-resized-images.zip" className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
               Download ZIP
@@ -1262,7 +1264,7 @@ export function ResizeImageExactKbTool() {
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
           {isActionBarVisible && <div ref={actionBarRef} data-exact-kb-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-            <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mx-auto flex max-w-[1600px] flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <p className="truncate text-sm font-black text-slate-950">
@@ -1280,9 +1282,9 @@ export function ResizeImageExactKbTool() {
                     Settings
                   </button>
                 </div>
-                {renderSettingsControls("exact-kb", "hidden sm:flex")}
+                {renderSettingsControls("exact-kb", "hidden sm:flex lg:flex-nowrap lg:gap-1.5")}
               </div>
-              <div className="min-w-0 lg:ml-auto">
+              <div className="min-w-0 2xl:ml-auto">
                 {renderActionButtons()}
               </div>
             </div>

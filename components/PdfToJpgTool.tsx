@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FileArchive, FileImage, FileText, GripVertical, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
@@ -113,10 +113,12 @@ export function PdfToJpgTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<JpgResult | null>(null);
   const pagesRef = useRef<JpgPage[]>([]);
   const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
@@ -154,47 +156,122 @@ export function PdfToJpgTool() {
     setConversionMode("pages");
     setDraggedIndex(null);
     setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
   }
 
   function openSettingsDrawer() {
-    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
-    drawerDragStartYRef.current = null;
-    setSettingsDrawerDragOffset(0);
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
     setIsSettingsDrawerOpen(true);
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(true);
-    setSettingsDrawerDragOffset(360);
-    drawerCloseTimerRef.current = setTimeout(() => {
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    window.setTimeout(() => {
       setIsSettingsDrawerOpen(false);
       setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
-      drawerCloseTimerRef.current = null;
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
+      window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus());
     }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
-    drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset;
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback((clientY?: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    if (typeof clientY === "number") {
+      const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = dragDistance;
+      setSettingsDrawerDragOffset(dragDistance);
+    }
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    if (drawerDragOffsetRef.current >= 84) {
+      closeSettingsDrawer();
+      return;
+    }
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }, [closeSettingsDrawer]);
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
     setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (drawerDragStartYRef.current === null) return;
-    setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current));
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    updateSettingsDrawerDrag(event.clientY);
   }
 
-  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
-    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) beginDrawerHandleDrag(touch.clientY);
+  }
+
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.touches[0];
+    if (touch) updateSettingsDrawerDrag(touch.clientY);
+  }
+
+  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
+    finishSettingsDrawerDrag(event.clientY);
+  }
+
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
+    const touch = event.changedTouches[0];
+    finishSettingsDrawerDrag(touch?.clientY);
+  }
+
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
-    if (offset >= 84) return closeSettingsDrawer();
+    drawerDragOffsetRef.current = 0;
     setSettingsDrawerDragOffset(0);
   }
 
@@ -347,7 +424,6 @@ export function PdfToJpgTool() {
     return () => {
       pagesRef.current.forEach((page) => URL.revokeObjectURL(page.url));
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
-      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
 
@@ -386,20 +462,48 @@ export function PdfToJpgTool() {
       if (event.key === "Escape") closeSettingsDrawer();
     };
     const onResize = () => {
-      if (window.innerWidth >= 640) {
-        if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
-        setIsSettingsDrawerOpen(false);
-        setIsSettingsDrawerClosing(false);
-        setSettingsDrawerDragOffset(0);
-      }
+      if (window.innerWidth >= 640) closeSettingsDrawer();
     };
-    window.addEventListener("keydown", onKeyDown);
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) updateSettingsDrawerDrag(touch.clientY);
+    };
+    const clearDrawerDrag = () => {
+      if (settingsDrawerClosingRef.current) return;
+      drawerDragStartYRef.current = null;
+      setIsSettingsDrawerDragging(false);
+      drawerDragOffsetRef.current = 0;
+      setSettingsDrawerDragOffset(0);
+    };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => finishSettingsDrawerDrag(event.changedTouches[0]?.clientY);
+
+    document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerDrag);
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerDrag);
     };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+  }, [closeSettingsDrawer, finishSettingsDrawerDrag, isSettingsDrawerOpen, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     if (files.length === 0 || workflowStep !== "arrange") {
@@ -421,12 +525,12 @@ export function PdfToJpgTool() {
       const viewportHeight = window.innerHeight;
       const workAreaRect = workArea.getBoundingClientRect();
       const workspaceRect = workspace.getBoundingClientRect();
-      const fallbackBarHeight = window.innerWidth < 640 ? 120 : 96;
+      const fallbackBarHeight = 96;
       const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
       const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
 
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : workAreaInView && workspaceStillCoversBar);
     };
 
     const scheduleUpdate = () => {
@@ -636,6 +740,25 @@ export function PdfToJpgTool() {
     );
   }
 
+  function renderActionButtons() {
+    return (
+      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+        <button type="button" onClick={() => addMoreInputRef.current?.click()} aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
+          <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
+          <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => void convertPdf()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
+          Convert to JPG
+          <FileArchive className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+          Clear all
+          <RotateCcw className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   function renderBottomActionBar() {
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" data-pdf-to-jpg-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
@@ -643,7 +766,7 @@ export function PdfToJpgTool() {
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-              <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="pdf-to-jpg-mobile-settings-drawer">
+              <button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="pdf-to-jpg-mobile-settings-drawer">
                 <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" /> Settings
               </button>
             </div>
@@ -651,20 +774,7 @@ export function PdfToJpgTool() {
           </div>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
-            <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
-            <button type="button" onClick={() => addMoreInputRef.current?.click()} aria-label="Add PDF files" className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:h-14 sm:w-14">
-              <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">{fileCount}</span>
-              <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-            </button>
-            <button type="button" onClick={() => void convertPdf()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-              Convert to JPG
-              <FileArchive className="h-5 w-5" aria-hidden="true" />
-            </button>
-            <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
-              Clear all
-              <RotateCcw className="h-5 w-5" aria-hidden="true" />
-            </button>
-            </div>
+            {renderActionButtons()}
           </div>
         </div>
       </div>
@@ -675,7 +785,12 @@ export function PdfToJpgTool() {
     if (!isSettingsDrawerOpen) return null;
     return (
       <div className="fixed inset-0 z-[60] sm:hidden">
-        <style>{`@keyframes pdfToJpgDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <style>{`
+          @keyframes pdfToJpgDrawerIn {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+          }
+        `}</style>
         <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
         <div
           id="pdf-to-jpg-mobile-settings-drawer"
@@ -683,9 +798,24 @@ export function PdfToJpgTool() {
           aria-modal="true"
           aria-label="PDF to JPG settings"
           style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
-          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[pdfToJpgDrawerIn_220ms_ease-out]"}`}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[pdfToJpgDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}
         >
-          <button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}>
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={onDrawerHandlePointerEnd}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
             <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
           </button>
           <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
@@ -693,6 +823,9 @@ export function PdfToJpgTool() {
             <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings"><X className="h-4 w-4" aria-hidden="true" /></button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderConversionOptions()}</div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            {renderActionButtons()}
+          </div>
         </div>
       </div>
     );
