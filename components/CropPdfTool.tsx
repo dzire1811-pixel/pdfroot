@@ -1,12 +1,12 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Crop, Download, FileText, Loader2, Minus, Plus, RotateCcw, Settings, UploadCloud } from "lucide-react";
+import { ChangeEvent, DragEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Crop, Download, FileText, Loader2, Minus, Plus, RotateCcw, Settings, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
 
-type CropMode = "all" | "selected" | "range";
+type CropMode = "all" | "selected";
 type WorkflowStep = "settings" | "process" | "download";
 
 type CropBox = {
@@ -20,6 +20,7 @@ type CropDragMode = "draw" | "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se"
 
 type CropInteraction = {
   mode: CropDragMode;
+  pageNumber: number;
   startX: number;
   startY: number;
   startBox: CropBox;
@@ -52,7 +53,9 @@ type ActivePagePreview = {
   height: number;
 };
 
-const defaultCropBox: CropBox = { x: 10, y: 10, width: 80, height: 80 };
+type PagePreview = ActivePagePreview & { pageNumber: number };
+
+const emptyCropBox: CropBox = { x: 0, y: 0, width: 0, height: 0 };
 
 function formatResultSize(sizeKb: number) {
   return sizeKb >= 1024 ? `${(sizeKb / 1024).toFixed(2)} MB` : `${sizeKb.toFixed(1)} KB`;
@@ -122,6 +125,26 @@ function marginsFromCrop(cropBox: CropBox) {
   };
 }
 
+function cropBoxToPdfCoordinates(crop: CropBox, pageWidth: number, pageHeight: number, rotation: number, originX = 0, originY = 0) {
+  const u1 = crop.x / 100;
+  const u2 = (crop.x + crop.width) / 100;
+  const v1 = crop.y / 100;
+  const v2 = (crop.y + crop.height) / 100;
+  const normalizedRotation = ((rotation % 360) + 360) % 360;
+  const toPdf = (u: number, v: number) => {
+    if (normalizedRotation === 90) return { x: v, y: u };
+    if (normalizedRotation === 180) return { x: 1 - u, y: v };
+    if (normalizedRotation === 270) return { x: 1 - v, y: 1 - u };
+    return { x: u, y: 1 - v };
+  };
+  const points = [toPdf(u1, v1), toPdf(u2, v1), toPdf(u1, v2), toPdf(u2, v2)];
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  return { x: originX + minX * pageWidth, y: originY + minY * pageHeight, width: (maxX - minX) * pageWidth, height: (maxY - minY) * pageHeight };
+}
+
 export function CropPdfTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [pageCounts, setPageCounts] = useState<number[]>([]);
@@ -129,17 +152,25 @@ export function CropPdfTool() {
   const [activePage, setActivePage] = useState(1);
   const [zoomPercent, setZoomPercent] = useState(100);
   const [activePagePreview, setActivePagePreview] = useState<ActivePagePreview | null>(null);
-  const [mode, setMode] = useState<CropMode>("all");
+  const [pagePreviews, setPagePreviews] = useState<PagePreview[]>([]);
+  const [mode, setMode] = useState<CropMode>("selected");
   const [selectedPage, setSelectedPage] = useState(1);
-  const [range, setRange] = useState("1-1");
-  const [cropBox, setCropBox] = useState<CropBox>(defaultCropBox);
+  const [cropBox, setCropBox] = useState<CropBox>(emptyCropBox);
+  const [pageCropBoxes, setPageCropBoxes] = useState<Record<string, CropBox>>({});
+  const [cropModeActive, setCropModeActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState("Upload PDF files and choose crop settings.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("settings");
   const [result, setResult] = useState<CropResult | null>(null);
+  // Retained for the shared approved sticky-bar viewport lifecycle.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
@@ -147,13 +178,49 @@ export function CropPdfTool() {
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<CropResult | null>(null);
   const activePagePreviewRef = useRef<ActivePagePreview | null>(null);
+  const pageCropBoxesRef = useRef<Record<string, CropBox>>({});
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
-  const margins = marginsFromCrop(cropBox);
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
+  const activeCropSelection = pageCropBoxes[`${activeFileIndex}:${activePage}`];
+  const hasValidCrop = Boolean(activeCropSelection && activeCropSelection.width >= 5 && activeCropSelection.height >= 5);
   const [cropInteraction, setCropInteraction] = useState<CropInteraction | null>(null);
   const [scrollHandleDrag, setScrollHandleDrag] = useState<ScrollHandleDrag | null>(null);
   const [scrollMetrics, setScrollMetrics] = useState<ScrollMetrics>({ thumbTop: 0, thumbHeight: 96, trackHeight: 320 });
   const [showCanvasSettings, setShowCanvasSettings] = useState(false);
+
+  const cropKey = (fileIndex = activeFileIndex, page = activePage) => `${fileIndex}:${page}`;
+
+  function updateCurrentCropBox(next: CropBox, page = activePage) {
+    setCropBox(next);
+    setPageCropBoxes((current) => {
+      const updated = { ...current, [cropKey(activeFileIndex, page)]: next };
+      if (mode === "all") {
+        const pageCount = Math.max(1, pageCounts[activeFileIndex] ?? 1);
+        for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+          updated[cropKey(activeFileIndex, pageNumber)] = { ...next };
+        }
+      }
+      pageCropBoxesRef.current = updated;
+      return updated;
+    });
+  }
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(420);
+    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: PointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: PointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
+  function finishDrawerDrag(event?: PointerEvent<HTMLButtonElement>) { const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset; drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (offset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0); }
 
   function scrollToolStageIntoView() {
     window.requestAnimationFrame(() => {
@@ -188,10 +255,13 @@ export function CropPdfTool() {
     setActiveFileIndex(0);
     setActivePage(1);
     setZoomPercent(100);
-    setMode("all");
+    setMode("selected");
     setSelectedPage(1);
-    setRange("1-1");
-    setCropBox(defaultCropBox);
+    setCropBox(emptyCropBox);
+    setPageCropBoxes({});
+    pageCropBoxesRef.current = {};
+    setPagePreviews([]);
+    setCropModeActive(false);
     setError(null);
     setIsDragging(false);
     setProgress(0);
@@ -267,25 +337,19 @@ export function CropPdfTool() {
     void handleFiles(event.dataTransfer.files);
   }
 
-  function updateMargin(name: "top" | "right" | "bottom" | "left", value: number) {
-    clearResult();
-    setError(null);
-    const nextMargins = { ...margins, [name]: clamp(value, 0, 95) };
-    setCropBox(cropFromMargins(nextMargins.top, nextMargins.right, nextMargins.bottom, nextMargins.left));
-    setStatus("Crop area updated. Crop PDF when ready.");
-  }
-
   function resetCrop() {
     clearResult();
     setError(null);
-    setCropBox(defaultCropBox);
-    setStatus("Crop area reset.");
+    setCropBox(emptyCropBox);
+    setPageCropBoxes({});
+    pageCropBoxesRef.current = {};
+    setCropInteraction(null);
+    setStatus("Crop selection removed.");
   }
 
   function targetPages(pageCount: number) {
     if (mode === "all") return Array.from({ length: pageCount }, (_, index) => index + 1);
-    if (mode === "selected") return [clamp(activePage, 1, pageCount)];
-    return parsePageRange(range, pageCount);
+    return Array.from({ length: pageCount }, (_, index) => index + 1);
   }
 
   async function cropPdf() {
@@ -294,8 +358,8 @@ export function CropPdfTool() {
       return;
     }
 
-    if (cropBox.width <= 0 || cropBox.height <= 0) {
-      setError("Crop area is invalid. Please select a visible crop area.");
+    if (!hasValidCrop) {
+      setError("Draw a valid crop area on at least one PDF page first.");
       return;
     }
 
@@ -309,28 +373,50 @@ export function CropPdfTool() {
       const { PDFDocument } = await import("pdf-lib");
       const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
 
+      if (mode === "selected") {
+        const currentFile = files[activeFileIndex];
+        const pageCrop = pageCropBoxes[cropKey(activeFileIndex, activePage)];
+        if (!currentFile || !pageCrop || pageCrop.width < 5 || pageCrop.height < 5) {
+          throw new Error("Draw a valid crop area on the current page first.");
+        }
+        setStatus(`Cropping page ${activePage} of ${currentFile.name}...`);
+        const sourcePdf = await PDFDocument.load(await currentFile.arrayBuffer(), { ignoreEncryption: true });
+        const sourcePage = sourcePdf.getPage(clamp(activePage - 1, 0, sourcePdf.getPageCount() - 1));
+        const mediaBox = sourcePage.getMediaBox();
+        const mappedCrop = cropBoxToPdfCoordinates(pageCrop, mediaBox.width, mediaBox.height, sourcePage.getRotation().angle, mediaBox.x, mediaBox.y);
+        sourcePage.setMediaBox(mappedCrop.x, mappedCrop.y, mappedCrop.width, mappedCrop.height);
+        sourcePage.setCropBox(mappedCrop.x, mappedCrop.y, mappedCrop.width, mappedCrop.height);
+        const outputPdf = await PDFDocument.create();
+        const [copiedPage] = await outputPdf.copyPages(sourcePdf, [activePage - 1]);
+        outputPdf.addPage(copiedPage);
+        outputFiles.push({
+          name: `${cleanFileName(currentFile.name)}-page-${activePage}-cropped.pdf`,
+          bytes: new Uint8Array(await outputPdf.save()),
+        });
+        setProgress(90);
+      } else {
+        const proportionalCrop = pageCropBoxes[cropKey(activeFileIndex, activePage)];
+        if (!proportionalCrop || proportionalCrop.width < 5 || proportionalCrop.height < 5) {
+          throw new Error("Draw a valid crop area on the active page before applying it to all pages.");
+        }
+
       for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
         const currentFile = files[fileIndex];
         setStatus(`Cropping ${currentFile.name} (${fileIndex + 1} of ${files.length})...`);
         const pdfDoc = await PDFDocument.load(await currentFile.arrayBuffer(), { ignoreEncryption: true });
         const pages = pdfDoc.getPages();
-        const pagesToCrop = new Set(targetPages(pages.length));
-
         pages.forEach((page, index) => {
           const pageNumber = index + 1;
-          if (!pagesToCrop.has(pageNumber)) return;
+          const mediaBox = page.getMediaBox();
+          const rotation = page.getRotation().angle;
+          const mappedCrop = cropBoxToPdfCoordinates(proportionalCrop, mediaBox.width, mediaBox.height, rotation, mediaBox.x, mediaBox.y);
 
-          const { width, height } = page.getSize();
-          const left = (cropBox.x / 100) * width;
-          const cropWidth = (cropBox.width / 100) * width;
-          const cropHeight = (cropBox.height / 100) * height;
-          const bottom = height - (cropBox.y / 100) * height - cropHeight;
-
-          if (cropWidth <= 0 || cropHeight <= 0) {
+          if (mappedCrop.width <= 0 || mappedCrop.height <= 0) {
             throw new Error("Crop area is invalid for this page size.");
           }
 
-          page.setCropBox(left, bottom, cropWidth, cropHeight);
+          page.setMediaBox(mappedCrop.x, mappedCrop.y, mappedCrop.width, mappedCrop.height);
+          page.setCropBox(mappedCrop.x, mappedCrop.y, mappedCrop.width, mappedCrop.height);
         });
 
         const croppedBytes = await pdfDoc.save();
@@ -339,6 +425,7 @@ export function CropPdfTool() {
           bytes: new Uint8Array(croppedBytes),
         });
         setProgress(Math.min(90, 20 + Math.round(((fileIndex + 1) / files.length) * 65)));
+      }
       }
 
       setProgress(92);
@@ -378,6 +465,7 @@ export function CropPdfTool() {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
       if (activePagePreviewRef.current?.url) URL.revokeObjectURL(activePagePreviewRef.current.url);
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
 
@@ -386,6 +474,14 @@ export function CropPdfTool() {
       scrollToolStageIntoView();
     }
   }, [workflowStep]);
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => { if (window.innerWidth >= 640) { if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current); setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); } };
+    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (!scrollHandleDrag) return;
@@ -437,6 +533,7 @@ export function CropPdfTool() {
     const activeFile = files[activeFileIndex];
     if (!activeFile || workflowStep !== "settings") {
       clearActivePagePreview();
+      setPagePreviews([]);
       return;
     }
 
@@ -448,39 +545,19 @@ export function CropPdfTool() {
         const pdfjsLib = await loadPdfJs();
         const bytes = await activeFile.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(bytes.slice(0)) }).promise;
-        const page = await pdf.getPage(clamp(activePage, 1, pdf.numPages));
-        const viewport = page.getViewport({ scale: 1.65 });
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d", { alpha: false });
-        if (!context) throw new Error("Your browser does not support PDF preview rendering.");
-
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        context.fillStyle = "#ffffff";
-        context.fillRect(0, 0, canvas.width, canvas.height);
-        await page.render({ canvas, canvasContext: context, viewport }).promise;
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((previewBlob) => {
-            if (previewBlob) {
-              resolve(previewBlob);
-              return;
-            }
-            reject(new Error("Could not create PDF page preview."));
-          }, "image/jpeg", 0.9);
-        });
-        const nextPreview = {
-          url: URL.createObjectURL(blob),
-          width: canvas.width,
-          height: canvas.height,
-        };
-
-        if (cancelled) {
-          URL.revokeObjectURL(nextPreview.url);
-          return;
+        const rendered: PagePreview[] = [];
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 1.35 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d", { alpha: false });
+          if (!context) throw new Error("Your browser does not support PDF preview rendering.");
+          canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+          context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvas, canvasContext: context, viewport }).promise;
+          rendered.push({ pageNumber, url: canvas.toDataURL("image/jpeg", 0.92), width: canvas.width, height: canvas.height });
         }
-
-        activePagePreviewRef.current = nextPreview;
-        setActivePagePreview(nextPreview);
+        if (!cancelled) setPagePreviews(rendered);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Could not render this PDF page.");
@@ -492,7 +569,7 @@ export function CropPdfTool() {
     return () => {
       cancelled = true;
     };
-  }, [files, activeFileIndex, activePage, workflowStep]);
+  }, [files, activeFileIndex, workflowStep]);
 
   useEffect(() => {
     updateScrollMetrics();
@@ -647,19 +724,20 @@ export function CropPdfTool() {
   }
 
   function startCropInteraction(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
+    if (!cropModeActive || event.button !== 0) return;
     const point = pointFromCropEvent(event);
     clearResult();
     setError(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     setCropInteraction({
       mode: pointInCropBox(point) ? "move" : "draw",
+      pageNumber: activePage,
       startX: point.x,
       startY: point.y,
       startBox: cropBox,
     });
     if (!pointInCropBox(point)) {
-      setCropBox({ x: point.x, y: point.y, width: 0.1, height: 0.1 });
+      updateCurrentCropBox({ x: point.x, y: point.y, width: 0.1, height: 0.1 });
     }
   }
 
@@ -677,17 +755,28 @@ export function CropPdfTool() {
     clearResult();
     setError(null);
     event.currentTarget.setPointerCapture(event.pointerId);
-    setCropInteraction({ mode, startX: point.x, startY: point.y, startBox: cropBox });
+    setCropInteraction({ mode, pageNumber: activePage, startX: point.x, startY: point.y, startBox: cropBox });
   }
 
   function moveCropInteraction(event: PointerEvent<HTMLDivElement>) {
     if (!cropInteraction) return;
     const point = pointFromCropEvent(event);
-    setCropBox(resizeCropBox(cropInteraction, point));
+    updateCurrentCropBox(resizeCropBox(cropInteraction, point));
   }
 
   function endCropInteraction() {
     if (!cropInteraction) return;
+    const key = cropKey(activeFileIndex, cropInteraction.pageNumber);
+    const selection = pageCropBoxesRef.current[key];
+    if (cropInteraction.mode === "draw" && (!selection || selection.width < 5 || selection.height < 5)) {
+      setPageCropBoxes((current) => {
+        const next = { ...current };
+        delete next[key];
+        pageCropBoxesRef.current = next;
+        return next;
+      });
+      setCropBox(emptyCropBox);
+    }
     setCropInteraction(null);
     setStatus("Crop area updated. Crop PDF when ready.");
   }
@@ -711,6 +800,7 @@ export function CropPdfTool() {
   function setCanvasPage(nextPage: number) {
     const pageCount = Math.max(1, pageCounts[activeFileIndex] ?? 1);
     const safePage = clamp(Math.round(nextPage), 1, pageCount);
+    setCropBox(pageCropBoxes[cropKey(activeFileIndex, safePage)] ?? emptyCropBox);
     setActivePage(safePage);
     setSelectedPage(safePage);
   }
@@ -731,16 +821,47 @@ export function CropPdfTool() {
     });
   }
 
-  function renderCropResizeHandles() {
+  function startPageCropInteraction(pageNumber: number, event: PointerEvent<HTMLDivElement>) {
+    const pageBox = pageCropBoxes[cropKey(activeFileIndex, pageNumber)];
+    if (!cropModeActive) { setActivePage(pageNumber); setSelectedPage(pageNumber); setCropBox(pageBox ?? emptyCropBox); return; }
+    if (event.button !== 0) return;
+    const point = pointFromCropEvent(event);
+    const inside = Boolean(pageBox && point.x >= pageBox.x && point.x <= pageBox.x + pageBox.width && point.y >= pageBox.y && point.y <= pageBox.y + pageBox.height);
+    const startBox = pageBox ?? { x: point.x, y: point.y, width: 0, height: 0 };
+    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
+    setActivePage(pageNumber); setSelectedPage(pageNumber); setCropBox(startBox);
+    setCropInteraction({ mode: inside ? "move" : "draw", pageNumber, startX: point.x, startY: point.y, startBox });
+    if (!inside) updateCurrentCropBox(startBox, pageNumber);
+  }
+
+  function movePageCropInteraction(pageNumber: number, event: PointerEvent<HTMLDivElement>) {
+    if (!cropInteraction || cropInteraction.pageNumber !== pageNumber) return;
+    const next = resizeCropBox(cropInteraction, pointFromCropEvent(event));
+    updateCurrentCropBox(next, pageNumber);
+  }
+
+  function startPageResizeInteraction(pageNumber: number, pageBox: CropBox, mode: CropDragMode, event: PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault(); event.stopPropagation();
+    const parent = event.currentTarget.closest("[data-crop-canvas='true']");
+    if (!(parent instanceof HTMLElement)) return;
+    const rect = parent.getBoundingClientRect();
+    const point = { x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100), y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100) };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setActivePage(pageNumber); setSelectedPage(pageNumber); setCropBox(pageBox);
+    setCropInteraction({ mode, pageNumber, startX: point.x, startY: point.y, startBox: pageBox });
+  }
+
+  function renderCropResizeHandles(pageNumber = activePage, pageBox = cropBox) {
     const handles: Array<{ mode: CropDragMode; className: string; label: string }> = [
-      { mode: "nw", className: "-left-2 -top-2 cursor-nwse-resize", label: "Resize from top left" },
-      { mode: "n", className: "left-1/2 -top-2 -translate-x-1/2 cursor-ns-resize", label: "Resize from top" },
-      { mode: "ne", className: "-right-2 -top-2 cursor-nesw-resize", label: "Resize from top right" },
-      { mode: "e", className: "-right-2 top-1/2 -translate-y-1/2 cursor-ew-resize", label: "Resize from right" },
-      { mode: "se", className: "-bottom-2 -right-2 cursor-nwse-resize", label: "Resize from bottom right" },
-      { mode: "s", className: "bottom-[-0.5rem] left-1/2 -translate-x-1/2 cursor-ns-resize", label: "Resize from bottom" },
-      { mode: "sw", className: "-bottom-2 -left-2 cursor-nesw-resize", label: "Resize from bottom left" },
-      { mode: "w", className: "-left-2 top-1/2 -translate-y-1/2 cursor-ew-resize", label: "Resize from left" },
+      { mode: "nw", className: "-left-2.5 -top-2.5 h-5 w-5 cursor-nwse-resize", label: "Resize from top left" },
+      { mode: "n", className: "-top-2 left-3 right-3 h-4 cursor-ns-resize", label: "Resize from top" },
+      { mode: "ne", className: "-right-2.5 -top-2.5 h-5 w-5 cursor-nesw-resize", label: "Resize from top right" },
+      { mode: "e", className: "-right-2 bottom-3 top-3 w-4 cursor-ew-resize", label: "Resize from right" },
+      { mode: "se", className: "-bottom-2.5 -right-2.5 h-5 w-5 cursor-nwse-resize", label: "Resize from bottom right" },
+      { mode: "s", className: "-bottom-2 left-3 right-3 h-4 cursor-ns-resize", label: "Resize from bottom" },
+      { mode: "sw", className: "-bottom-2.5 -left-2.5 h-5 w-5 cursor-nesw-resize", label: "Resize from bottom left" },
+      { mode: "w", className: "-left-2 bottom-3 top-3 w-4 cursor-ew-resize", label: "Resize from left" },
     ];
 
     return handles.map((handle) => (
@@ -748,10 +869,34 @@ export function CropPdfTool() {
         key={handle.mode}
         type="button"
         aria-label={handle.label}
-        onPointerDown={(event) => startResizeInteraction(handle.mode, event)}
-        className={`absolute z-40 h-4 w-4 rounded-full border-2 border-white bg-[#FF2D2D] shadow-[0_4px_12px_rgba(15,23,42,0.28)] ${handle.className}`}
+        onPointerDown={(event) => startPageResizeInteraction(pageNumber, pageBox, handle.mode, event)}
+        className={`absolute z-40 opacity-0 ${handle.className}`}
       />
     ));
+  }
+
+  function renderPageGrid() {
+    const activeFile = files[activeFileIndex];
+    return (
+      <div className="mx-auto w-full max-w-7xl">
+        <p className="mb-4 text-center text-sm font-bold text-slate-500">{cropModeActive ? "Drag anywhere on a page to draw. Drag inside to move, or use an invisible edge or corner to resize." : "Activate Crop Mode to select an area on any page."}</p>
+        <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(13rem,17rem))] items-start justify-center gap-4 sm:gap-5">
+          {pagePreviews.length === 0 ? <div className="col-span-full grid justify-items-center py-16"><Loader2 className="h-8 w-8 animate-spin text-[#FF2D2D]" /><p className="mt-3 text-sm font-bold text-slate-500">Rendering all PDF pages...</p></div> : pagePreviews.map((preview) => {
+            const pageBox = pageCropBoxes[cropKey(activeFileIndex, preview.pageNumber)];
+            return (
+              <article key={preview.pageNumber} className={`relative min-w-0 rounded-2xl border bg-white p-3 shadow-sm transition ${activePage === preview.pageNumber ? "border-[#FF2D2D] ring-2 ring-red-100" : "border-slate-200"}`} style={{ width: `${clamp(zoomPercent, 50, 140)}%`, maxWidth: "17rem", justifySelf: "center" }}>
+                <span className="absolute left-2 top-2 z-40 grid h-8 min-w-8 place-items-center rounded-lg bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-sm" aria-label={`Page ${preview.pageNumber}`}>{preview.pageNumber}</span>
+                <div data-crop-canvas="true" onPointerDown={(event) => startPageCropInteraction(preview.pageNumber, event)} onPointerMove={(event) => movePageCropInteraction(preview.pageNumber, event)} onPointerUp={endCropInteraction} onPointerCancel={endCropInteraction} className={`relative w-full overflow-visible bg-white ${cropModeActive ? "touch-none" : "touch-pan-y"}`} style={{ aspectRatio: `${preview.width}/${preview.height}` }}>
+                  <img src={preview.url} alt={`PDF page ${preview.pageNumber}`} draggable={false} className="pointer-events-none block h-full w-full select-none object-contain" />
+                  {cropModeActive && pageBox && pageBox.width > 0 && pageBox.height > 0 && <div className="absolute z-30 cursor-move border border-[#FF2D2D] bg-transparent" style={{ left: `${pageBox.x}%`, top: `${pageBox.y}%`, width: `${pageBox.width}%`, height: `${pageBox.height}%` }}>{renderCropResizeHandles(preview.pageNumber, pageBox)}</div>}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <div className="mx-auto mt-3 max-w-[17rem] min-w-0 text-left"><p className="truncate text-sm font-black leading-snug text-slate-950" title={activeFile?.name}>{activeFile?.name}</p><span className="mt-1.5 inline-flex rounded-full bg-slate-200 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{activeFile ? `${(activeFile.size / 1024).toFixed(1)} KB` : "0 KB"}</span></div>
+      </div>
+    );
   }
 
   function renderActiveCropCanvas() {
@@ -761,15 +906,9 @@ export function CropPdfTool() {
     const pageAspectRatio = activePagePreview ? `${activePagePreview.width} / ${activePagePreview.height}` : "1 / 1.414";
 
     return (
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Working canvas</p>
-            <h3 className="mt-1 truncate text-xl font-black tracking-tight text-slate-950">{activeFile?.name ?? "PDF preview"}</h3>
-          </div>
-          <p className="text-sm font-bold text-slate-500">Drag inside the crop box to move it. Drag edges or corners to resize.</p>
-        </div>
-        <div className="relative mx-auto h-[min(72vh,58rem)] min-h-[34rem] w-full rounded-2xl border border-slate-200 bg-slate-200 shadow-sm">
+      <div className="mx-auto w-full max-w-5xl">
+        <p className="mb-3 text-center text-sm font-bold text-slate-500">{cropModeActive ? "Drag inside the crop box to move it. Drag edges or corners to resize." : "Use the page normally, then activate crop mode from the controls below."}</p>
+        <div className="relative mx-auto h-[min(68vh,52rem)] min-h-[30rem] w-full bg-slate-200">
           <div
             ref={canvasScrollRef}
             onScroll={updateScrollMetrics}
@@ -782,7 +921,7 @@ export function CropPdfTool() {
               onPointerMove={moveCropInteraction}
               onPointerUp={endCropInteraction}
               onPointerCancel={endCropInteraction}
-              className="relative mx-auto touch-none bg-white"
+              className={`relative mx-auto bg-white ${cropModeActive ? "touch-none" : "touch-pan-x touch-pan-y"}`}
               style={{ width: pageSurfaceWidth, aspectRatio: pageAspectRatio }}
             >
               {activePagePreview ? (
@@ -798,8 +937,8 @@ export function CropPdfTool() {
                   </div>
                 </div>
               )}
-              <div className="pointer-events-none absolute inset-0 bg-slate-950/25" />
-              <div
+              {cropModeActive && <div className="pointer-events-none absolute inset-0 bg-slate-950/25" />}
+              {cropModeActive && <div
                 className="absolute z-30 cursor-move border-2 border-[#FF2D2D] bg-red-500/10 shadow-[0_0_0_9999px_rgba(15,23,42,0.35)]"
                 style={{
                   left: `${cropBox.x}%`,
@@ -809,11 +948,11 @@ export function CropPdfTool() {
                 }}
               >
                 {renderCropResizeHandles()}
-              </div>
+              </div>}
             </div>
           </div>
 
-          <div className="pointer-events-none absolute bottom-5 right-2 top-5 z-50 w-4 rounded-full bg-slate-300/70">
+          <div className="hidden">
             <button
               type="button"
               onPointerDown={startScrollHandleDrag}
@@ -823,7 +962,7 @@ export function CropPdfTool() {
             />
           </div>
 
-          <div className="absolute bottom-4 left-1/2 z-50 flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 rounded-2xl border border-slate-200 bg-white/95 p-2 text-slate-800 shadow-[0_16px_45px_rgba(15,23,42,0.18)] backdrop-blur">
+          <div className="hidden">
             <button type="button" onClick={() => setCanvasPage(activePage - 1)} className="grid h-9 min-w-9 place-items-center rounded-xl px-2 text-sm font-black transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label="Previous page">
               Prev
             </button>
@@ -885,6 +1024,7 @@ export function CropPdfTool() {
             </div>
           )}
         </div>
+        <div className="mt-3 min-w-0 text-left"><p className="truncate text-sm font-black leading-snug text-slate-950" title={activeFile?.name}>{activeFile?.name}</p><span className="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{activeFile ? `${(activeFile.size / 1024).toFixed(1)} KB` : "0 KB"}</span></div>
       </div>
     );
   }
@@ -916,9 +1056,7 @@ export function CropPdfTool() {
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
           <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your PDF is ready!</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${formatResultSize(result.sizeKb)}` : "Ready"}
-          </p>
+          {result && <div className="mt-3 min-w-0"><p className="truncate text-sm font-black text-slate-950" title={result.downloadName}>{result.downloadName}</p><span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{formatResultSize(result.sizeKb)}</span></div>}
           {result && (
             <a
               href={result.url}
@@ -944,12 +1082,10 @@ export function CropPdfTool() {
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "settings" && (
-            <div className="pb-[32rem] sm:pb-64 lg:pb-48 xl:pb-32">
-              {renderActiveCropCanvas()}
-            </div>
+            <div className="pb-36 sm:pb-32">{renderPageGrid()}</div>
           )}
           {workflowStep === "process" && renderProcessingCard()}
           {workflowStep === "download" && renderSuccessCard()}
@@ -958,79 +1094,51 @@ export function CropPdfTool() {
     );
   }
 
-  function renderCropSettings() {
-    const compactInputClass = "h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-950 shadow-sm outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100";
+  function renderCropSettings(mobile = false) {
+    const compactInputClass = `${mobile ? "h-10 rounded-lg px-3 text-xs" : "h-14 rounded-xl px-3 text-sm"} border border-slate-200 bg-white font-black text-slate-950 shadow-sm outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100`;
 
     return (
-      <div className="grid min-w-0 gap-2 lg:grid-cols-[10.5rem_8rem_repeat(4,4.75rem)_5.75rem] xl:flex xl:flex-none xl:items-center">
+      <div className={mobile ? "grid min-w-0 grid-cols-2 gap-3" : "flex min-w-0 flex-nowrap items-center gap-2"}>
+        {mobile && <button type="button" onClick={() => setCropModeActive((current) => !current)} className={`col-span-2 inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-black shadow-sm transition ${cropModeActive ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-800"}`}><Crop className="h-4 w-4" />Crop Mode</button>}
+        <label className={`${mobile ? "col-span-2" : ""} flex items-center gap-2 text-xs font-black text-slate-700`}>
+          Apply to:
         <select
           id="crop-pdf-page-mode"
           name="crop-pdf-page-mode"
           value={mode}
           onChange={(event) => {
-            setMode(event.target.value as CropMode);
+            const nextMode = event.target.value as CropMode;
+            if (nextMode === "all") {
+              const currentSelection = pageCropBoxes[cropKey()];
+              if (currentSelection) {
+                const pageCount = Math.max(1, pageCounts[activeFileIndex] ?? 1);
+                setPageCropBoxes((current) => {
+                  const next = { ...current };
+                  for (let page = 1; page <= pageCount; page += 1) next[cropKey(activeFileIndex, page)] = { ...currentSelection };
+                  pageCropBoxesRef.current = next;
+                  return next;
+                });
+              }
+            }
+            setMode(nextMode);
             clearResult();
             setError(null);
           }}
-          aria-label="Pages to crop"
-          className={`${compactInputClass} w-full appearance-auto xl:w-44`}
+          aria-label="Apply crop to"
+          className={`${compactInputClass} appearance-auto ${mobile ? "w-full" : "w-[8rem] shrink-0"}`}
         >
-          <option value="all">All pages</option>
-          <option value="selected">Selected page</option>
-          <option value="range">Page range</option>
+          <option value="selected">Current Page</option>
+          <option value="all">All Pages</option>
         </select>
+        </label>
 
-        {mode === "range" ? (
-          <input
-            id="crop-pdf-page-range"
-            name="crop-pdf-page-range"
-            value={range}
-            onChange={(event) => {
-              setRange(event.target.value);
-              clearResult();
-            }}
-            aria-label="Page range"
-            placeholder="1-3,5"
-            className={`${compactInputClass} min-w-0 xl:w-32`}
-          />
-        ) : (
-          <input
-            id="crop-pdf-selected-page"
-            name="crop-pdf-selected-page"
-            type="number"
-            min={1}
-            value={selectedPage}
-            disabled={mode !== "selected"}
-            onChange={(event) => {
-              const nextPage = Math.max(1, Math.round(Number(event.target.value) || 1));
-              setSelectedPage(nextPage);
-              setActivePage(nextPage);
-              clearResult();
-            }}
-            aria-label="Selected page"
-            className={`${compactInputClass} min-w-0 disabled:opacity-50 xl:w-32`}
-          />
-        )}
-
-        {(["top", "right", "bottom", "left"] as const).map((key) => (
-          <input
-            id={`crop-pdf-margin-${key}`}
-            name={`crop-pdf-margin-${key}`}
-            key={key}
-            type="number"
-            min={0}
-            max={95}
-            value={margins[key]}
-            onChange={(event) => updateMargin(key, Number(event.target.value))}
-            aria-label={`${key} margin percent`}
-            title={`${key[0].toUpperCase()}${key.slice(1)} margin (%)`}
-            className={`${compactInputClass} w-full xl:w-20`}
-          />
-        ))}
-
-        <button type="button" onClick={resetCrop} className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-800 shadow-sm transition hover:border-red-200 hover:text-[#FF2D2D] xl:w-24">
+        <div className={mobile ? "contents" : "flex shrink-0 items-center gap-2"}>
+          <button type="button" onClick={() => applyZoom(zoomPercent - 10)} className={`${compactInputClass} inline-flex items-center justify-center ${mobile ? "w-10" : "w-14 px-0"}`} aria-label="Zoom out" title="Zoom Out"><Minus className={mobile ? "h-4 w-4" : "h-5 w-5"} /></button>
+          <button type="button" onClick={() => applyZoom(zoomPercent + 10)} className={`${compactInputClass} inline-flex items-center justify-center ${mobile ? "w-10" : "w-14 px-0"}`} aria-label="Zoom in" title="Zoom In"><Plus className={mobile ? "h-4 w-4" : "h-5 w-5"} /></button>
+        </div>
+        <button type="button" onClick={resetCrop} className={`inline-flex items-center justify-center border border-slate-200 bg-white font-black text-slate-800 shadow-sm transition hover:border-red-200 hover:text-[#FF2D2D] ${mobile ? "col-span-2 h-10 gap-1.5 rounded-lg px-3 text-xs" : "h-14 w-auto shrink-0 gap-2 rounded-xl px-4 text-sm"}`}>
           Reset
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          <RotateCcw className={mobile ? "h-3.5 w-3.5" : "h-5 w-5"} aria-hidden="true" />
         </button>
       </div>
     );
@@ -1040,21 +1148,24 @@ export function CropPdfTool() {
     const isProcessing = workflowStep === "process";
 
     return (
-      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
+      <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 overflow-visible border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
+        <div className="relative mx-auto grid max-w-[1800px] min-w-0 gap-3 overflow-visible sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <p className="shrink-0 truncate text-sm font-black text-slate-950">{readyLabel}</p>
+            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+          </div>
+          <div className="hidden min-w-0 flex-1 flex-nowrap items-center gap-2 sm:flex">
+            <button type="button" onClick={() => setCropModeActive((current) => !current)} className={`inline-flex h-14 w-auto shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-0 text-sm font-black shadow-sm transition ${cropModeActive ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-800 hover:border-red-200 hover:text-[#FF2D2D]"}`}><Crop className="h-5 w-5" />Crop Mode</button>
             {renderCropSettings()}
           </div>
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
-          <div className="min-w-0 xl:ml-auto">
-            <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+          <div className="min-w-0 overflow-visible sm:ml-auto sm:flex sm:shrink-0 sm:items-center">
+            <div className="grid grid-cols-[3rem_minmax(8rem,1fr)_minmax(5rem,.7fr)] items-center gap-2 overflow-visible sm:w-max sm:grid-cols-[3.5rem_8.75rem_6.75rem] sm:gap-2">
               {renderAddMoreButton(isProcessing)}
               <button
                 type="button"
                 onClick={() => void cropPdf()}
-                disabled={isProcessing}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
+                disabled={isProcessing || !hasValidCrop}
+                className="inline-flex h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
               >
                 {isProcessing ? "Processing..." : "Crop PDF"}
                 <Crop className="h-5 w-5" aria-hidden="true" />
@@ -1063,16 +1174,22 @@ export function CropPdfTool() {
                 type="button"
                 onClick={resetTool}
                 disabled={isProcessing}
-                className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
+                className="inline-flex h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Clear All
                 <RotateCcw className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:absolute sm:bottom-full sm:left-1/2 sm:mb-2 sm:-translate-x-1/2">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes cropPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div role="dialog" aria-modal="true" aria-label="Crop PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(62vh,34rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[cropPdfDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Crop settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderCropSettings(true)}</div></div></div>;
   }
 
   return (
@@ -1091,7 +1208,8 @@ export function CropPdfTool() {
         <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           <input id="crop-pdf-workspace-upload" name="crop-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
-          {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "settings" && renderBottomActionBar()}
+          {workflowStep === "settings" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

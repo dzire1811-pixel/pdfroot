@@ -1,12 +1,74 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, Eye, EyeOff, FileText, GripVertical, Loader2, Plus, RotateCcw, Trash2, UnlockKeyhole, UploadCloud } from "lucide-react";
+/* eslint-disable @next/next/no-img-element */
+
+import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, Eye, EyeOff, FileText, GripVertical, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UnlockKeyhole, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type WorkflowStep = "settings" | "process" | "download";
 
 const CARD_DRAG_TYPE = "application/x-pdfroot-unlock-card";
+
+type QpdfRuntime = {
+  FS: {
+    writeFile(path: string, data: Uint8Array): void;
+    readFile(path: string): Uint8Array;
+    unlink(path: string): void;
+  };
+  callMain(args: string[]): void;
+};
+
+let unlockQpdfRuntimePromise: Promise<QpdfRuntime> | null = null;
+
+function loadUnlockQpdfRuntime() {
+  if (typeof window === "undefined") return Promise.reject(new Error("QPDF is available only in the browser."));
+  if (!unlockQpdfRuntimePromise) {
+    unlockQpdfRuntimePromise = import("qpdf-wasm")
+      .then(({ default: initQpdf }) => initQpdf({
+        locateFile: (path) => path.endsWith(".wasm") ? "/wasm/qpdf.wasm" : path,
+        print: () => undefined,
+        printErr: () => undefined,
+      }))
+      .catch((error) => {
+        unlockQpdfRuntimePromise = null;
+        throw error;
+      });
+  }
+  return unlockQpdfRuntimePromise;
+}
+
+async function renderFirstPagePreview(file: File, password?: string) {
+  const pdfjs = await loadPdfJs();
+  const bytes = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes.slice(0)), password: password || undefined }).promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 0.8 });
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("PDF preview rendering is unavailable.");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext: context, viewport }).promise;
+  return await new Promise<string>((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(URL.createObjectURL(blob)) : reject(new Error("Could not create PDF preview.")), "image/jpeg", 0.82);
+  });
+}
+
+async function verifyUnlockedPdf(bytes: Uint8Array) {
+  const pdfjs = await loadPdfJs();
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+  try {
+    await loadingTask.promise;
+  } catch {
+    throw new Error("The generated PDF is still password protected.");
+  } finally {
+    await loadingTask.destroy();
+  }
+}
 
 type UnlockResult = {
   url: string;
@@ -49,7 +111,6 @@ function friendlyUnlockError(err: unknown) {
 export function UnlockPdfTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [sourcePreviewUrls, setSourcePreviewUrls] = useState<string[]>([]);
-  const [encryptedFlags, setEncryptedFlags] = useState<boolean[]>([]);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +121,10 @@ export function UnlockPdfTool() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("settings");
   const [result, setResult] = useState<UnlockResult | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
@@ -67,9 +132,9 @@ export function UnlockPdfTool() {
   const resultRef = useRef<UnlockResult | null>(null);
   const sourcePreviewUrlsRef = useRef<string[]>([]);
   const draggedIndexRef = useRef<number | null>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
-  const encryptedCount = encryptedFlags.filter(Boolean).length;
-  const needsPassword = encryptedCount > 0;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
 
   function scrollToolStageIntoView() {
@@ -90,6 +155,45 @@ export function UnlockPdfTool() {
     setResult(null);
     resultRef.current = null;
   }
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(360);
+    drawerCloseTimerRef.current = setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setSettingsDrawerDragOffset(0);
+      drawerCloseTimerRef.current = null;
+    }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset;
+    setIsSettingsDrawerDragging(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current));
+  }
+
+  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
+    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    if (offset >= 84) return closeSettingsDrawer();
+    setSettingsDrawerDragOffset(0);
+  }
 
   function clearSourcePreviews() {
     sourcePreviewUrlsRef.current.forEach((url) => {
@@ -108,7 +212,6 @@ export function UnlockPdfTool() {
     clearResult();
     clearSourcePreviews();
     setFiles([]);
-    setEncryptedFlags([]);
     setPassword("");
     setShowPassword(false);
     setError(null);
@@ -126,7 +229,6 @@ export function UnlockPdfTool() {
     setWorkflowStep("settings");
     setActiveDraggedIndex(null);
     setFiles((current) => current.filter((_, index) => index !== indexToRemove));
-    setEncryptedFlags((current) => current.filter((_, index) => index !== indexToRemove));
     setSourcePreviewUrls((current) => {
       const next = [...current];
       const [removedUrl] = next.splice(indexToRemove, 1);
@@ -160,10 +262,15 @@ export function UnlockPdfTool() {
           return looksEncrypted(bytes);
         })
       );
-      const previewUrls = incomingFiles.map((nextFile) => URL.createObjectURL(nextFile));
+      const previewUrls = await Promise.all(incomingFiles.map(async (nextFile, index) => {
+        try {
+          return await renderFirstPagePreview(nextFile, incomingEncryptedFlags[index] ? password : undefined);
+        } catch {
+          return "";
+        }
+      }));
 
       setFiles((current) => [...current, ...incomingFiles]);
-      setEncryptedFlags((current) => [...current, ...incomingEncryptedFlags]);
       setSourcePreviewUrls((current) => {
         const next = [...current, ...previewUrls];
         sourcePreviewUrlsRef.current = next;
@@ -215,7 +322,7 @@ export function UnlockPdfTool() {
 
   function validateForm() {
     if (files.length === 0) return "Please upload at least one PDF first.";
-    if (needsPassword && !password.trim()) return "Password is required to unlock this PDF.";
+    if (!password.trim()) return "Password is required to unlock this PDF.";
     return null;
   }
 
@@ -235,16 +342,8 @@ export function UnlockPdfTool() {
     setStatus("Loading PDF unlock engine...");
 
     try {
-      const { default: initQpdf } = await import("qpdf-wasm");
-      const qpdf = await initQpdf({
-        locateFile: (path) => {
-          if (path.endsWith(".wasm")) return "/qpdf.wasm";
-          if (path.endsWith(".js")) return "/qpdf.js";
-          return path;
-        },
-        print: () => undefined,
-        printErr: () => undefined,
-      });
+      const qpdf = await loadUnlockQpdfRuntime();
+
       const outputFiles: Array<{ name: string; bytes: Uint8Array }> = [];
 
       for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
@@ -255,12 +354,13 @@ export function UnlockPdfTool() {
         setStatus(`Unlocking ${currentFile.name} (${fileIndex + 1} of ${files.length})...`);
         qpdf.FS.writeFile(inputPath, new Uint8Array(await currentFile.arrayBuffer()));
 
-        const passwordArgs = encryptedFlags[fileIndex] ? [`--password=${password}`] : [];
+        const passwordArgs = [`--password=${password}`];
         qpdf.callMain([...passwordArgs, "--decrypt", inputPath, outputPath]);
-        const unlockedBytes = qpdf.FS.readFile(outputPath);
+        const unlockedBytes = new Uint8Array(qpdf.FS.readFile(outputPath));
+        await verifyUnlockedPdf(unlockedBytes);
         outputFiles.push({
           name: `${cleanFileName(currentFile.name)}-unlocked.pdf`,
-          bytes: new Uint8Array(unlockedBytes),
+          bytes: unlockedBytes,
         });
 
         try {
@@ -289,12 +389,13 @@ export function UnlockPdfTool() {
         sizeKb: blob.size / 1024,
         fileCount: outputFiles.length,
         downloadName: outputFiles.length === 1 ? outputFiles[0].name : "PDFRoot-unlocked-pdfs.zip",
-        downloadLabel: outputFiles.length === 1 ? "Download PDF" : "Download ZIP",
+        downloadLabel: outputFiles.length === 1 ? "Download Unlocked PDF" : "Download Unlocked PDFs",
       });
       setProgress(100);
       setStatus(files.length === 1 ? "Unlocked PDF is ready to download." : "Unlocked PDFs are ready to download.");
       setWorkflowStep("download");
     } catch (err) {
+      unlockQpdfRuntimePromise = null;
       setProgress(0);
       setStatus("PDF unlock failed.");
       setWorkflowStep("settings");
@@ -309,9 +410,57 @@ export function UnlockPdfTool() {
   useEffect(() => {
     sourcePreviewUrlsRef.current = sourcePreviewUrls;
   }, [sourcePreviewUrls]);
+  useEffect(() => {
+    if (!password.trim() || files.length === 0) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void Promise.all(files.map(async (file) => {
+        try { return await renderFirstPagePreview(file, password); } catch { return null; }
+      })).then((previews) => {
+        if (cancelled) {
+          previews.forEach((url) => { if (url) URL.revokeObjectURL(url); });
+          return;
+        }
+        setSourcePreviewUrls((current) => {
+          const next = [...current];
+          previews.forEach((url, index) => {
+            if (!url) return;
+            if (next[index]) URL.revokeObjectURL(next[index]);
+            next[index] = url;
+          });
+          sourcePreviewUrlsRef.current = next;
+          return next;
+        });
+      });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [files, password]);
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => {
+      if (window.innerWidth >= 640) {
+        if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+        setIsSettingsDrawerOpen(false);
+        setIsSettingsDrawerClosing(false);
+        setSettingsDrawerDragOffset(0);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     return () => {
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
       sourcePreviewUrlsRef.current.forEach((url) => {
         if (url) URL.revokeObjectURL(url);
@@ -385,16 +534,7 @@ export function UnlockPdfTool() {
       setActiveDraggedIndex(targetIndex);
       return next;
     });
-    setEncryptedFlags((current) => {
-      if (fromIndex < 0 || targetIndex < 0 || fromIndex >= current.length || targetIndex >= current.length) {
-        return current;
-      }
 
-      const next = [...current];
-      const [draggedFlag] = next.splice(fromIndex, 1);
-      next.splice(targetIndex, 0, draggedFlag);
-      return next;
-    });
     setSourcePreviewUrls((current) => {
       if (fromIndex < 0 || targetIndex < 0 || fromIndex >= current.length || targetIndex >= current.length) {
         return current;
@@ -457,7 +597,6 @@ export function UnlockPdfTool() {
 
   function renderFileCard(pdfFile: File, index: number) {
     const sourcePreviewUrl = sourcePreviewUrls[index];
-    const isCardDragging = draggedIndex !== null;
 
     function startCardDrag(event: DragEvent<HTMLElement>) {
       const target = event.target;
@@ -465,15 +604,13 @@ export function UnlockPdfTool() {
         event.preventDefault();
         return;
       }
-
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(CARD_DRAG_TYPE, String(index));
       setActiveDraggedIndex(index);
     }
 
     function onCardDragOver(event: DragEvent<HTMLElement>) {
-      if (hasDraggedFiles(event)) return;
-      if (!hasDraggedCard(event)) return;
+      if (hasDraggedFiles(event) || !hasDraggedCard(event)) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
     }
@@ -485,8 +622,7 @@ export function UnlockPdfTool() {
     }
 
     function onCardDrop(event: DragEvent<HTMLElement>) {
-      if (hasDraggedFiles(event)) return;
-      if (!hasDraggedCard(event)) return;
+      if (hasDraggedFiles(event) || !hasDraggedCard(event)) return;
       event.preventDefault();
       setActiveDraggedIndex(null);
     }
@@ -499,88 +635,25 @@ export function UnlockPdfTool() {
         onDragOver={onCardDragOver}
         onDragEnter={onCardDragEnter}
         onDrop={onCardDrop}
-        className={`group relative flex h-full w-full max-w-sm min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
-          draggedIndex === index ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
-        }`}
+        className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${draggedIndex === index ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"}`}
       >
-        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
-          <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">
-            {index + 1}
-          </span>
-          {encryptedFlags[index] && (
-            <span className="absolute bottom-2 left-2 z-10 rounded-full bg-slate-950 px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-wide text-white">
-              Password
-            </span>
-          )}
-          <button
-            type="button"
-            draggable
-            onDragStart={startCardDrag}
-            onDragEnd={() => setActiveDraggedIndex(null)}
-            className="absolute right-2 top-2 z-30 grid h-8 w-8 cursor-grab place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm transition hover:text-[#FF2D2D] active:cursor-grabbing"
-            aria-label={`Drag ${pdfFile.name} to reorder`}
-            title="Drag to reorder"
-          >
-            <GripVertical className="h-4 w-4" aria-hidden="true" />
-          </button>
+        <div className="relative grid aspect-[3/4] place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{index + 1}</span>
+          <button type="button" draggable={false} data-no-card-drag="true" onDragStart={(event) => event.preventDefault()} onClick={(event) => { event.stopPropagation(); removeFile(index); }} className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Remove ${pdfFile.name}`}><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
           {sourcePreviewUrl ? (
-            <object data={`${sourcePreviewUrl}#toolbar=0&navpanes=0`} type="application/pdf" className="h-full w-full touch-pan-y overflow-auto bg-white">
-              <div className="grid h-full w-full place-items-center bg-slate-50 p-6 text-center">
-                <div>
-                  <div className="mx-auto grid h-20 w-20 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
-                    <FileText className="h-10 w-10" aria-hidden="true" />
-                  </div>
-                  <p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-slate-400">PDF</p>
-                  <p className="mt-2 text-xs font-bold text-slate-500">Preview unavailable</p>
-                </div>
-              </div>
-            </object>
+            <img src={sourcePreviewUrl} alt={`First page of ${pdfFile.name}`} draggable={false} className="h-full w-full object-contain" />
           ) : (
-            <div className="grid h-full w-full place-items-center bg-slate-50 p-6 text-center">
-              <div>
-                <div className="mx-auto grid h-20 w-20 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]">
-                  <FileText className="h-10 w-10" aria-hidden="true" />
-                </div>
-                <p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-slate-400">PDF</p>
-                <p className="mt-2 text-xs font-bold text-slate-500">Preview loading</p>
-              </div>
-            </div>
+            <div className="grid h-full w-full place-items-center text-center"><div><div className="mx-auto grid h-20 w-20 place-items-center rounded-2xl bg-red-50 text-[#FF2D2D]"><FileText className="h-10 w-10" aria-hidden="true" /></div><p className="mt-3 text-xs font-bold text-slate-500">Enter the PDF password to preview</p></div></div>
           )}
-          <div
-            className={`absolute inset-y-0 left-0 right-3 z-20 cursor-grab ${isCardDragging ? "" : "active:cursor-grabbing"}`}
-            draggable
-            onDragStart={startCardDrag}
-            onDragOver={onCardDragOver}
-            onDragEnter={onCardDragEnter}
-            onDrop={onCardDrop}
-            onDragEnd={() => setActiveDraggedIndex(null)}
-            aria-hidden="true"
-          />
+          <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm" aria-hidden="true"><GripVertical className="h-4 w-4" /></span>
         </div>
-        <div className="mt-2 flex min-w-0 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-black text-slate-950">{pdfFile.name}</p>
-            <p className="mt-1 text-xs font-bold text-slate-500">{formatKb(pdfFile.size)} KB</p>
-          </div>
-          <button
-            type="button"
-            draggable={false}
-            data-no-card-drag="true"
-            onDragStart={(event) => event.preventDefault()}
-            onClick={(event) => {
-              event.stopPropagation();
-              removeFile(index);
-            }}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"
-            aria-label={`Remove ${pdfFile.name}`}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+        <div className="mt-2 min-w-0">
+          <p className="truncate text-sm font-black leading-snug text-slate-950" title={pdfFile.name}>{pdfFile.name}</p>
+          <p className="mt-1.5 inline-flex max-w-full rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(pdfFile.size)} KB</p>
         </div>
       </article>
     );
   }
-
   function renderProcessingCard() {
     return (
       <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
@@ -607,10 +680,13 @@ export function UnlockPdfTool() {
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
-          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your PDF is ready!</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${formatResultSize(result.sizeKb)}` : "Ready"}
-          </p>
+          <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your unlocked PDF is ready!</h3>
+          {result ? (
+            <div className="mt-3 min-w-0">
+              <p className="truncate text-sm font-black text-slate-800" title={result.downloadName}>{result.downloadName}</p>
+              <p className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{formatResultSize(result.sizeKb)}</p>
+            </div>
+          ) : <p className="mt-2 text-sm font-semibold text-slate-500">Ready</p>}
           {result && (
             <a
               href={result.url}
@@ -636,10 +712,10 @@ export function UnlockPdfTool() {
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "settings" ? "min-h-[calc(100dvh-9rem)]" : "min-h-0"}`}>
         <div className="transition duration-300">
           {workflowStep === "settings" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+            <div className="grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-40 sm:gap-5 sm:pb-32">
               {files.map((pdfFile, index) => (
                 <div key={sourcePreviewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderFileCard(pdfFile, index)}</div>
               ))}
@@ -668,7 +744,7 @@ export function UnlockPdfTool() {
             clearResult();
           }}
           aria-label="PDF password"
-          placeholder={needsPassword ? "PDF password" : "Password if required"}
+          placeholder="PDF password"
           className={`${compactInputClass} min-w-0 xl:w-56`}
         />
         <button
@@ -683,6 +759,20 @@ export function UnlockPdfTool() {
     );
   }
 
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`@keyframes unlockPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div id="unlock-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="Unlock PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(58vh,30rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[unlockPdfDrawerIn_220ms_ease-out]"}`}>
+          <button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button>
+          <div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Password settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderPasswordSettings()}</div>
+        </div>
+      </div>
+    );
+  }
   function renderBottomActionBar() {
     const isProcessing = workflowStep === "process";
 
@@ -690,8 +780,11 @@ export function UnlockPdfTool() {
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
-            <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderPasswordSettings()}
+            <div className="flex min-w-0 items-center justify-between gap-3 xl:contents">
+              <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
+              <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-controls="unlock-pdf-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+            </div>
+            <div className="hidden sm:block xl:contents">{renderPasswordSettings()}</div>
           </div>
           {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
           <div className="min-w-0 xl:ml-auto">
@@ -739,6 +832,7 @@ export function UnlockPdfTool() {
           <input id="unlock-pdf-workspace-upload" name="unlock-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           {renderWorkspace()}
           {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "settings" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>

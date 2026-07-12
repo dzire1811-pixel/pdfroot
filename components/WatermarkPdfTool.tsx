@@ -1,13 +1,16 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, CSSProperties, DragEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, RotateCcw, Stamp, Trash2, UploadCloud } from "lucide-react";
+import { ChangeEvent, CSSProperties, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileText, GripVertical, Image as ImageIcon, Loader2, Plus, RotateCcw, SlidersHorizontal, Stamp, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
+import { loadPdfJs } from "@/lib/pdfjsClient";
 
 type WatermarkType = "text" | "image";
 type WatermarkPosition = "center" | "top" | "bottom" | "left" | "right";
 type WorkflowStep = "settings" | "process" | "download";
+
+type PageThumbnail = { fileIndex: number; pageNumber: number; url: string; width: number; height: number };
 
 const CARD_DRAG_TYPE = "application/x-pdfroot-watermark-card";
 
@@ -40,6 +43,23 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function hexToRgb(hex: string) {
+  const value = hex.replace("#", "");
+  return [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255) as [number, number, number];
+}
+
+function selectedPageNumbers(input: string, pageCount: number) {
+  const selected = new Set<number>();
+  input.split(",").map((part) => part.trim()).filter(Boolean).forEach((part) => {
+    const [startRaw, endRaw] = part.split("-");
+    const start = Number(startRaw);
+    const end = endRaw === undefined ? start : Number(endRaw);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start) return;
+    for (let page = start; page <= Math.min(end, pageCount); page += 1) selected.add(page);
+  });
+  return selected;
+}
+
 function textPosition(position: WatermarkPosition, pageWidth: number, pageHeight: number, textWidth: number, fontSize: number) {
   const margin = 42;
   if (position === "top") return { x: (pageWidth - textWidth) / 2, y: pageHeight - margin - fontSize };
@@ -61,12 +81,17 @@ function imagePosition(position: WatermarkPosition, pageWidth: number, pageHeigh
 export function WatermarkPdfTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [sourcePreviewUrls, setSourcePreviewUrls] = useState<string[]>([]);
+  const [pageThumbnails, setPageThumbnails] = useState<PageThumbnail[]>([]);
+  const [previewsLoading, setPreviewsLoading] = useState(false);
   const [watermarkType, setWatermarkType] = useState<WatermarkType>("text");
   const [text, setText] = useState("PDFRoot");
   const [fontSize, setFontSize] = useState(52);
   const [opacity, setOpacity] = useState(0.22);
   const [angle, setAngle] = useState(-35);
   const [position, setPosition] = useState<WatermarkPosition>("center");
+  const [color, setColor] = useState("#ff2d2d");
+  const [pageMode, setPageMode] = useState<"all" | "selected">("all");
+  const [pageRange, setPageRange] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageWatermarkPreviewUrl, setImageWatermarkPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +101,13 @@ export function WatermarkPdfTool() {
   const [status, setStatus] = useState("Upload a PDF and choose watermark settings.");
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>("settings");
   const [result, setResult] = useState<WatermarkResult | null>(null);
+  // Retained for the shared sticky-bar viewport lifecycle used by approved PDF tools.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
+  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
+  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
+  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -86,8 +117,51 @@ export function WatermarkPdfTool() {
   const sourcePreviewUrlsRef = useRef<string[]>([]);
   const imageWatermarkPreviewRef = useRef<string | null>(null);
   const draggedIndexRef = useRef<number | null>(null);
+  const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
+
+  function isPageSelected(pageNumber: number, pageCount: number) {
+    return pageMode === "all" || selectedPageNumbers(pageRange, pageCount).has(pageNumber);
+  }
+
+  function openSettingsDrawer() {
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+  }
+
+  const closeSettingsDrawer = useCallback(() => {
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(420);
+    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+
+  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
+  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
+    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false);
+    if (offset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0);
+  }
+
+  async function renderPdfThumbnails(file: File, fileIndex: number) {
+    const pdfjs = await loadPdfJs();
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const thumbnails: PageThumbnail[] = [];
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 1.15 });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("Your browser does not support PDF previews.");
+      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+      context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: context, viewport }).promise;
+      thumbnails.push({ fileIndex, pageNumber, url: canvas.toDataURL("image/jpeg", 0.9), width: canvas.width, height: canvas.height });
+    }
+    return thumbnails;
+  }
 
   function scrollToolStageIntoView() {
     window.requestAnimationFrame(() => {
@@ -138,6 +212,10 @@ export function WatermarkPdfTool() {
     setOpacity(0.22);
     setAngle(-35);
     setPosition("center");
+    setColor("#ff2d2d");
+    setPageMode("all");
+    setPageRange("");
+    setPageThumbnails([]);
     setImageFile(null);
     setError(null);
     setIsDragging(false);
@@ -249,6 +327,7 @@ export function WatermarkPdfTool() {
     if (files.length === 0) return "Please upload at least one PDF first.";
     if (watermarkType === "text" && !text.trim()) return "Please enter watermark text.";
     if (watermarkType === "image" && !imageFile) return "Please upload a watermark image.";
+    if (pageMode === "selected" && !pageRange.trim()) return "Enter pages such as 1,3-5.";
     return null;
   }
 
@@ -276,6 +355,9 @@ export function WatermarkPdfTool() {
         setStatus(`Applying watermark to ${currentFile.name} (${fileIndex + 1} of ${files.length})...`);
         const pdfDoc = await PDFDocument.load(await currentFile.arrayBuffer(), { ignoreEncryption: true });
         const pages = pdfDoc.getPages();
+        const selectedPages = selectedPageNumbers(pageRange, pages.length);
+        const shouldApply = (_page: unknown, pageIndex: number) => pageMode === "all" || selectedPages.has(pageIndex + 1);
+        const [red, green, blue] = hexToRgb(color);
 
         if (watermarkType === "text") {
           const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -283,7 +365,7 @@ export function WatermarkPdfTool() {
           const finalOpacity = clampNumber(opacity, 0.05, 1);
           const finalAngle = clampNumber(angle, -180, 180);
 
-          pages.forEach((page) => {
+          pages.filter(shouldApply).forEach((page) => {
             const { width, height } = page.getSize();
             const textWidth = font.widthOfTextAtSize(text.trim(), finalFontSize);
             const { x, y } = textPosition(position, width, height, textWidth, finalFontSize);
@@ -292,7 +374,7 @@ export function WatermarkPdfTool() {
               y,
               size: finalFontSize,
               font,
-              color: rgb(1, 0.18, 0.18),
+              color: rgb(red, green, blue),
               opacity: finalOpacity,
               rotate: degrees(finalAngle),
             });
@@ -303,8 +385,9 @@ export function WatermarkPdfTool() {
           const watermarkImage = lowerName.endsWith(".png") || imageFile.type === "image/png" ? await pdfDoc.embedPng(imageBytes) : await pdfDoc.embedJpg(imageBytes);
           const finalOpacity = clampNumber(opacity, 0.05, 1);
           const finalSize = clampNumber(fontSize, 8, 90) / 100;
+          const finalAngle = clampNumber(angle, -180, 180);
 
-          pages.forEach((page) => {
+          pages.filter(shouldApply).forEach((page) => {
             const { width, height } = page.getSize();
             const maxWidth = width * finalSize;
             const scale = maxWidth / watermarkImage.width;
@@ -317,6 +400,7 @@ export function WatermarkPdfTool() {
               width: drawWidth,
               height: drawHeight,
               opacity: finalOpacity,
+              rotate: degrees(finalAngle),
             });
           });
         }
@@ -367,14 +451,35 @@ export function WatermarkPdfTool() {
   }, [sourcePreviewUrls]);
 
   useEffect(() => {
+    let active = true;
+    if (!files.length) { setPageThumbnails([]); setPreviewsLoading(false); return; }
+    setPreviewsLoading(true);
+    void Promise.all(files.map((file, index) => renderPdfThumbnails(file, index)))
+      .then((groups) => { if (active) setPageThumbnails(groups.flat()); })
+      .catch((previewError) => { if (active) setError(previewError instanceof Error ? previewError.message : "Could not render PDF previews."); })
+      .finally(() => { if (active) setPreviewsLoading(false); });
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
+
+  useEffect(() => {
     return () => {
       if (resultRef.current?.url) URL.revokeObjectURL(resultRef.current.url);
       sourcePreviewUrlsRef.current.forEach((url) => {
         if (url) URL.revokeObjectURL(url);
       });
       if (imageWatermarkPreviewRef.current) URL.revokeObjectURL(imageWatermarkPreviewRef.current);
+      if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSettingsDrawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
+    const onResize = () => { if (window.innerWidth >= 640) { setIsSettingsDrawerOpen(false); setSettingsDrawerDragOffset(0); } };
+    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
+  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
 
   useEffect(() => {
     if (workflowStep === "process" || workflowStep === "download") {
@@ -541,11 +646,12 @@ export function WatermarkPdfTool() {
     return (
       <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" aria-hidden="true">
         <span
-          className="absolute max-w-[85%] truncate font-black leading-none text-[#FF2D2D]"
+          className="absolute max-w-[85%] truncate font-black leading-none"
           style={{
             ...positionStyle,
             fontSize: `${clampNumber(fontSize * 0.45, 8, 72)}px`,
             opacity: finalOpacity,
+            color,
           }}
         >
           {watermarkText}
@@ -554,6 +660,23 @@ export function WatermarkPdfTool() {
     );
   }
 
+  function renderPageThumbnail(thumbnail: PageThumbnail) {
+    const file = files[thumbnail.fileIndex];
+    const filePageCount = pageThumbnails.filter((item) => item.fileIndex === thumbnail.fileIndex).length;
+    const selected = isPageSelected(thumbnail.pageNumber, filePageCount);
+    return (
+      <article key={`${thumbnail.fileIndex}-${thumbnail.pageNumber}`} className={`w-full max-w-[15rem] min-w-0 rounded-2xl border bg-white p-3 shadow-sm transition hover:-translate-y-1 hover:shadow-md ${selected ? "border-red-200" : "border-slate-200"}`}>
+        <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white" style={{ aspectRatio: `${thumbnail.width}/${thumbnail.height}` }}>
+          <span className="absolute left-2 top-2 z-20 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow">{thumbnail.pageNumber}</span>
+          <img src={thumbnail.url} alt={`Page ${thumbnail.pageNumber} of ${file?.name ?? "PDF"}`} className="block h-full w-full object-contain" />
+          {selected && renderLiveWatermarkOverlay()}
+        </div>
+        {thumbnail.pageNumber === 1 ? <div className="min-w-0 text-left"><p className="mt-2 truncate text-sm font-black leading-snug text-slate-950" title={file?.name}>{file?.name}</p><span className="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">{formatKb(file?.size ?? 0)} KB</span></div> : <p className="mt-2 text-left text-xs font-bold text-slate-500">Page {thumbnail.pageNumber}</p>}
+      </article>
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function renderFileCard(pdfFile: File, index: number) {
     const sourcePreviewUrl = sourcePreviewUrls[index];
     const isCardDragging = draggedIndex !== null;
@@ -706,9 +829,7 @@ export function WatermarkPdfTool() {
             <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
           </div>
           <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Your PDF is ready!</h3>
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${formatResultSize(result.sizeKb)}` : "Ready"}
-          </p>
+          {result && <div className="mt-3 min-w-0"><p className="truncate text-sm font-black text-slate-950" title={result.downloadName}>{result.downloadName}</p><span className="mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{formatResultSize(result.sizeKb)}</span></div>}
           {result && (
             <a
               href={result.url}
@@ -734,13 +855,11 @@ export function WatermarkPdfTool() {
 
   function renderWorkspace() {
     return (
-      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "settings" && (
-            <div className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
-              {files.map((pdfFile, index) => (
-                <div key={sourcePreviewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderFileCard(pdfFile, index)}</div>
-              ))}
+            <div data-merge-card-grid="true" className="grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(13rem,15rem))] items-start justify-center gap-4 pb-36 sm:gap-5 sm:pb-44">
+              {previewsLoading && pageThumbnails.length === 0 ? <div className="col-span-full grid justify-items-center py-16 text-slate-500"><Loader2 className="h-8 w-8 animate-spin text-[#FF2D2D]" /><p className="mt-3 text-sm font-bold">Rendering clear PDF previews...</p></div> : pageThumbnails.map(renderPageThumbnail)}
             </div>
           )}
           {workflowStep === "process" && renderProcessingCard()}
@@ -750,13 +869,13 @@ export function WatermarkPdfTool() {
     );
   }
 
-  function renderWatermarkSettings() {
-    const compactInputClass = "h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-950 shadow-sm outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100";
+  function renderWatermarkSettings(mobile = false) {
+    const compactInputClass = `h-10 rounded-lg border border-slate-200 bg-white ${mobile ? "px-3" : "px-2"} text-xs font-black text-slate-950 shadow-sm outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100`;
     const textMode = watermarkType === "text";
 
     return (
-      <div className="grid min-w-0 gap-2 lg:grid-cols-[10.5rem_minmax(10rem,13rem)_4.75rem_4.75rem_4.75rem_7rem] xl:flex xl:flex-none xl:items-center">
-        <div className="grid h-10 grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm xl:w-44">
+      <div className={mobile ? "grid min-w-0 grid-cols-2 gap-3" : "flex w-full min-w-0 flex-nowrap items-end gap-1.5 pb-1"}>
+        <div className={`grid h-10 grid-cols-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm ${mobile ? "col-span-2" : "w-[9.5rem] shrink-0"}`}>
           {(["text", "image"] as const).map((type) => {
             const selected = watermarkType === type;
             return (
@@ -784,10 +903,10 @@ export function WatermarkPdfTool() {
             onChange={(event) => setText(event.target.value)}
             aria-label="Watermark text"
             placeholder="Watermark text"
-            className={`${compactInputClass} min-w-0 xl:w-52`}
+            className={`${compactInputClass} min-w-0 ${mobile ? "col-span-2" : "w-[clamp(8rem,14vw,15rem)] flex-1"}`}
           />
         ) : (
-          <button type="button" onClick={() => imageInputRef.current?.click()} className={`${compactInputClass} min-w-0 truncate text-left xl:w-52`}>
+          <button type="button" onClick={() => imageInputRef.current?.click()} className={`${compactInputClass} min-w-0 truncate text-left ${mobile ? "col-span-2" : "w-[clamp(8rem,14vw,15rem)] flex-1"}`}>
             {imageFile ? imageFile.name : "Choose watermark image"}
           </button>
         )}
@@ -799,7 +918,8 @@ export function WatermarkPdfTool() {
           value={fontSize}
           onChange={(event) => setFontSize(clampNumber(Number(event.target.value), textMode ? 10 : 8, textMode ? 160 : 90))}
           aria-label={textMode ? "Font size" : "Image size"}
-          className={`${compactInputClass} w-full xl:w-20`}
+          className={`${compactInputClass} ${mobile ? "w-full" : "w-[3.75rem] shrink-0 px-2"}`}
+          title={textMode ? "Font size" : "Image size"}
         />
         <input
           id="watermark-pdf-opacity"
@@ -809,7 +929,8 @@ export function WatermarkPdfTool() {
           value={opacity}
           onChange={(event) => setOpacity(clampNumber(Number(event.target.value), 0.05, 1))}
           aria-label="Opacity"
-          className={`${compactInputClass} w-full xl:w-20`}
+          className={`${compactInputClass} ${mobile ? "w-full" : "w-[4rem] shrink-0 px-2"}`}
+          title="Opacity"
         />
         <input
           id="watermark-pdf-angle"
@@ -818,15 +939,19 @@ export function WatermarkPdfTool() {
           value={angle}
           onChange={(event) => setAngle(clampNumber(Number(event.target.value), -180, 180))}
           aria-label="Angle"
-          className={`${compactInputClass} w-full xl:w-20`}
+          className={`${compactInputClass} ${mobile ? "w-full" : "w-[4rem] shrink-0 px-2"}`}
+          title="Rotation"
         />
-        <select id="watermark-pdf-position" name="watermark-pdf-position" value={position} onChange={(event) => setPosition(event.target.value as WatermarkPosition)} aria-label="Position" className={`${compactInputClass} w-full appearance-auto xl:w-28`}>
+        <select id="watermark-pdf-position" name="watermark-pdf-position" value={position} onChange={(event) => setPosition(event.target.value as WatermarkPosition)} aria-label="Position" title="Position" className={`${compactInputClass} appearance-auto ${mobile ? "w-full" : "w-[5.75rem] shrink-0 px-2"}`}>
           <option value="center">Center</option>
           <option value="top">Top</option>
           <option value="bottom">Bottom</option>
           <option value="left">Left</option>
           <option value="right">Right</option>
         </select>
+        <label className={`${compactInputClass} flex items-center ${mobile ? "gap-2" : "w-[4.75rem] shrink-0 gap-1.5"}`} title="Color"><input type="color" value={color} onChange={(event) => setColor(event.target.value)} className={`h-6 cursor-pointer border-0 bg-transparent p-0 ${mobile ? "w-8" : "w-6"}`} /><span>Color</span></label>
+        <select value={pageMode} onChange={(event) => setPageMode(event.target.value as "all" | "selected")} aria-label="Pages" className={`${compactInputClass} appearance-auto ${mobile ? "" : "w-[6.5rem] shrink-0 px-2"}`}><option value="all">All pages</option><option value="selected">Selected pages</option></select>
+        {pageMode === "selected" && <input value={pageRange} onChange={(event) => setPageRange(event.target.value)} placeholder="1,3-5" aria-label="Page range" className={`${compactInputClass} ${mobile ? "col-span-2" : "w-20 shrink-0 px-2"}`} />}
       </div>
     );
   }
@@ -836,20 +961,20 @@ export function WatermarkPdfTool() {
 
     return (
       <div ref={actionBarRef} data-merge-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
+        <div className="mx-auto grid max-w-[1600px] min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-end">
+          <div className="flex min-w-0 items-center justify-between gap-3 sm:self-center">
             <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            {renderWatermarkSettings()}
+            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
           </div>
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 lg:max-w-sm">{error}</p>}
-          <div className="min-w-0 xl:ml-auto">
-            <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+          <div className="hidden min-w-0 overflow-hidden sm:block">{renderWatermarkSettings()}</div>
+          <div className="min-w-0 sm:ml-auto sm:shrink-0">
+            <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:w-max sm:grid-cols-[3.5rem_10.75rem_7.25rem] sm:gap-1.5">
               {renderAddMoreButton(isProcessing)}
               <button
                 type="button"
                 onClick={() => void addWatermark()}
                 disabled={isProcessing}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-5 sm:text-base"
+                className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0 sm:min-h-14 sm:px-4 sm:text-base"
               >
                 {isProcessing ? "Processing..." : "Add Watermark"}
                 <Stamp className="h-5 w-5" aria-hidden="true" />
@@ -858,16 +983,22 @@ export function WatermarkPdfTool() {
                 type="button"
                 onClick={resetTool}
                 disabled={isProcessing}
-                className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm"
+                className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-14 sm:gap-1.5 sm:px-3 sm:text-sm"
               >
                 Clear All
                 <RotateCcw className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           </div>
+          {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:col-span-3">{error}</p>}
         </div>
       </div>
     );
+  }
+
+  function renderMobileSettingsDrawer() {
+    if (!isSettingsDrawerOpen) return null;
+    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes watermarkDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div role="dialog" aria-modal="true" aria-label="Watermark settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(62vh,34rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[watermarkDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Watermark settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderWatermarkSettings(true)}</div></div></div>;
   }
 
   return (
@@ -887,7 +1018,8 @@ export function WatermarkPdfTool() {
           <input id="watermark-pdf-workspace-upload" name="watermark-pdf-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={onInputChange} />
           <input id="watermark-image-upload" name="watermark-image-upload" ref={imageInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" onChange={onImageInputChange} />
           {renderWorkspace()}
-          {workflowStep === "settings" && isActionBarVisible && renderBottomActionBar()}
+          {workflowStep === "settings" && renderBottomActionBar()}
+          {workflowStep === "settings" && renderMobileSettingsDrawer()}
         </div>
       ) : (
         <>
