@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { ChangeEvent, DragEvent, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, TouchEvent as ReactTouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, Eye, EyeOff, FileText, GripVertical, Loader2, Plus, RotateCcw, SlidersHorizontal, Trash2, UnlockKeyhole, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
@@ -129,10 +129,13 @@ export function UnlockPdfTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const resultRef = useRef<UnlockResult | null>(null);
   const sourcePreviewUrlsRef = useRef<string[]>([]);
   const draggedIndexRef = useRef<number | null>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
@@ -157,41 +160,85 @@ export function UnlockPdfTool() {
   }
   function openSettingsDrawer() {
     if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
     setSettingsDrawerDragOffset(0);
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(false);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
     setIsSettingsDrawerOpen(true);
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
     setIsSettingsDrawerClosing(true);
-    setSettingsDrawerDragOffset(360);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
     drawerCloseTimerRef.current = setTimeout(() => {
       setIsSettingsDrawerOpen(false);
       setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
       setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
       drawerCloseTimerRef.current = null;
+      window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus());
     }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
-    drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset;
-    setIsSettingsDrawerDragging(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
 
-  function onDrawerPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
-    if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current));
-  }
-
-  function finishDrawerDrag(event?: ReactPointerEvent<HTMLButtonElement>) {
-    const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset;
+  const finishSettingsDrawerDrag = useCallback((clientY?: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    if (typeof clientY === "number") updateSettingsDrawerDrag(clientY);
     drawerDragStartYRef.current = null;
     setIsSettingsDrawerDragging(false);
-    if (offset >= 84) return closeSettingsDrawer();
+    if (drawerDragOffsetRef.current >= 84) {
+      closeSettingsDrawer();
+      return;
+    }
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }, [closeSettingsDrawer, updateSettingsDrawerDrag]);
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    beginDrawerHandleDrag(event.clientY);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function onDrawerHandlePointerMove(event: ReactPointerEvent<HTMLButtonElement>) { updateSettingsDrawerDrag(event.clientY); }
+  function onDrawerHandleMouseDown(event: ReactMouseEvent<HTMLButtonElement>) { beginDrawerHandleDrag(event.clientY); }
+  function onDrawerHandleMouseUp(event: ReactMouseEvent<HTMLButtonElement>) { finishSettingsDrawerDrag(event.clientY); }
+  function onDrawerHandleTouchStart(event: ReactTouchEvent<HTMLButtonElement>) { const touch = event.touches[0]; if (touch) beginDrawerHandleDrag(touch.clientY); }
+  function onDrawerHandleTouchMove(event: ReactTouchEvent<HTMLButtonElement>) { const touch = event.touches[0]; if (touch) updateSettingsDrawerDrag(touch.clientY); }
+  function onDrawerHandleTouchEnd(event: ReactTouchEvent<HTMLButtonElement>) { finishSettingsDrawerDrag(event.changedTouches[0]?.clientY); }
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
     setSettingsDrawerDragOffset(0);
   }
 
@@ -220,6 +267,15 @@ export function UnlockPdfTool() {
     setProgress(0);
     setWorkflowStep("settings");
     setStatus("Upload a protected PDF to unlock it.");
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    drawerCloseTimerRef.current = null;
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
   }
 
   function removeFile(indexToRemove: number) {
@@ -438,25 +494,38 @@ export function UnlockPdfTool() {
 
   useEffect(() => {
     if (!isSettingsDrawerOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
-    const onResize = () => {
-      if (window.innerWidth >= 640) {
-        if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
-        setIsSettingsDrawerOpen(false);
-        setIsSettingsDrawerClosing(false);
-        setSettingsDrawerDragOffset(0);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
+    const onResize = () => { if (window.innerWidth >= 640) closeSettingsDrawer(); };
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => { const touch = event.touches[0]; if (touch) updateSettingsDrawerDrag(touch.clientY); };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => finishSettingsDrawerDrag(event.changedTouches[0]?.clientY);
+
+    document.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerHandleDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerHandleDrag);
     return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerHandleDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerHandleDrag);
     };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+  }, [closeSettingsDrawer, finishSettingsDrawerDrag, isSettingsDrawerOpen, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     return () => {
@@ -715,7 +784,7 @@ export function UnlockPdfTool() {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "settings" ? "min-h-[calc(100dvh-9rem)]" : "min-h-0"}`}>
         <div className="transition duration-300">
           {workflowStep === "settings" && (
-            <div className="grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-40 sm:gap-5 sm:pb-32">
+            <div className="grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-32">
               {files.map((pdfFile, index) => (
                 <div key={sourcePreviewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderFileCard(pdfFile, index)}</div>
               ))}
@@ -761,14 +830,41 @@ export function UnlockPdfTool() {
 
   function renderMobileSettingsDrawer() {
     if (!isSettingsDrawerOpen) return null;
+    const isProcessing = workflowStep === "process";
     return (
       <div className="fixed inset-0 z-[60] sm:hidden">
         <style>{`@keyframes unlockPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
         <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
-        <div id="unlock-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="Unlock PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(58vh,30rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[unlockPdfDrawerIn_220ms_ease-out]"}`}>
-          <button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button>
-          <div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Password settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div>
+        <div id="unlock-pdf-mobile-settings-drawer" role="dialog" aria-modal="true" aria-label="Unlock PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[unlockPdfDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}>
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={(event) => finishSettingsDrawerDrag(event.clientY)}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          ><span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" /></button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black text-slate-950">Settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings"><X className="h-4 w-4" aria-hidden="true" /></button></div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderPasswordSettings()}</div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            <div className="grid grid-cols-[3rem_minmax(9rem,1fr)_minmax(5.5rem,0.75fr)] gap-2">
+              {renderAddMoreButton(isProcessing)}
+              <button type="button" onClick={() => void unlockPdf()} disabled={isProcessing} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0">
+                {isProcessing ? "Processing..." : "Unlock PDF"}<UnlockKeyhole className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={resetTool} disabled={isProcessing} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
+                Clear All<RotateCcw className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -782,7 +878,7 @@ export function UnlockPdfTool() {
           <div className="flex min-w-0 flex-1 flex-col gap-2 xl:flex-row xl:items-center">
             <div className="flex min-w-0 items-center justify-between gap-3 xl:contents">
               <p className="truncate text-sm font-black text-slate-950">{readyLabel}</p>
-              <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-controls="unlock-pdf-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+              <button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-controls="unlock-pdf-mobile-settings-drawer" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />Settings</button>
             </div>
             <div className="hidden sm:block xl:contents">{renderPasswordSettings()}</div>
           </div>

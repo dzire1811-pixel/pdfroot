@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, Crop, Download, FileText, Loader2, Minus, Plus, RotateCcw, Settings, SlidersHorizontal, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
@@ -175,11 +175,14 @@ export function CropPdfTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
+  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const canvasScrollRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<CropResult | null>(null);
   const activePagePreviewRef = useRef<ActivePagePreview | null>(null);
   const pageCropBoxesRef = useRef<Record<string, CropBox>>({});
   const drawerDragStartYRef = useRef<number | null>(null);
+  const drawerDragOffsetRef = useRef(0);
+  const settingsDrawerClosingRef = useRef(false);
   const drawerCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileCount = files.length;
   const readyLabel = `${fileCount} ${fileCount === 1 ? "PDF" : "PDFs"} ready`;
@@ -209,18 +212,84 @@ export function CropPdfTool() {
 
   function openSettingsDrawer() {
     if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
-    setSettingsDrawerDragOffset(0); setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(false); setIsSettingsDrawerOpen(true);
+    if (window.innerWidth < 640) {
+      const workArea = workAreaRef.current;
+      if (workArea) {
+        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
+      }
+    }
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(false);
+    settingsDrawerClosingRef.current = false;
+    drawerDragOffsetRef.current = 0;
+    setIsSettingsDrawerOpen(true);
   }
 
   const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing) return;
-    drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); setIsSettingsDrawerClosing(true); setSettingsDrawerDragOffset(420);
-    drawerCloseTimerRef.current = setTimeout(() => { setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); drawerCloseTimerRef.current = null; }, 240);
+    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
+    const closeDistance = Math.max(window.innerHeight, 420);
+    settingsDrawerClosingRef.current = true;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    setIsSettingsDrawerClosing(true);
+    setSettingsDrawerDragOffset(closeDistance);
+    drawerDragOffsetRef.current = closeDistance;
+    drawerCloseTimerRef.current = setTimeout(() => {
+      setIsSettingsDrawerOpen(false);
+      setIsSettingsDrawerClosing(false);
+      setIsSettingsDrawerDragging(false);
+      setSettingsDrawerDragOffset(0);
+      settingsDrawerClosingRef.current = false;
+      drawerDragOffsetRef.current = 0;
+      drawerCloseTimerRef.current = null;
+      window.requestAnimationFrame(() => mobileSettingsButtonRef.current?.focus());
+    }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
 
-  function onDrawerPointerDown(event: PointerEvent<HTMLButtonElement>) { drawerDragStartYRef.current = event.clientY - settingsDrawerDragOffset; setIsSettingsDrawerDragging(true); event.currentTarget.setPointerCapture(event.pointerId); }
-  function onDrawerPointerMove(event: PointerEvent<HTMLButtonElement>) { if (drawerDragStartYRef.current !== null) setSettingsDrawerDragOffset(Math.max(0, event.clientY - drawerDragStartYRef.current)); }
-  function finishDrawerDrag(event?: PointerEvent<HTMLButtonElement>) { const offset = event && drawerDragStartYRef.current !== null ? Math.max(0, event.clientY - drawerDragStartYRef.current) : settingsDrawerDragOffset; drawerDragStartYRef.current = null; setIsSettingsDrawerDragging(false); if (offset >= 84) closeSettingsDrawer(); else setSettingsDrawerDragOffset(0); }
+  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
+    drawerDragOffsetRef.current = dragDistance;
+    setSettingsDrawerDragOffset(dragDistance);
+  }, []);
+
+  const finishSettingsDrawerDrag = useCallback((clientY?: number) => {
+    if (drawerDragStartYRef.current === null) return;
+    if (typeof clientY === "number") updateSettingsDrawerDrag(clientY);
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    if (drawerDragOffsetRef.current >= 84) {
+      closeSettingsDrawer();
+      return;
+    }
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }, [closeSettingsDrawer, updateSettingsDrawerDrag]);
+
+  function beginDrawerHandleDrag(clientY: number) {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = clientY;
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+    setIsSettingsDrawerDragging(true);
+  }
+
+  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) { beginDrawerHandleDrag(event.clientY); event.currentTarget.setPointerCapture(event.pointerId); }
+  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) { updateSettingsDrawerDrag(event.clientY); }
+  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) { beginDrawerHandleDrag(event.clientY); }
+  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) { finishSettingsDrawerDrag(event.clientY); }
+  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) { const touch = event.touches[0]; if (touch) beginDrawerHandleDrag(touch.clientY); }
+  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) { const touch = event.touches[0]; if (touch) updateSettingsDrawerDrag(touch.clientY); }
+  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) { finishSettingsDrawerDrag(event.changedTouches[0]?.clientY); }
+  function clearDrawerHandleDrag() {
+    if (settingsDrawerClosingRef.current) return;
+    drawerDragStartYRef.current = null;
+    setIsSettingsDrawerDragging(false);
+    drawerDragOffsetRef.current = 0;
+    setSettingsDrawerDragOffset(0);
+  }
 
   function scrollToolStageIntoView() {
     window.requestAnimationFrame(() => {
@@ -267,6 +336,15 @@ export function CropPdfTool() {
     setProgress(0);
     setWorkflowStep("settings");
     setStatus("Upload PDF files and choose crop settings.");
+    if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current);
+    drawerCloseTimerRef.current = null;
+    setIsSettingsDrawerOpen(false);
+    setIsSettingsDrawerClosing(false);
+    setIsSettingsDrawerDragging(false);
+    setSettingsDrawerDragOffset(0);
+    settingsDrawerClosingRef.current = false;
+    drawerDragStartYRef.current = null;
+    drawerDragOffsetRef.current = 0;
   }
 
   async function handleFiles(nextFiles: FileList | File[] | null | undefined) {
@@ -478,10 +556,37 @@ export function CropPdfTool() {
   useEffect(() => {
     if (!isSettingsDrawerOpen) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") closeSettingsDrawer(); };
-    const onResize = () => { if (window.innerWidth >= 640) { if (drawerCloseTimerRef.current) clearTimeout(drawerCloseTimerRef.current); setIsSettingsDrawerOpen(false); setIsSettingsDrawerClosing(false); setSettingsDrawerDragOffset(0); } };
-    window.addEventListener("keydown", onKeyDown); window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("resize", onResize); };
-  }, [closeSettingsDrawer, isSettingsDrawerOpen]);
+    const onResize = () => { if (window.innerWidth >= 640) closeSettingsDrawer(); };
+    const onPointerMove = (event: globalThis.PointerEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onMouseMove = (event: globalThis.MouseEvent) => updateSettingsDrawerDrag(event.clientY);
+    const onTouchMove = (event: globalThis.TouchEvent) => { const touch = event.touches[0]; if (touch) updateSettingsDrawerDrag(touch.clientY); };
+    const onPointerEnd = (event: globalThis.PointerEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onMouseEnd = (event: globalThis.MouseEvent) => finishSettingsDrawerDrag(event.clientY);
+    const onTouchEnd = (event: globalThis.TouchEvent) => finishSettingsDrawerDrag(event.changedTouches[0]?.clientY);
+
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", clearDrawerHandleDrag);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseEnd);
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", clearDrawerHandleDrag);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", clearDrawerHandleDrag);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseEnd);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", clearDrawerHandleDrag);
+    };
+  }, [closeSettingsDrawer, finishSettingsDrawerDrag, isSettingsDrawerOpen, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     if (!scrollHandleDrag) return;
@@ -1085,7 +1190,7 @@ export function CropPdfTool() {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className={`relative min-w-0 bg-slate-100 p-4 text-left sm:p-6 ${workflowStep === "download" ? "min-h-0" : "min-h-[calc(100dvh-9rem)]"}`}>
         <div className="transition duration-300">
           {workflowStep === "settings" && (
-            <div className="pb-36 sm:pb-32">{renderPageGrid()}</div>
+            <div className="pb-[28rem] sm:pb-32">{renderPageGrid()}</div>
           )}
           {workflowStep === "process" && renderProcessingCard()}
           {workflowStep === "download" && renderSuccessCard()}
@@ -1152,7 +1257,7 @@ export function CropPdfTool() {
         <div className="relative mx-auto grid max-w-[1800px] min-w-0 gap-3 overflow-visible sm:flex sm:flex-nowrap sm:items-center sm:gap-2">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <p className="shrink-0 truncate text-sm font-black text-slate-950">{readyLabel}</p>
-            <button type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm sm:hidden" aria-expanded={isSettingsDrawerOpen}><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" />Settings</button>
+            <button ref={mobileSettingsButtonRef} type="button" onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden" aria-expanded={isSettingsDrawerOpen} aria-controls="crop-pdf-mobile-settings-drawer"><SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />Settings</button>
           </div>
           <div className="hidden min-w-0 flex-1 flex-nowrap items-center gap-2 sm:flex">
             <button type="button" onClick={() => setCropModeActive((current) => !current)} className={`inline-flex h-14 w-auto shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-0 text-sm font-black shadow-sm transition ${cropModeActive ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-800 hover:border-red-200 hover:text-[#FF2D2D]"}`}><Crop className="h-5 w-5" />Crop Mode</button>
@@ -1189,7 +1294,58 @@ export function CropPdfTool() {
 
   function renderMobileSettingsDrawer() {
     if (!isSettingsDrawerOpen) return null;
-    return <div className="fixed inset-0 z-[60] sm:hidden"><style>{`@keyframes cropPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style><button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} /><div role="dialog" aria-modal="true" aria-label="Crop PDF settings" style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }} className={`absolute inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] flex max-h-[min(62vh,34rem)] flex-col rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[cropPdfDrawerIn_220ms_ease-out]"}`}><button type="button" className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none items-center justify-center" aria-label="Drag down to close settings" onPointerDown={onDrawerPointerDown} onPointerMove={onDrawerPointerMove} onPointerUp={finishDrawerDrag} onPointerCancel={() => finishDrawerDrag()} onLostPointerCapture={() => finishDrawerDrag()}><span className="h-1 w-10 rounded-full bg-slate-300" /></button><div className="relative shrink-0 rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5"><p className="text-sm font-black">Crop settings</p><button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100" aria-label="Close settings"><X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderCropSettings(true)}</div></div></div>;
+    const isProcessing = workflowStep === "process";
+    return (
+      <div className="fixed inset-0 z-[60] sm:hidden">
+        <style>{`@keyframes cropPdfDrawerIn { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
+        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
+        <div
+          id="crop-pdf-mobile-settings-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Crop PDF settings"
+          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
+          className={`absolute inset-x-0 bottom-0 flex max-h-[min(44vh,23rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"} ${isSettingsDrawerClosing ? "" : "animate-[cropPdfDrawerIn_220ms_ease-out]"} ${settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""}`}
+        >
+          <button
+            type="button"
+            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
+            aria-label="Drag down to close settings"
+            onPointerDown={onDrawerHandlePointerDown}
+            onPointerMove={onDrawerHandlePointerMove}
+            onPointerUp={(event) => finishSettingsDrawerDrag(event.clientY)}
+            onPointerCancel={clearDrawerHandleDrag}
+            onLostPointerCapture={clearDrawerHandleDrag}
+            onMouseDown={onDrawerHandleMouseDown}
+            onMouseUp={onDrawerHandleMouseUp}
+            onTouchStart={onDrawerHandleTouchStart}
+            onTouchMove={onDrawerHandleTouchMove}
+            onTouchEnd={onDrawerHandleTouchEnd}
+            onTouchCancel={clearDrawerHandleDrag}
+          >
+            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+          </button>
+          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
+            <p className="text-sm font-black text-slate-950">Settings</p>
+            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{renderCropSettings(true)}</div>
+          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+            <div className="grid grid-cols-[3rem_minmax(8rem,1fr)_minmax(5rem,.7fr)] items-center gap-2 overflow-visible">
+              {renderAddMoreButton(isProcessing)}
+              <button type="button" onClick={() => void cropPdf()} disabled={isProcessing || !hasValidCrop} className="inline-flex h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0">
+                {isProcessing ? "Processing..." : "Crop PDF"}<Crop className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button type="button" onClick={resetTool} disabled={isProcessing} className="inline-flex h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-60">
+                Clear All<RotateCcw className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
