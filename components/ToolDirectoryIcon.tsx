@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { Tool } from "@/lib/tools";
 
-export function ToolDirectoryIcon({ tool, size = "card" }: { tool: Tool; size?: "card" | "search" }) {
+export function ToolDirectoryIcon({ tool, size = "card" }: { tool: Tool; size?: "card" | "search" | "mobile" | "menu" }) {
   const isTrimmedExactKbIcon = tool.slug === "resize-image-to-exact-kb";
   const uncroppedCardIconSizes: Record<string, string> = {
     "rrb-photo-resize": "h-[44px] w-[44px] sm:h-[50px] sm:w-[50px]",
@@ -10,6 +10,21 @@ export function ToolDirectoryIcon({ tool, size = "card" }: { tool: Tool; size?: 
     "signature-resize-tool": "h-[50px] w-[50px] sm:h-14 sm:w-14",
   };
   const uncroppedCardIconSize = uncroppedCardIconSizes[tool.slug];
+
+  if (size === "mobile" || size === "menu") {
+    const preserveFullIcon = Boolean(uncroppedCardIconSize || isTrimmedExactKbIcon);
+    return (
+      <span data-original-tool-icon="true" aria-hidden="true" className="relative block h-[18px] w-[18px] shrink-0 overflow-hidden rounded-sm">
+        <Image
+          src={`/icons/tools/${tool.slug}.png`}
+          alt=""
+          width={36}
+          height={36}
+          className={preserveFullIcon ? "h-[18px] w-[18px] object-contain" : "absolute inset-0 h-[18px] w-[18px] max-w-none scale-[1.65] object-cover"}
+        />
+      </span>
+    );
+  }
 
   if (size === "search") {
     return (
