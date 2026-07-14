@@ -7,6 +7,7 @@ import { ArrowRight, CheckCircle2, FileSearch, Search, ShieldCheck, Sparkles, Up
 import { BrandPhrase } from "@/components/Brand";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { blogPosts } from "@/lib/blog";
+import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
 
 type FaqItem = {
@@ -18,10 +19,11 @@ function ToolTile({ tool, compact = false }: { tool: Tool; compact?: boolean }) 
   return (
     <Link
       href={`/${tool.slug}`}
-      className="group flex min-h-[8.25rem] min-w-0 flex-col rounded-lg border border-border bg-card p-3 text-left transition hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-md hover:shadow-foreground/5"
+      style={getToolRowTintStyle(tool.slug)}
+      className="group flex min-h-[8.25rem] min-w-0 flex-col rounded-lg border border-border bg-card p-3 text-left transition hover:-translate-y-0.5 hover:border-primary/45 hover:bg-[var(--tool-row-tint)] hover:shadow-md hover:shadow-foreground/5 focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]"
     >
       <ToolDirectoryIcon tool={tool} />
-      <span className="mt-3 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{tool.name}</span>
+      <span className="mt-3 line-clamp-2 text-sm font-normal leading-snug text-foreground">{tool.name}</span>
       {!compact && <span className="mt-2 line-clamp-2 text-xs font-medium leading-relaxed text-muted-foreground">{tool.description}</span>}
       <span className="mt-auto inline-flex items-center gap-1 pt-3 text-xs font-semibold text-primary opacity-0 transition group-hover:opacity-100">
         Open
@@ -128,10 +130,10 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
                   {filteredTools.length ? (
                     filteredTools.map((tool) => {
                       return (
-                        <Link key={tool.slug} href={`/${tool.slug}`} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-muted">
+                        <Link key={tool.slug} href={`/${tool.slug}`} style={getToolRowTintStyle(tool.slug)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]">
                           <ToolDirectoryIcon tool={tool} />
                           <span className="min-w-0">
-                            <span className="block truncate text-sm font-semibold text-foreground">{tool.name}</span>
+                            <span className="block truncate text-sm font-normal text-foreground">{tool.name}</span>
                             <span className="block truncate text-xs font-medium text-muted-foreground">{tool.category}</span>
                           </span>
                         </Link>
@@ -148,7 +150,7 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
               {["Merge PDF", "Resize Image to Exact KB", "Compress PDF", "JPG to PDF", "Signature Resize Tool"].map((name) => {
                 const tool = tools.find((item) => item.name === name);
                 return tool ? (
-                  <Link key={tool.slug} href={`/${tool.slug}`} className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/40 hover:text-primary">
+                  <Link key={tool.slug} href={`/${tool.slug}`} style={getToolRowTintStyle(tool.slug)} className="rounded-full border border-border bg-card px-3 py-1.5 text-sm font-normal text-foreground transition-colors hover:border-primary/40 hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]">
                     {tool.name}
                   </Link>
                 ) : null;

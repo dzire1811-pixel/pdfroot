@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { ChangeEvent, DragEvent, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Download, FileText, ImageUp, UploadCloud } from "lucide-react";
+import { Download, ImageUp, UploadCloud } from "lucide-react";
+import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { tools } from "@/lib/tools";
 import { clearUploadSession, readUploadSession, saveUploadSession } from "@/lib/uploadSession";
 
@@ -199,19 +201,17 @@ export function UploadBox({
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">Suggested tools</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {suggestions.map((tool) => {
-              const Icon = tool.icon ?? FileText;
               return (
                 <Link
                   key={tool.slug}
                   href={`/${tool.slug}`}
+                  style={getToolRowTintStyle(tool.slug)}
                   onClick={() => {
                     void saveUploadSession(selectedFiles);
                   }}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-semibold text-foreground transition hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
+                  className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-normal text-foreground transition hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
+                  <ToolDirectoryIcon tool={tool} />
                   {tool.name}
                 </Link>
               );

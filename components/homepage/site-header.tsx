@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { ChevronDown, FileOutput, Home, Menu, Shapes, X } from "lucide-react";
 import { Logo } from "@/components/homepage/logo";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
 
 type OpenMenu = "convert" | "government" | "all" | null;
@@ -48,30 +49,12 @@ const conversionTools = conversionToolSlugs.flatMap((slug) => {
 });
 
 const directNavItems = [
-  { label: "Resize Image to Exact KB", href: "/resize-image-to-exact-kb", icon: toolBySlug.get("resize-image-to-exact-kb")!.icon, accent: "#9655a8" },
-  { label: "Merge PDF", href: "/merge-pdf", icon: toolBySlug.get("merge-pdf")!.icon, accent: "#f0442e" },
-  { label: "Crop Image", href: "/crop-image", icon: toolBySlug.get("crop-image")!.icon, accent: "#8b4bab" },
+  { label: "Resize Image to Exact KB", href: "/resize-image-to-exact-kb", tool: toolBySlug.get("resize-image-to-exact-kb")!, accent: "#9655a8" },
+  { label: "Merge PDF", href: "/merge-pdf", tool: toolBySlug.get("merge-pdf")!, accent: "#f0442e" },
+  { label: "Crop Image", href: "/crop-image", tool: toolBySlug.get("crop-image")!, accent: "#8b4bab" },
 ];
 
-const toolAccentColors: Record<string, string> = {
-  "merge-pdf": "#f0442e", "split-pdf": "#f0442e", "compress-pdf": "#65a844",
-  "pdf-to-word": "#3578d4", "pdf-to-excel": "#379447", "pdf-to-powerpoint": "#d94b20",
-  "pdf-to-jpg": "#e9aa00", "jpg-to-pdf": "#e9aa00", "png-to-pdf": "#09a8b8",
-  "word-to-pdf": "#3978d0", "excel-to-pdf": "#599b32", "powerpoint-to-pdf": "#e65a3e",
-  "rotate-pdf": "#3e69df", "organize-pdf-pages": "#8b4bab", "delete-pdf-pages": "#ef492d",
-  "watermark-pdf": "#97499a", "crop-pdf": "#4778df", "protect-pdf": "#4a9b38", "unlock-pdf": "#efa900",
-  "resize-image-to-exact-kb": "#9655a8", "compress-image": "#68a83d", "background-remover": "#10afbd",
-  "crop-image": "#8b4bab", "resize-image": "#3478df", "jpg-to-png": "#0abcc1", "png-to-jpg": "#10adcb",
-  "passport-photo-maker": "#2f79e8", "signature-resize-tool": "#8547dd",
-  "image-compressor-for-government-forms": "#69a959", "ssc-photo-resize": "#3478df", "rrb-photo-resize": "#6686d8",
-  "ibps-photo-resize": "#4d83c9", "ojas-photo-resize": "#a748cf", "gpsc-photo-resize": "#4678dc",
-  "upsc-photo-resize": "#5082cc", "front-back-card-merge": "#3e61d9",
-};
-
-function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadable = false, mobileTopAligned = false, desktopCompact = false, displayName }: { tool: Tool; onClick: () => void; touched: boolean; onTouchChange: (touched: boolean) => void; mobileReadable?: boolean; mobileTopAligned?: boolean; desktopCompact?: boolean; displayName?: string }) {
-  const iconScale = tool.slug === "resize-image-to-exact-kb" ? "scale-[0.52]" : "scale-[0.7]";
-  const accentColor = toolAccentColors[tool.slug] ?? "#FF2D2D";
-  const accentStyle = { "--tool-accent": accentColor, "--tool-tint": `${accentColor}18` } as CSSProperties;
+function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadable = false, mobileSingleLine = false, desktopCompact = false, displayName }: { tool: Tool; onClick: () => void; touched: boolean; onTouchChange: (touched: boolean) => void; mobileReadable?: boolean; mobileSingleLine?: boolean; desktopCompact?: boolean; displayName?: string }) {
   return (
     <Link
       href={`/${tool.slug}`}
@@ -79,21 +62,21 @@ function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadabl
       onTouchStart={() => onTouchChange(true)}
       onTouchEnd={() => onTouchChange(false)}
       onTouchCancel={() => onTouchChange(false)}
-      style={accentStyle}
+      style={getToolRowTintStyle(tool.slug)}
       data-mobile-readable-tool={mobileReadable ? "true" : undefined}
-      className={`flex min-w-0 rounded-lg font-medium text-foreground outline-none transition-colors [@media(hover:hover)]:hover:bg-[var(--tool-tint)] [@media(hover:hover)]:hover:text-[var(--tool-accent)] focus-visible:bg-[var(--tool-tint)] focus-visible:text-[var(--tool-accent)] ${mobileTopAligned ? "items-start" : "items-center"} ${mobileReadable ? `h-full ${mobileTopAligned ? "min-h-11" : "min-h-10"} gap-2 px-2 py-1 text-sm leading-5` : desktopCompact ? "h-10 gap-1.5 px-1.5 py-0.5 text-sm leading-4" : "h-10 gap-1.5 px-1.5 py-0.5 text-[11px] leading-4 2xl:text-xs"} ${touched ? "bg-[var(--tool-tint)] text-[var(--tool-accent)]" : ""}`}
+      className={`flex min-w-0 items-center rounded-lg font-normal text-sm text-foreground outline-none transition-colors [@media(hover:hover)]:hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)] ${mobileReadable ? "h-full min-h-10 gap-2 px-2 py-1 leading-5" : desktopCompact ? "h-10 gap-1.5 px-1.5 py-0.5 leading-4" : "h-10 gap-1.5 px-1.5 py-0.5 leading-4"} ${touched ? "bg-[var(--tool-row-tint)]" : ""}`}
     >
-      <span className={`${mobileReadable || desktopCompact ? "flex h-5 w-5 items-center justify-center" : "flex h-8 w-8 items-center justify-center"} shrink-0 border-0 bg-transparent leading-none shadow-none [&_img]:border-0 [&_img]:bg-transparent [&_img]:mix-blend-multiply [&_img]:shadow-none`} aria-hidden="true">
+      <span className={`${mobileReadable || desktopCompact ? "flex h-[22px] w-[22px] items-center justify-center" : "flex h-8 w-8 items-center justify-center"} shrink-0 border-0 bg-transparent leading-none shadow-none [&_img]:border-0 [&_img]:bg-transparent [&_img]:shadow-none`} aria-hidden="true">
         {mobileReadable || desktopCompact ? (
-          <ToolDirectoryIcon tool={tool} size={mobileReadable ? "mobile" : "menu"} />
+          <ToolDirectoryIcon tool={tool} />
         ) : (
-          <span className={`block h-11 w-11 shrink-0 origin-center border-0 bg-transparent leading-none shadow-none ${iconScale}`}>
-            <ToolDirectoryIcon tool={tool} size="search" />
+          <span className="block h-8 w-8 shrink-0 border-0 bg-transparent leading-none shadow-none">
+            <ToolDirectoryIcon tool={tool} />
           </span>
         )}
       </span>
       <span className={`flex min-w-0 items-center ${mobileReadable ? "min-h-0" : "min-h-8"}`}>
-        <span className="line-clamp-2 min-w-0 break-words">{displayName ?? tool.name}</span>
+        <span className={mobileSingleLine ? "min-w-0 whitespace-nowrap" : "line-clamp-2 min-w-0 break-words"}>{displayName ?? tool.name}</span>
       </span>
     </Link>
   );
@@ -109,6 +92,7 @@ export function HomepageSiteHeader() {
   const headerRef = useRef<HTMLElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
+  const mobileScrollPositionRef = useRef({ x: 0, y: 0 });
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function cancelScheduledClose() {
@@ -171,26 +155,43 @@ export function HomepageSiteHeader() {
   useEffect(() => {
     if (!isMobileMenuOpen) return;
 
+    const scrollPosition = { x: window.scrollX, y: window.scrollY };
+    mobileScrollPositionRef.current = scrollPosition;
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
     const previousOverscrollBehavior = document.documentElement.style.overscrollBehavior;
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
     document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
     document.documentElement.style.overscrollBehavior = "none";
+    document.documentElement.style.scrollBehavior = "auto";
 
     function updateMobileMenuTop() {
       setMobileMenuTop(headerRef.current?.getBoundingClientRect().bottom ?? 0);
     }
 
+    function preserveBackgroundScroll() {
+      if (window.scrollX !== scrollPosition.x || window.scrollY !== scrollPosition.y) {
+        window.scrollTo(scrollPosition.x, scrollPosition.y);
+      }
+    }
+
+    function preventBackgroundTouchMove(event: TouchEvent) {
+      if (!mobileMenuPanelRef.current?.contains(event.target as Node)) {
+        event.preventDefault();
+      }
+    }
+
     updateMobileMenuTop();
     window.addEventListener("resize", updateMobileMenuTop);
-    window.addEventListener("scroll", updateMobileMenuTop, { passive: true });
+    window.addEventListener("scroll", preserveBackgroundScroll, { passive: true });
+    document.addEventListener("touchmove", preventBackgroundTouchMove, { passive: false });
     return () => {
       window.removeEventListener("resize", updateMobileMenuTop);
-      window.removeEventListener("scroll", updateMobileMenuTop);
+      window.removeEventListener("scroll", preserveBackgroundScroll);
+      document.removeEventListener("touchmove", preventBackgroundTouchMove);
       document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
       document.documentElement.style.overscrollBehavior = previousOverscrollBehavior;
+      window.scrollTo(mobileScrollPositionRef.current.x, mobileScrollPositionRef.current.y);
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
     };
   }, [isMobileMenuOpen]);
 
@@ -226,30 +227,40 @@ export function HomepageSiteHeader() {
         <div
           ref={mobileMenuPanelRef}
           id="mobile-tools-menu"
-          className="fixed left-0 right-0 z-[100] w-screen touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain border-t border-border bg-background px-3 pb-[calc(1.75rem+env(safe-area-inset-bottom))] pt-3 shadow-2xl xl:hidden"
-          style={{ top: mobileMenuTop, maxHeight: `calc(100dvh - ${mobileMenuTop}px)` }}
+          className="fixed left-0 right-0 z-[100] flex w-screen flex-col overflow-hidden border-t border-border bg-background shadow-2xl xl:hidden"
+          style={{
+            "--mobile-header-height": `${mobileMenuTop}px`,
+            top: "var(--mobile-header-height)",
+            height: "calc(100dvh - var(--mobile-header-height))",
+          } as CSSProperties}
           role="menu"
           aria-label="Mobile navigation menu"
         >
-          <div className="sticky top-0 z-10 -mx-3 -mt-3 flex items-center justify-end border-b border-border bg-background px-4 py-2.5">
-            <button type="button" onClick={closeMobileMenu} className="grid h-9 w-9 place-items-center rounded-lg border border-border text-foreground transition-colors hover:bg-muted" aria-label="Close mobile menu">
-              <X className="h-5 w-5" aria-hidden="true" />
+          <div data-mobile-menu-actions className="sticky top-0 z-30 flex h-11 shrink-0 items-start justify-end border-b border-border bg-white px-3">
+            <button type="button" onClick={closeMobileMenu} className="grid h-11 w-11 shrink-0 place-items-center text-foreground" aria-label="Close mobile menu">
+              <span data-mobile-close-visual className="grid h-8 w-8 place-items-center rounded-lg border border-border transition-colors hover:bg-muted">
+                <X className="h-4 w-4" aria-hidden="true" />
+              </span>
             </button>
           </div>
+          <div data-mobile-menu-scroll-region className="min-h-0 w-full flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-3 pb-[calc(1.75rem+env(safe-area-inset-bottom))]">
           <div className="mx-auto w-full max-w-[1800px] space-y-2 py-3">
             {mobileDirectLinks.map((item) => {
-              const Icon = item.icon;
               const itemStyle = { "--mobile-accent": item.accent, "--mobile-tint": `${item.accent}12` } as CSSProperties;
               return (
-                <Link key={item.label} href={item.href} onClick={closeMobileMenu} style={itemStyle} className="flex min-h-12 w-full items-center gap-3 rounded-xl bg-[var(--mobile-tint)] px-3 py-3 text-sm font-medium text-foreground transition-colors active:text-[var(--mobile-accent)]">
-                  <Icon className="h-5 w-5 shrink-0 text-[var(--mobile-accent)]" aria-hidden="true" />
-                  <span>{item.label}</span>
+                <Link key={item.label} href={item.href} onClick={closeMobileMenu} style={itemStyle} className="flex min-h-12 w-full items-center gap-3 rounded-xl bg-[var(--mobile-tint)] px-3 py-3 text-sm text-foreground transition-colors active:text-[var(--mobile-accent)]">
+                  {"tool" in item ? (
+                    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center"><ToolDirectoryIcon tool={item.tool} /></span>
+                  ) : (() => {
+                    const Icon = item.icon;
+                    return <Icon className="h-5 w-5 shrink-0 text-[var(--mobile-accent)]" aria-hidden="true" />;
+                  })()}
+                  <span className={"tool" in item ? "font-normal" : "font-medium"}>{item.label}</span>
                 </Link>
               );
             })}
             {mobileAccordionSections.map((section) => {
               const isExpanded = mobileExpandedSection === section.id;
-              const isGovernmentSection = section.id === "government";
               const Icon = section.icon;
               const sectionStyle = { "--mobile-accent": section.accent, "--mobile-tint": `${section.accent}12` } as CSSProperties;
               return (
@@ -260,13 +271,14 @@ export function HomepageSiteHeader() {
                     <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--mobile-accent)] transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
                   </button>
                   {isExpanded && (
-                    <div id={`mobile-nav-section-${section.id}`} className={`grid grid-cols-2 items-stretch gap-y-1 px-1 pt-1 ${isGovernmentSection ? "gap-x-5 pb-6 [grid-auto-rows:minmax(44px,auto)]" : "gap-x-1 [grid-auto-rows:minmax(40px,auto)]"}`}>
-                      {section.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeMobileMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} mobileReadable mobileTopAligned={isGovernmentSection} displayName={section.id === "government" || section.id === "all" ? compactMenuToolLabels[tool.slug] : undefined} />)}
+                    <div id={`mobile-nav-section-${section.id}`} className="grid grid-cols-1 items-stretch gap-y-0 px-1 pb-2 pt-1 [grid-auto-rows:44px]">
+                      {section.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeMobileMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} mobileReadable mobileSingleLine displayName={section.id === "government" || section.id === "all" ? compactMenuToolLabels[tool.slug] : undefined} />)}
                     </div>
                   )}
                 </section>
               );
             })}
+          </div>
           </div>
         </div>,
         document.body,

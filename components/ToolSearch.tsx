@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { tools } from "@/lib/tools";
 
 const aliases: Record<string, string[]> = {
@@ -94,7 +95,7 @@ export function ToolSearch() {
           onChange={onChange}
           onFocus={() => setIsOpen(true)}
           onKeyDown={onKeyDown}
-          className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400"
+          className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-500/80"
           placeholder="Search PDF and Image Tools"
           aria-label="Search PDF and Image Tools"
         />
@@ -110,11 +111,12 @@ export function ToolSearch() {
                     key={tool.slug}
                     href={`/${tool.slug}`}
                     onClick={() => setIsOpen(false)}
-                    className="flex items-start gap-3 rounded-xl px-3 py-3 transition hover:bg-red-50"
+                    style={getToolRowTintStyle(tool.slug)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]"
                   >
-                    <ToolDirectoryIcon tool={tool} size="search" />
+                    <ToolDirectoryIcon tool={tool} />
                     <span className="min-w-0">
-                      <span className="block text-sm font-black text-slate-950">{tool.name}</span>
+                      <span className="block text-sm font-normal text-slate-950">{tool.name}</span>
                       <span className="mt-1 line-clamp-2 block text-sm leading-5 text-slate-600">{tool.description}</span>
                     </span>
                   </Link>

@@ -1,32 +1,3 @@
-import {
-  Combine,
-  Crop,
-  FileArchive,
-  FileCheck2,
-  FileImage,
-  FileMinus2,
-  FileOutput,
-  FilePlus2,
-  FileSpreadsheet,
-  FileText,
-  FileType,
-  FileUp,
-  ImageDown,
-  Images,
-  Layers3,
-  LockKeyhole,
-  Maximize2,
-  Minimize2,
-  PanelTop,
-  RotateCw,
-  Scissors,
-  ShieldCheck,
-  Signature,
-  Stamp,
-  TrainFront,
-  UnlockKeyhole,
-} from "lucide-react";
-
 export type ToolCategory = "PDF Tools" | "Image Tools";
 
 export type Tool = {
@@ -39,7 +10,6 @@ export type Tool = {
   featured?: boolean;
   conversion?: boolean;
   government?: boolean;
-  icon: typeof FileText;
 };
 
 export const pdfTools: Tool[] = [
@@ -50,7 +20,6 @@ export const pdfTools: Tool[] = [
     description: "Combine multiple PDF files into one organized document.",
     keywords: ["merge pdf", "combine pdf", "join pdf files"],
     popular: true,
-    icon: Combine,
   },
   {
     name: "Split PDF",
@@ -59,7 +28,6 @@ export const pdfTools: Tool[] = [
     description: "Split a PDF into separate files or extract selected page ranges.",
     keywords: ["split pdf", "separate pdf pages", "extract pdf"],
     popular: true,
-    icon: Scissors,
   },
   {
     name: "Compress PDF",
@@ -68,7 +36,6 @@ export const pdfTools: Tool[] = [
     description: "Reduce PDF file size for email, portals, and document upload limits.",
     keywords: ["compress pdf", "reduce pdf size", "pdf compressor"],
     popular: true,
-    icon: FileArchive,
   },
   {
     name: "PDF to Word",
@@ -77,7 +44,6 @@ export const pdfTools: Tool[] = [
     description: "Convert PDF documents into editable Word files.",
     keywords: ["pdf to word", "convert pdf to docx"],
     conversion: true,
-    icon: FileOutput,
   },
   {
     name: "PDF to Excel",
@@ -86,7 +52,6 @@ export const pdfTools: Tool[] = [
     description: "Convert tables and data from PDF into spreadsheet-friendly Excel files.",
     keywords: ["pdf to excel", "extract tables from pdf"],
     conversion: true,
-    icon: FileSpreadsheet,
   },
   {
     name: "PDF to PowerPoint",
@@ -95,7 +60,6 @@ export const pdfTools: Tool[] = [
     description: "Turn PDF pages into presentation-ready PowerPoint slides.",
     keywords: ["pdf to powerpoint", "pdf to ppt"],
     conversion: true,
-    icon: PanelTop,
   },
   {
     name: "PDF to JPG",
@@ -105,7 +69,6 @@ export const pdfTools: Tool[] = [
     keywords: ["pdf to jpg", "convert pdf to image"],
     popular: true,
     conversion: true,
-    icon: FileImage,
   },
   {
     name: "JPG to PDF",
@@ -115,7 +78,6 @@ export const pdfTools: Tool[] = [
     keywords: ["jpg to pdf", "image to pdf", "photo to pdf"],
     popular: true,
     conversion: true,
-    icon: ImageDown,
   },
   {
     name: "PNG to PDF",
@@ -124,7 +86,6 @@ export const pdfTools: Tool[] = [
     description: "Convert PNG images into a downloadable PDF document.",
     keywords: ["png to pdf", "convert png to pdf"],
     conversion: true,
-    icon: Images,
   },
   {
     name: "Word to PDF",
@@ -133,7 +94,6 @@ export const pdfTools: Tool[] = [
     description: "Turn Word documents into polished PDF files.",
     keywords: ["word to pdf", "docx to pdf"],
     conversion: true,
-    icon: FileText,
   },
   {
     name: "Excel to PDF",
@@ -142,7 +102,6 @@ export const pdfTools: Tool[] = [
     description: "Convert spreadsheets to PDF for sharing and submission.",
     keywords: ["excel to pdf", "xlsx to pdf"],
     conversion: true,
-    icon: FileSpreadsheet,
   },
   {
     name: "PowerPoint to PDF",
@@ -151,7 +110,6 @@ export const pdfTools: Tool[] = [
     description: "Export presentation slides as a compact PDF.",
     keywords: ["powerpoint to pdf", "ppt to pdf"],
     conversion: true,
-    icon: PanelTop,
   },
   {
     name: "Rotate PDF",
@@ -159,7 +117,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Rotate PDF pages left or right and fix page orientation.",
     keywords: ["rotate pdf", "fix pdf orientation"],
-    icon: RotateCw,
   },
   {
     name: "Organize PDF Pages",
@@ -167,7 +124,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Reorder, sort, and manage pages inside a PDF.",
     keywords: ["organize pdf", "reorder pdf pages"],
-    icon: Layers3,
   },
   {
     name: "Delete PDF Pages",
@@ -175,7 +131,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Remove unwanted pages from a PDF document.",
     keywords: ["delete pdf pages", "remove pages from pdf"],
-    icon: FileMinus2,
   },
   {
     name: "Watermark PDF",
@@ -183,7 +138,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Add text or image watermarks to PDF files.",
     keywords: ["watermark pdf", "add watermark to pdf"],
-    icon: Stamp,
   },
   {
     name: "Crop PDF",
@@ -191,7 +145,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Crop PDF pages to remove extra margins and clean document layout.",
     keywords: ["crop pdf", "remove pdf margins", "crop pdf online"],
-    icon: Crop,
   },
   {
     name: "Protect PDF",
@@ -199,7 +152,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Secure a PDF with password protection.",
     keywords: ["protect pdf", "password protect pdf"],
-    icon: LockKeyhole,
   },
   {
     name: "Unlock PDF",
@@ -207,7 +159,6 @@ export const pdfTools: Tool[] = [
     category: "PDF Tools",
     description: "Remove supported PDF restrictions when you have permission.",
     keywords: ["unlock pdf", "remove pdf password"],
-    icon: UnlockKeyhole,
   },
 ];
 
@@ -221,7 +172,6 @@ export const imageTools: Tool[] = [
     popular: true,
     featured: true,
     government: true,
-    icon: Maximize2,
   },
   {
     name: "Compress Image",
@@ -230,7 +180,6 @@ export const imageTools: Tool[] = [
     description: "Compress JPG, PNG, and WebP images without complicated settings.",
     keywords: ["compress image", "image compressor", "reduce image size"],
     popular: true,
-    icon: Minimize2,
   },
   {
     name: "Background Remover",
@@ -239,7 +188,6 @@ export const imageTools: Tool[] = [
     description: "Remove image backgrounds online and download transparent PNG files.",
     keywords: ["background remover", "remove background", "transparent png", "image background remover"],
     popular: true,
-    icon: Scissors,
   },
   {
     name: "Crop Image",
@@ -247,7 +195,6 @@ export const imageTools: Tool[] = [
     category: "Image Tools",
     description: "Crop photos for forms, profiles, documents, and web uploads.",
     keywords: ["crop image", "photo crop online"],
-    icon: Crop,
   },
   {
     name: "Resize Image",
@@ -255,7 +202,6 @@ export const imageTools: Tool[] = [
     category: "Image Tools",
     description: "Resize image width and height for uploads, documents, and websites.",
     keywords: ["resize image", "change image dimensions"],
-    icon: Maximize2,
   },
   {
     name: "JPG to PNG",
@@ -263,7 +209,6 @@ export const imageTools: Tool[] = [
     category: "Image Tools",
     description: "Convert JPG photos into PNG images.",
     keywords: ["jpg to png", "convert jpg to png"],
-    icon: FileUp,
   },
   {
     name: "PNG to JPG",
@@ -271,7 +216,6 @@ export const imageTools: Tool[] = [
     category: "Image Tools",
     description: "Convert PNG images into JPG format.",
     keywords: ["png to jpg", "convert png to jpg"],
-    icon: FileType,
   },
   {
     name: "Passport Photo Maker",
@@ -280,7 +224,6 @@ export const imageTools: Tool[] = [
     description: "Prepare passport-style photos for applications and official forms.",
     keywords: ["passport photo maker", "passport photo online"],
     government: true,
-    icon: FilePlus2,
   },
   {
     name: "Signature Resize Tool",
@@ -290,7 +233,6 @@ export const imageTools: Tool[] = [
     keywords: ["signature resize online", "resize signature to 20kb"],
     popular: true,
     government: true,
-    icon: Signature,
   },
   {
     name: "Image Compressor for Government Forms",
@@ -299,7 +241,6 @@ export const imageTools: Tool[] = [
     description: "Compress photos and signatures for recruitment, scholarship, and admission forms.",
     keywords: ["government form photo resize", "ssc photo resize", "ojas photo resize"],
     government: true,
-    icon: ShieldCheck,
   },
   {
     name: "SSC Signature Resize Tool",
@@ -308,7 +249,6 @@ export const imageTools: Tool[] = [
     description: "Resize SSC signatures to JPG/JPEG, 10-20 KB, and 6.0 cm x 2.0 cm requirements.",
     keywords: ["ssc signature resize", "resize signature for ssc", "ssc signature 10kb 20kb", "ssc signature 6x2 cm"],
     government: true,
-    icon: FileCheck2,
   },
   {
     name: "RRB Signature Resize",
@@ -317,7 +257,6 @@ export const imageTools: Tool[] = [
     description: "Resize RRB signatures to JPG/JPEG, 30-49 KB, minimum 140 x 60 px, and 100 DPI requirements.",
     keywords: ["rrb signature resize", "railway signature resize", "rrb signature 30kb 49kb", "rrb signature 140x60"],
     government: true,
-    icon: TrainFront,
   },
   {
     name: "IBPS Photo, Signature, Thumb & Declaration Resize",
@@ -326,7 +265,6 @@ export const imageTools: Tool[] = [
     description: "Resize IBPS photo, signature, left thumb impression, and handwritten declaration documents to required JPG/JPEG dimensions and file sizes.",
     keywords: ["ibps photo resize", "ibps signature resize", "ibps thumb impression resize", "ibps handwritten declaration resize"],
     government: true,
-    icon: FileImage,
   },
   {
     name: "OJAS Photo Resize",
@@ -335,7 +273,6 @@ export const imageTools: Tool[] = [
     description: "Resize photos and signatures for OJAS Gujarat recruitment forms.",
     keywords: ["ojas photo resize", "ojas signature resize", "gujarat form photo resize"],
     government: true,
-    icon: FileUp,
   },
   {
     name: "GPSC Photo Resize Online",
@@ -344,7 +281,6 @@ export const imageTools: Tool[] = [
     description: "Prepare GPSC form photos and signatures at the required file size.",
     keywords: ["gpsc photo resize", "gpsc signature resize", "gpsc form photo"],
     government: true,
-    icon: FilePlus2,
   },
   {
     name: "UPSC Photo Resize",
@@ -353,7 +289,6 @@ export const imageTools: Tool[] = [
     description: "Resize UPSC application photos and signature images online.",
     keywords: ["upsc photo resize", "upsc signature resize", "upsc form image resize"],
     government: true,
-    icon: ShieldCheck,
   },
   {
     name: "Front & Back Card Merge",
@@ -363,7 +298,6 @@ export const imageTools: Tool[] = [
     keywords: ["front back card merge", "aadhaar card front back merge", "pan card front back", "document card merge"],
     popular: true,
     government: true,
-    icon: Images,
   },
 ];
 

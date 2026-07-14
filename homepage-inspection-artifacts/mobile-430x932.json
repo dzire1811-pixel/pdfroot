@@ -1,0 +1,2001 @@
+{
+  "viewport": {
+    "width": 430,
+    "height": 932
+  },
+  "capturedAt": "2026-07-14T04:22:04.524Z",
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedRequests": [],
+  "failedAssets": [],
+  "brokenLinks": [],
+  "heroStatusInitial": [
+    "Preview ready",
+    "Preview ready"
+  ],
+  "heroStatusAfterTimer": [
+    "Preparing",
+    "Preparing"
+  ],
+  "uploadChooserOpened": null,
+  "focusIndicators": {
+    "navigation": {
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "oklch(0.18 0 0)",
+      "hasNonColorIndicator": false
+    },
+    "popularCard": {
+      "outlineStyle": "auto",
+      "outlineWidth": "2px",
+      "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px",
+      "backgroundColor": "oklch(1 0 0)",
+      "color": "rgb(15, 23, 42)",
+      "hasNonColorIndicator": true
+    },
+    "productTab": {
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "boxShadow": "none",
+      "backgroundColor": "oklch(0.598 0.214 27.3)",
+      "color": "oklch(0.99 0 0)",
+      "hasNonColorIndicator": false
+    },
+    "faq": {
+      "outlineStyle": "none",
+      "outlineWidth": "3px",
+      "boxShadow": "none",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "color": "rgb(15, 23, 42)",
+      "hasNonColorIndicator": false
+    }
+  },
+  "navigationState": {
+    "afterScrollMenuBox": {
+      "x": 0,
+      "y": 65,
+      "width": 430,
+      "height": 867
+    },
+    "menuBox": {
+      "x": 0,
+      "y": 65,
+      "width": 430,
+      "height": 867
+    },
+    "allToolsLinks": 36,
+    "bodyOverflow": "hidden",
+    "htmlOverflow": "visible"
+  },
+  "initialLoadPerformance": {
+    "cls": 0,
+    "lcp": 819.1399999856949,
+    "shifts": []
+  },
+  "document": {
+    "width": 430,
+    "height": 10747
+  },
+  "horizontalOverflow": 0,
+  "sections": [
+    {
+      "index": 0,
+      "id": null,
+      "rect": {
+        "x": 0,
+        "y": 65,
+        "width": 430,
+        "height": 1310.796875,
+        "right": 430,
+        "bottom": 1375.796875
+      },
+      "background": "rgb(255, 255, 255)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": null
+    },
+    {
+      "index": 1,
+      "id": "tools",
+      "rect": {
+        "x": 0,
+        "y": 1375.796875,
+        "width": 430,
+        "height": 1739.671875,
+        "right": 430,
+        "bottom": 3115.46875
+      },
+      "background": "oklch(1 0 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "The tools people open every single day"
+    },
+    {
+      "index": 2,
+      "id": "gov-tools",
+      "rect": {
+        "x": 0,
+        "y": 3115.46875,
+        "width": 430,
+        "height": 1884.25,
+        "right": 430,
+        "bottom": 4999.71875
+      },
+      "background": "rgba(0, 0, 0, 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "Never get your application rejected because of incorrect photo or signature size"
+    },
+    {
+      "index": 3,
+      "id": "showcase",
+      "rect": {
+        "x": 0,
+        "y": 4999.71875,
+        "width": 430,
+        "height": 1225.234375,
+        "right": 430,
+        "bottom": 6224.953125
+      },
+      "background": "oklch(1 0 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "Clean previews of the tools before you open them"
+    },
+    {
+      "index": 4,
+      "id": "blog",
+      "rect": {
+        "x": 0,
+        "y": 6224.953125,
+        "width": 430,
+        "height": 1062.6875,
+        "right": 430,
+        "bottom": 7287.640625
+      },
+      "background": "oklch(1 0 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "Helpful guides for PDFs, images, and online forms"
+    },
+    {
+      "index": 5,
+      "id": null,
+      "rect": {
+        "x": 0,
+        "y": 7287.640625,
+        "width": 430,
+        "height": 1050,
+        "right": 430,
+        "bottom": 8337.640625
+      },
+      "background": "oklch(1 0 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "Why choose PDFRoot"
+    },
+    {
+      "index": 6,
+      "id": null,
+      "rect": {
+        "x": 0,
+        "y": 8337.640625,
+        "width": 430,
+        "height": 403.6875,
+        "right": 430,
+        "bottom": 8741.328125
+      },
+      "background": "oklch(0.18 0 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": null
+    },
+    {
+      "index": 7,
+      "id": "faq",
+      "rect": {
+        "x": 0,
+        "y": 8741.328125,
+        "width": 430,
+        "height": 780,
+        "right": 430,
+        "bottom": 9521.328125
+      },
+      "background": "rgba(0, 0, 0, 0)",
+      "borderTop": "0px",
+      "borderBottom": "1px",
+      "heading": "Frequently asked questions"
+    }
+  ],
+  "sectionGaps": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "overflowing": [],
+  "clippedInteractive": [],
+  "images": [
+    {
+      "src": "http://127.0.0.1:3000/pdfroot-pr-monogram.svg",
+      "alt": "PDFRoot",
+      "complete": true,
+      "naturalWidth": 512,
+      "naturalHeight": 512,
+      "rendered": {
+        "width": 36,
+        "height": 36
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fmerge-pdf.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fsplit-pdf.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fcompress-pdf.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fpdf-to-jpg.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fjpg-to-pdf.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fresize-image-to-exact-kb.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 126,
+      "rendered": {
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fcompress-image.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fbackground-remover.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fresize-image-to-exact-kb.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 126,
+      "rendered": {
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fssc-photo-resize.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Frrb-photo-resize.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 44,
+        "height": 44
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fibps-photo-resize.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Fojas-photo-resize.png&w=96&q=75",
+      "alt": "",
+      "complete": true,
+      "naturalWidth": 96,
+      "naturalHeight": 96,
+      "rendered": {
+        "width": 52.8,
+        "height": 52.8
+      }
+    },
+    {
+      "src": "http://127.0.0.1:3000/pdfroot-pr-monogram.svg",
+      "alt": "PDFRoot",
+      "complete": true,
+      "naturalWidth": 512,
+      "naturalHeight": 512,
+      "rendered": {
+        "width": 36,
+        "height": 36
+      }
+    }
+  ],
+  "missingAccessibleNames": [],
+  "duplicateIds": [],
+  "headingLevels": [
+    {
+      "level": 1,
+      "text": "Convert PDFs & Resize Images for Government Forms in Seconds"
+    },
+    {
+      "level": 2,
+      "text": "The tools people open every single day"
+    },
+    {
+      "level": 3,
+      "text": "Merge PDF"
+    },
+    {
+      "level": 3,
+      "text": "Split PDF"
+    },
+    {
+      "level": 3,
+      "text": "Compress PDF"
+    },
+    {
+      "level": 3,
+      "text": "PDF to JPG"
+    },
+    {
+      "level": 3,
+      "text": "JPG to PDF"
+    },
+    {
+      "level": 3,
+      "text": "Resize Image to Exact KB"
+    },
+    {
+      "level": 3,
+      "text": "Compress Image"
+    },
+    {
+      "level": 3,
+      "text": "Background Remover"
+    },
+    {
+      "level": 2,
+      "text": "Never get your application rejected because of incorrect photo or signature size"
+    },
+    {
+      "level": 3,
+      "text": "Resize Image to Exact KB"
+    },
+    {
+      "level": 3,
+      "text": "SSC Signature Resize Tool"
+    },
+    {
+      "level": 3,
+      "text": "RRB Signature Resize"
+    },
+    {
+      "level": 3,
+      "text": "IBPS Photo, Signature, Thumb & Declaration Resize"
+    },
+    {
+      "level": 3,
+      "text": "OJAS Photo Resize"
+    },
+    {
+      "level": 2,
+      "text": "Clean previews of the tools before you open them"
+    },
+    {
+      "level": 3,
+      "text": "Resize settings"
+    },
+    {
+      "level": 2,
+      "text": "Helpful guides for PDFs, images, and online forms"
+    },
+    {
+      "level": 3,
+      "text": "How to Resize Image to Exact KB for Government Forms"
+    },
+    {
+      "level": 3,
+      "text": "JPG to PDF Online: Complete Guide"
+    },
+    {
+      "level": 3,
+      "text": "How to Compress PDF Without Losing Quality"
+    },
+    {
+      "level": 2,
+      "text": "Why choose PDFRoot"
+    },
+    {
+      "level": 3,
+      "text": "Fast Processing"
+    },
+    {
+      "level": 3,
+      "text": "Privacy First"
+    },
+    {
+      "level": 3,
+      "text": "Mobile Friendly"
+    },
+    {
+      "level": 3,
+      "text": "Government Form Ready"
+    },
+    {
+      "level": 2,
+      "text": "Frequently asked questions"
+    },
+    {
+      "level": 3,
+      "text": "Company"
+    },
+    {
+      "level": 3,
+      "text": "Tools"
+    },
+    {
+      "level": 3,
+      "text": "Government"
+    },
+    {
+      "level": 3,
+      "text": "Legal"
+    }
+  ],
+  "skippedHeadingLevels": [],
+  "smallTargets": [
+    {
+      "name": "PDFRoot home",
+      "width": 124.39,
+      "height": 42
+    },
+    {
+      "name": "Open mobile menu",
+      "width": 40,
+      "height": 40
+    },
+    {
+      "name": "Browse tools",
+      "width": 382,
+      "height": 40
+    },
+    {
+      "name": "View all tools",
+      "width": 112.14,
+      "height": 22.67
+    },
+    {
+      "name": "Resize Image to Exact KB",
+      "width": 222.95,
+      "height": 40.67
+    },
+    {
+      "name": "Passport Photo Maker",
+      "width": 201.77,
+      "height": 40.67
+    },
+    {
+      "name": "JPG to PDF",
+      "width": 129.39,
+      "height": 40.67
+    },
+    {
+      "name": "Open Resize Image to Exact KB",
+      "width": 240.72,
+      "height": 38.67
+    },
+    {
+      "name": "View all posts",
+      "width": 116.36,
+      "height": 22.67
+    },
+    {
+      "name": "Read more",
+      "width": 340,
+      "height": 42.67
+    },
+    {
+      "name": "Read more",
+      "width": 340,
+      "height": 42.67
+    },
+    {
+      "name": "Read more",
+      "width": 340,
+      "height": 42.67
+    },
+    {
+      "name": "About Us",
+      "width": 61.56,
+      "height": 17
+    },
+    {
+      "name": "Blog",
+      "width": 29.53,
+      "height": 17
+    },
+    {
+      "name": "Contact Us",
+      "width": 74.05,
+      "height": 17
+    },
+    {
+      "name": "FAQ",
+      "width": 26.89,
+      "height": 17
+    },
+    {
+      "name": "Merge PDF",
+      "width": 74.17,
+      "height": 17
+    },
+    {
+      "name": "Split PDF",
+      "width": 60.48,
+      "height": 17
+    },
+    {
+      "name": "Resize Image to Exact KB",
+      "width": 169,
+      "height": 17
+    },
+    {
+      "name": "Compress Image",
+      "width": 112.33,
+      "height": 17
+    },
+    {
+      "name": "Resize Image to Exact KB",
+      "width": 169,
+      "height": 17
+    },
+    {
+      "name": "SSC Signature Resize Tool",
+      "width": 175.69,
+      "height": 17
+    },
+    {
+      "name": "RRB Signature Resize",
+      "width": 142.28,
+      "height": 17
+    },
+    {
+      "name": "IBPS Photo, Signature, Thumb & Declaration Resize",
+      "width": 340.23,
+      "height": 17
+    },
+    {
+      "name": "Privacy Policy",
+      "width": 92.89,
+      "height": 17
+    },
+    {
+      "name": "Terms & Conditions",
+      "width": 129.67,
+      "height": 17
+    },
+    {
+      "name": "Disclaimer",
+      "width": 69.23,
+      "height": 17
+    }
+  ],
+  "typography": [
+    {
+      "tag": "a",
+      "text": "PDFRoot",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h1",
+      "text": "Convert PDFs & Resize Images for Government Forms in Seconds",
+      "fontSize": "36px",
+      "lineHeight": "37.8px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Convert, compress, merge and split PDFs. Resize photos and signatures for SSC, RRB, UPSC, IBPS, GPSC",
+      "fontSize": "18px",
+      "lineHeight": "30.96px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Explore All Tools",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "p",
+      "text": "Image resize",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "p",
+      "text": "PDF conversion",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "a",
+      "text": "Browse tools",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "p",
+      "text": "Popular Tools",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "The tools people open every single day",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "a",
+      "text": "View all tools",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "a",
+      "text": "Merge PDFCombine multiple PDF files into one organized document.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Merge PDF",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Combine multiple PDF files into one organized document.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Split PDFSplit a PDF into separate files or extract selected page ranges.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Split PDF",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Split a PDF into separate files or extract selected page ranges.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Compress PDFReduce PDF file size for email, portals, and document upload limits.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Compress PDF",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Reduce PDF file size for email, portals, and document upload limits.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "PDF to JPGConvert PDF pages into clear JPG images.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "PDF to JPG",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Convert PDF pages into clear JPG images.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "JPG to PDFCreate a clean PDF from JPG images in seconds.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "JPG to PDF",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Create a clean PDF from JPG images in seconds.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Resize Image to Exact KBResize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Resize Image to Exact KB",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Compress ImageCompress JPG, PNG, and WebP images without complicated settings.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Compress Image",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Compress JPG, PNG, and WebP images without complicated settings.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Background RemoverRemove image backgrounds online and download transparent PNG files.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Background Remover",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Remove image backgrounds online and download transparent PNG files.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Built for India's exams",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "Never get your application rejected because of incorrect photo or signature size",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Built for SSC, RRB, UPSC, GPSC, IBPS, OJAS and Railway recruitment forms.",
+      "fontSize": "18px",
+      "lineHeight": "30.96px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Resize Image to Exact KBResize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Resize Image to Exact KB",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "SSC Signature Resize ToolResize SSC signatures to JPG/JPEG, 10-20 KB, and 6.0 cm x 2.0 cm requiremen",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "SSC Signature Resize Tool",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize SSC signatures to JPG/JPEG, 10-20 KB, and 6.0 cm x 2.0 cm requirements.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "RRB Signature ResizeResize RRB signatures to JPG/JPEG, 30-49 KB, minimum 140 x 60 px, and 100 DPI re",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "RRB Signature Resize",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize RRB signatures to JPG/JPEG, 30-49 KB, minimum 140 x 60 px, and 100 DPI requirements.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "IBPS Photo, Signature, Thumb & Declaration ResizeResize IBPS photo, signature, left thumb impression",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "IBPS Photo, Signature, Thumb & Declaration Resize",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize IBPS photo, signature, left thumb impression, and handwritten declaration documents to requir",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "OJAS Photo ResizeResize photos and signatures for OJAS Gujarat recruitment forms.Open tool",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "OJAS Photo Resize",
+      "fontSize": "13px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Resize photos and signatures for OJAS Gujarat recruitment forms.",
+      "fontSize": "11px",
+      "lineHeight": "16.5px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Product Preview",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "Clean previews of the tools before you open them",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Illustrative screens that show the workflow without pretending to process uploaded files.",
+      "fontSize": "18px",
+      "lineHeight": "30.96px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "Resize Image to Exact KB",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "button",
+      "text": "Passport Photo Maker",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "button",
+      "text": "JPG to PDF",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "h3",
+      "text": "Resize settings",
+      "fontSize": "18px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "a",
+      "text": "Open Resize Image to Exact KB",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "p",
+      "text": "Blog",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "Helpful guides for PDFs, images, and online forms",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "a",
+      "text": "View all posts",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "h3",
+      "text": "How to Resize Image to Exact KB for Government Forms",
+      "fontSize": "20px",
+      "lineHeight": "24px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Prepare photos and signatures for online applications by resizing images to exact KB limits without ",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Read more",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "h3",
+      "text": "JPG to PDF Online: Complete Guide",
+      "fontSize": "20px",
+      "lineHeight": "24px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Learn how to combine JPG images into a clean PDF for forms, assignments, office documents, and shari",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Read more",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "h3",
+      "text": "How to Compress PDF Without Losing Quality",
+      "fontSize": "20px",
+      "lineHeight": "24px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "p",
+      "text": "Reduce PDF file size for email, portals, and sharing while keeping pages readable and professional.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Read more",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "500"
+    },
+    {
+      "tag": "p",
+      "text": "Why PDFRoot",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "Why choose PDFRoot",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "h3",
+      "text": "Fast Processing",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Optimized engines convert and compress files in seconds, even on slow connections.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Privacy First",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Files are processed securely over SSL and automatically deleted within one hour.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Mobile Friendly",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Every tool is built mobile-first, so it works perfectly from any phone or tablet.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Government Form Ready",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "p",
+      "text": "Exact KB sizing and photo presets tuned for SSC, RRB, UPSC, IBPS and more.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "FAQ",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "h2",
+      "text": "Frequently asked questions",
+      "fontSize": "30px",
+      "lineHeight": "36px",
+      "fontWeight": "700"
+    },
+    {
+      "tag": "button",
+      "text": "Can I convert PDF files online with PDFRoot?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Yes. PDFRoot includes PDF conversion tools such as PDF to Word, PDF to Excel, PDF to PowerPoint, Wor",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "How do I resize an image to exact KB?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Open Resize Image to Exact KB, upload your photo or signature, enter the target size such as 20KB, 5",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "Can I resize SSC signatures online?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Yes. PDFRoot provides an SSC Signature Resize Tool for candidates who need JPG/JPEG signatures sized",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "Can I resize signatures for RRB railway forms?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Yes. The RRB Signature Resize tool helps prepare JPG/JPEG signatures for railway recruitment applica",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "Does PDFRoot include a passport photo maker?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Yes. Passport Photo Maker helps prepare official-style photos for forms, admissions, applications, a",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "button",
+      "text": "How do I compress a PDF online?",
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Choose Compress PDF, upload your document, let PDFRoot reduce the file size, and download the compre",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "PDF and image tools for conversion, compression, resizing, and government form file preparation.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Company",
+      "fontSize": "14px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "a",
+      "text": "About Us",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Blog",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Contact Us",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "FAQ",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Tools",
+      "fontSize": "14px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "a",
+      "text": "Merge PDF",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Split PDF",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Resize Image to Exact KB",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Compress Image",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Government",
+      "fontSize": "14px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "a",
+      "text": "Resize Image to Exact KB",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "SSC Signature Resize Tool",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "RRB Signature Resize",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "IBPS Photo, Signature, Thumb & Declaration Resize",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "h3",
+      "text": "Legal",
+      "fontSize": "14px",
+      "lineHeight": "24px",
+      "fontWeight": "600"
+    },
+    {
+      "tag": "a",
+      "text": "Privacy Policy",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Terms & Conditions",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "a",
+      "text": "Disclaimer",
+      "fontSize": "14px",
+      "lineHeight": "22.68px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "Copyright 2026 PDFRoot. All rights reserved.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    },
+    {
+      "tag": "p",
+      "text": "PDF and image tools for everyday file preparation.",
+      "fontSize": "14px",
+      "lineHeight": "21px",
+      "fontWeight": "400"
+    }
+  ],
+  "cards": [
+    {
+      "text": "",
+      "rect": {
+        "x": 24,
+        "y": 473.046875,
+        "width": 382,
+        "height": 64.671875,
+        "right": 406,
+        "bottom": 537.71875
+      },
+      "padding": "8px",
+      "radius": "16px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(15, 23, 42, 0.08) 0px 18px 45px 0px"
+    },
+    {
+      "text": "Explore All Tools",
+      "rect": {
+        "x": 24,
+        "y": 569.71875,
+        "width": 382,
+        "height": 48,
+        "right": 406,
+        "bottom": 617.71875
+      },
+      "padding": "0px 24px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Browse tools",
+      "rect": {
+        "x": 24,
+        "y": 1270.796875,
+        "width": 382,
+        "height": 40,
+        "right": 406,
+        "bottom": 1310.796875
+      },
+      "padding": "0px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Merge PDFCombine multiple PDF files into one organized document.Open t",
+      "rect": {
+        "x": 24,
+        "y": 1619.46875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 1783.96875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Split PDFSplit a PDF into separate files or extract selected page rang",
+      "rect": {
+        "x": 24,
+        "y": 1799.96875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 1964.46875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Compress PDFReduce PDF file size for email, portals, and document uplo",
+      "rect": {
+        "x": 24,
+        "y": 1980.46875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 2144.96875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "PDF to JPGConvert PDF pages into clear JPG images.Open tool",
+      "rect": {
+        "x": 24,
+        "y": 2160.96875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 2325.46875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "JPG to PDFCreate a clean PDF from JPG images in seconds.Open tool",
+      "rect": {
+        "x": 24,
+        "y": 2341.46875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 2505.96875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Resize Image to Exact KBResize images to 20KB, 50KB, 100KB, 200KB, or ",
+      "rect": {
+        "x": 24,
+        "y": 2521.96875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 2687.46875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Compress ImageCompress JPG, PNG, and WebP images without complicated s",
+      "rect": {
+        "x": 24,
+        "y": 2703.46875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 2868.96875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Background RemoverRemove image backgrounds online and download transpa",
+      "rect": {
+        "x": 24,
+        "y": 2884.96875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 3050.46875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Illustrative size checkBefore4.2 MBAbove targetNeeds resizeAfter20 KBE",
+      "rect": {
+        "x": 24,
+        "y": 3562.375,
+        "width": 382,
+        "height": 453.84375,
+        "right": 406,
+        "bottom": 4016.21875
+      },
+      "padding": "24px",
+      "radius": "16px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 1px 2px 0px"
+    },
+    {
+      "text": "Resize Image to Exact KBResize images to 20KB, 50KB, 100KB, 200KB, or ",
+      "rect": {
+        "x": 24,
+        "y": 4040.21875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 4205.71875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "SSC Signature Resize ToolResize SSC signatures to JPG/JPEG, 10-20 KB, ",
+      "rect": {
+        "x": 24,
+        "y": 4221.71875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 4387.21875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "RRB Signature ResizeResize RRB signatures to JPG/JPEG, 30-49 KB, minim",
+      "rect": {
+        "x": 24,
+        "y": 4403.21875,
+        "width": 382,
+        "height": 169.5,
+        "right": 406,
+        "bottom": 4572.71875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "IBPS Photo, Signature, Thumb & Declaration ResizeResize IBPS photo, si",
+      "rect": {
+        "x": 24,
+        "y": 4588.71875,
+        "width": 382,
+        "height": 165.5,
+        "right": 406,
+        "bottom": 4754.21875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "OJAS Photo ResizeResize photos and signatures for OJAS Gujarat recruit",
+      "rect": {
+        "x": 24,
+        "y": 4770.21875,
+        "width": 382,
+        "height": 164.5,
+        "right": 406,
+        "bottom": 4934.71875
+      },
+      "padding": "12px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "pdfroot.com/resize-image-to-exact-kbResize settingsTarget size20 KBQua",
+      "rect": {
+        "x": 24,
+        "y": 5442.921875,
+        "width": 382,
+        "height": 717.03125,
+        "right": 406,
+        "bottom": 6159.953125
+      },
+      "padding": "0px",
+      "radius": "16px",
+      "shadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.25) 0px 25px 50px -12px"
+    },
+    {
+      "text": "Open Resize Image to Exact KB",
+      "rect": {
+        "x": 144.28125,
+        "y": 6100.28125,
+        "width": 240.71875,
+        "height": 38.671875,
+        "right": 385,
+        "bottom": 6138.953125
+      },
+      "padding": "8px 16px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Image ToolsJune 22, 2026How to Resize Image to Exact KB for Government",
+      "rect": {
+        "x": 24,
+        "y": 6468.625,
+        "width": 382,
+        "height": 247.671875,
+        "right": 406,
+        "bottom": 6716.296875
+      },
+      "padding": "20px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "PDF ConversionJune 22, 2026JPG to PDF Online: Complete GuideLearn how ",
+      "rect": {
+        "x": 24,
+        "y": 6732.296875,
+        "width": 382,
+        "height": 247.671875,
+        "right": 406,
+        "bottom": 6979.96875
+      },
+      "padding": "20px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "PDF CompressionJune 22, 2026How to Compress PDF Without Losing Quality",
+      "rect": {
+        "x": 24,
+        "y": 6995.96875,
+        "width": 382,
+        "height": 226.671875,
+        "right": 406,
+        "bottom": 7222.640625
+      },
+      "padding": "20px",
+      "radius": "8px",
+      "shadow": "none"
+    },
+    {
+      "text": "Fast ProcessingOptimized engines convert and compress files in seconds",
+      "rect": {
+        "x": 24,
+        "y": 7456.640625,
+        "width": 382,
+        "height": 192,
+        "right": 406,
+        "bottom": 7648.640625
+      },
+      "padding": "24px",
+      "radius": "16px",
+      "shadow": "none"
+    },
+    {
+      "text": "Privacy FirstFiles are processed securely over SSL and automatically d",
+      "rect": {
+        "x": 24,
+        "y": 7664.640625,
+        "width": 382,
+        "height": 192,
+        "right": 406,
+        "bottom": 7856.640625
+      },
+      "padding": "24px",
+      "radius": "16px",
+      "shadow": "none"
+    },
+    {
+      "text": "Mobile FriendlyEvery tool is built mobile-first, so it works perfectly",
+      "rect": {
+        "x": 24,
+        "y": 7872.640625,
+        "width": 382,
+        "height": 192,
+        "right": 406,
+        "bottom": 8064.640625
+      },
+      "padding": "24px",
+      "radius": "16px",
+      "shadow": "none"
+    },
+    {
+      "text": "Government Form ReadyExact KB sizing and photo presets tuned for SSC, ",
+      "rect": {
+        "x": 24,
+        "y": 8080.640625,
+        "width": 382,
+        "height": 192,
+        "right": 406,
+        "bottom": 8272.640625
+      },
+      "padding": "24px",
+      "radius": "16px",
+      "shadow": "none"
+    },
+    {
+      "text": "Can I convert PDF files online with PDFRoot?Yes. PDFRoot includes PDF ",
+      "rect": {
+        "x": 24,
+        "y": 8946.328125,
+        "width": 382,
+        "height": 510,
+        "right": 406,
+        "bottom": 9456.328125
+      },
+      "padding": "0px",
+      "radius": "16px",
+      "shadow": "none"
+    }
+  ],
+  "seo": {
+    "title": "PDFRoot - All PDF & Image Tools in One Place",
+    "h1": [
+      "Convert PDFs & Resize Images for Government Forms in Seconds"
+    ],
+    "description": "Use PDFRoot to convert, compress, merge, split, edit, organize, and resize PDFs and images online. Built for Indian students, cyber cafes, offices, and government recruitment forms.",
+    "canonical": "https://pdfroot.com/",
+    "robots": "index, follow",
+    "ogTitle": "PDFRoot - Smart PDF & Image Toolkit",
+    "ogDescription": "All PDF and image tools in one place. Convert, compress, merge, split, edit, organize, and resize files online.",
+    "ogImage": "https://pdfroot.com/pdfroot-og-image.png",
+    "ogUrl": "https://pdfroot.com",
+    "structuredData": [
+      [
+        {
+          "@context": "https://schema.org",
+          "@type": "WebApplication",
+          "name": "PDFRoot",
+          "alternateName": "PDFRoot Smart PDF & Image Toolkit",
+          "applicationCategory": "UtilitiesApplication",
+          "operatingSystem": "Any",
+          "url": "https://pdfroot.com",
+          "description": "PDFRoot is a smart PDF and image toolkit for conversion, compression, exact KB image resizing, government form photos, and everyday document work.",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+          }
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Can I convert PDF files online with PDFRoot?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. PDFRoot includes PDF conversion tools such as PDF to Word, PDF to Excel, PDF to PowerPoint, Word to PDF, JPG to PDF, and PDF to JPG."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I resize an image to exact KB?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Open Resize Image to Exact KB, upload your photo or signature, enter the target size such as 20KB, 50KB, or 100KB, and download the optimized file."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I resize SSC signatures online?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. PDFRoot provides an SSC Signature Resize Tool for candidates who need JPG/JPEG signatures sized between 10KB and 20KB."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Can I resize signatures for RRB railway forms?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. The RRB Signature Resize tool helps prepare JPG/JPEG signatures for railway recruitment applications."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does PDFRoot include a passport photo maker?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Passport Photo Maker helps prepare official-style photos for forms, admissions, applications, and document uploads."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How do I compress a PDF online?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Choose Compress PDF, upload your document, let PDFRoot reduce the file size, and download the compressed PDF for email or portal upload."
+              }
+            }
+          ]
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://pdfroot.com"
+            }
+          ]
+        }
+      ],
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "PDFRoot",
+        "url": "https://pdfroot.com",
+        "logo": "https://pdfroot.com/pdfroot-icon-logo.png",
+        "image": "https://pdfroot.com/pdfroot-og-image.png",
+        "sameAs": [
+          "https://twitter.com/pdfroot",
+          "https://www.linkedin.com/company/pdfroot",
+          "https://www.facebook.com/pdfroot"
+        ]
+      }
+    ]
+  },
+  "performance": {
+    "cls": 0.038921054020965316,
+    "lcp": 470.4200000166893,
+    "shifts": [
+      {
+        "value": 0.038921054020965316,
+        "time": 2802.5699999928474
+      }
+    ],
+    "domContentLoaded": 643.2549999952316,
+    "load": 1352.0850000083447,
+    "transferSize": 79627,
+    "resources": 20
+  },
+  "visibleText": "PDFRoot\nPDF & Government Form Tools\nConvert PDFs & Resize Images for Government Forms in Seconds\n\nConvert, compress, merge and split PDFs. Resize photos and signatures for SSC, RRB, UPSC, IBPS, GPSC and OJAS applications.\n\nExplore All Tools\nNo Registration Required\nSecure Processing\nMobile Friendly\nFree Online Tools\nDrag & Drop Files\nCHOOSE FILES\nor drop files here\n\nImage resize\n\nPreparing\n\nPDF conversion\n\nPreparing\nBrowse tools\n\nPOPULAR TOOLS\n\nThe tools people open every single day\nView all tools\nMerge PDF\n\nCombine multiple PDF files into one organized document.\n\nOpen tool\nSplit PDF\n\nSplit a PDF into separate files or extract selected page ranges.\n\nOpen tool\nCompress PDF\n\nReduce PDF file size for email, portals, and document upload limits.\n\nOpen tool\nPDF to JPG\n\nConvert PDF pages into clear JPG images.\n\nOpen tool\nJPG to PDF\n\nCreate a clean PDF from JPG images in seconds.\n\nOpen tool\nResize Image to Exact KB\n\nResize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.\n\nOpen tool\nCompress Image\n\nCompress JPG, PNG, and WebP images without complicated settings.\n\nOpen tool\nBackground Remover\n\nRemove image backgrounds online and download transparent PNG files.\n\nOpen tool\n\nBUILT FOR INDIA'S EXAMS\n\nNever get your application rejected because of incorrect photo or signature size\n\nBuilt for SSC, RRB, UPSC, GPSC, IBPS, OJAS and Railway recruitment forms.\n\nSSC\nRRB\nUPSC\nGPSC\nIBPS\nOJAS\nRailway\nIllustrative size check\nBEFORE\n4.2 MB\nAbove target\nNeeds resize\nAFTER\n20 KB\nExact size\nWithin target\nTarget size\n20 KB\n10 KB\n50 KB\n100 KB\nResize Image to Exact KB\n\nResize images to 20KB, 50KB, 100KB, 200KB, or a custom exact size.\n\nOpen tool\nSSC Signature Resize Tool\n\nResize SSC signatures to JPG/JPEG, 10-20 KB, and 6.0 cm x 2.0 cm requirements.\n\nOpen tool\nRRB Signature Resize\n\nResize RRB signatures to JPG/JPEG, 30-49 KB, minimum 140 x 60 px, and 100 DPI requirements.\n\nOpen tool\nIBPS Photo, Signature, Thumb & Declaration Resize\n\nResize IBPS photo, signature, left thumb impression, and handwritten declaration documents to required JPG/JPEG dimensions and file sizes.\n\nOpen tool\nOJAS Photo Resize\n\nResize photos and signatures for OJAS Gujarat recruitment forms.\n\nOpen tool\n\nPRODUCT PREVIEW\n\nClean previews of the tools before you open them\n\nIllustrative screens that show the workflow without pretending to process uploaded files.\n\nResize Image to Exact KB\nPassport Photo Maker\nJPG to PDF\npdfroot.com/resize-image-to-exact-kb\nResize settings\nTarget size\n20 KB\nQuality\nHigh\nDimensions\n200 x 230 px\nFormat\nJPG\nExample target settings applied\nOpen Resize Image to Exact KB\n\nBLOG\n\nHelpful guides for PDFs, images, and online forms\nView all posts\nImage Tools\nJune 22, 2026\nHow to Resize Image to Exact KB for Government Forms\n\nPrepare photos and signatures for online applications by resizing images to exact KB limits without complicated software.\n\nRead more\nPDF Conversion\nJune 22, 2026\nJPG to PDF Online: Complete Guide\n\nLearn how to combine JPG images into a clean PDF for forms, assignments, office documents, and sharing.\n\nRead more\nPDF Compression\nJune 22, 2026\nHow to Compress PDF Without Losing Quality\n\nReduce PDF file size for email, portals, and sharing while keeping pages readable and professional.\n\nRead more\n\nWHY PDFRoot\n\nWhy choose PDFRoot\nFast Processing\n\nOptimized engines convert and compress files in seconds, even on slow connections.\n\nPrivacy First\n\nFiles are processed securely over SSL and automatically deleted within one hour.\n\nMobile Friendly\n\nEvery tool is built mobile-first, so it works perfectly from any phone or tablet.\n\nGovernment Form Ready\n\nExact KB sizing and photo presets tuned for SSC, RRB, UPSC, IBPS and more.\n\nNo Registration\nStart using any tool instantly\nSecure Processing\nEncrypted SSL on every upload\nGovernment-Form Ready\nExact KB sizing built in\nWorks on Mobile\nBuilt mobile-first for any device\n\nFAQ\n\nFrequently asked questions\nCan I convert PDF files online with PDFRoot?\n\nYes. PDFRoot includes PDF conversion tools such as PDF to Word, PDF to Excel, PDF to PowerPoint, Word to PDF, JPG to PDF, and PDF to JPG.\n\nHow do I resize an image to exact KB?\n\nOpen Resize Image to Exact KB, upload your photo or signature, enter the target size such as 20KB, 50KB, or 100KB, and download the optimized file.\n\nCan I resize SSC signatures online?\n\nYes. PDFRoot provides an SSC Signature Resize Tool for candidates who need JPG/JPEG signatures sized between 10KB and 20KB.\n\nCan I resize signatures for RRB railway forms?\n\nYes. The RRB Signature Resize tool helps prepare JPG/JPEG signatures for railway recruitment applications.\n\nDoes PDFRoot include a passport photo maker?\n\nYes. Passport Photo Maker helps prepare official-style photos for forms, admissions, applications, and document uploads.\n\nHow do I compress a PDF online?\n\nChoose Compress PDF, upload your document, let PDFRoot reduce the file size, and download the compressed PDF for email or portal upload.\n\nPDFRoot\n\nPDF and image tools for conversion, compression, resizing, and government form file preparation.\n\nInstagram\nFacebook\nLinkedIn\nX\nCompany\nAbout Us\nBlog\nContact Us\nFAQ\nTools\nMerge PDF\nSplit PDF\nResize Image to Exact KB\nCompress Image\nGovernment\nResize Image to Exact KB\nSSC Signature Resize Tool\nRRB Signature Resize\nIBPS Photo, Signature, Thumb & Declaration Resize\nLegal\nPrivacy Policy\nTerms & Conditions\nDisclaimer\n\nCopyright 2026 PDFRoot. All rights reserved.\n\nPDF and image tools for everyday file preparation."
+}

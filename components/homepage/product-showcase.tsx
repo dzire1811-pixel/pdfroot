@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Check, Ruler, Sliders, UserSquare2 } from "lucide-react";
+import { Check } from "lucide-react";
+import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { tools } from "@/lib/tools";
 
-const tabs = [
-  { id: "resize", label: "Resize Image to Exact KB", icon: Ruler, slug: "resize-image-to-exact-kb" },
-  { id: "passport", label: "Passport Photo Maker", icon: UserSquare2, slug: "passport-photo-maker" },
-  { id: "jpg", label: "JPG to PDF", icon: Sliders, slug: "jpg-to-pdf" },
+const tabDefinitions = [
+  { id: "resize", slug: "resize-image-to-exact-kb" },
+  { id: "passport", slug: "passport-photo-maker" },
+  { id: "jpg", slug: "jpg-to-pdf" },
 ] as const;
+
+const tabs = tabDefinitions.map((tab) => ({
+  ...tab,
+  tool: tools.find((tool) => tool.slug === tab.slug)!,
+}));
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -38,12 +45,12 @@ export function ProductShowcase() {
                 type="button"
                 onClick={() => setActive(tab.id)}
                 className={
-                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors " +
+                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-normal transition-colors " +
                   (isActive ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground")
                 }
               >
-                <tab.icon className="h-4 w-4" aria-hidden="true" />
-                {tab.label}
+                <ToolDirectoryIcon tool={tab.tool} />
+                {tab.tool.name}
               </button>
             );
           })}
@@ -55,8 +62,8 @@ export function ProductShowcase() {
             {active === "passport" && <PassportScreen />}
             {active === "jpg" && <JpgScreen />}
             <div className="mt-5 flex justify-end">
-              <Link href={`/${activeTab.slug}`} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
-                Open {activeTab.label}
+              <Link href={`/${activeTab.slug}`} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-normal text-primary-foreground transition hover:bg-primary/90">
+                Open {activeTab.tool.name}
               </Link>
             </div>
           </AppWindow>

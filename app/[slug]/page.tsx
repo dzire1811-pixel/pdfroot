@@ -11,6 +11,7 @@ import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { ToolRenderer } from "@/components/ToolRenderer";
 import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
+import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { getToolBySlug, imageTools, pdfTools, recruitmentPlatforms, tools } from "@/lib/tools";
 
 type ToolPageProps = {
@@ -90,7 +91,6 @@ export default async function ToolPage({ params }: ToolPageProps) {
     notFound();
   }
 
-  const Icon = tool.icon;
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-photo-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
@@ -426,7 +426,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           />
           <div className="relative mx-auto max-w-4xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-              <Icon className="h-4 w-4" aria-hidden="true" />
+              <ToolDirectoryIcon tool={tool} />
               {tool.category}
             </div>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
@@ -456,13 +456,14 @@ export default async function ToolPage({ params }: ToolPageProps) {
                       <Link
                         key={item.slug}
                         href={`/${item.slug}`}
-                        className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background p-3 transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[#F3F4F6] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        style={getToolRowTintStyle(item.slug)}
+                        className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-background p-3 transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[var(--tool-row-tint)] hover:shadow-sm focus-visible:bg-[var(--tool-row-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:bg-[var(--tool-row-tint)]"
                       >
                         <span className="shrink-0">
                           <ToolDirectoryIcon tool={item} />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-semibold leading-tight text-foreground">{label}</span>
+                          <span className="block text-sm font-normal leading-tight text-foreground">{label}</span>
                           <span className="mt-1 block text-xs leading-snug text-muted-foreground">{description}</span>
                         </span>
                       </Link>
@@ -476,8 +477,10 @@ export default async function ToolPage({ params }: ToolPageProps) {
                       <Link
                         key={item.slug}
                         href={`/${item.slug}`}
-                        className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[#F3F4F6] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        style={getToolRowTintStyle(item.slug)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-sm font-normal text-foreground transition-[background-color,border-color,box-shadow] duration-200 hover:border-slate-300 hover:bg-[var(--tool-row-tint)] hover:shadow-sm focus-visible:bg-[var(--tool-row-tint)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:bg-[var(--tool-row-tint)]"
                       >
+                        <ToolDirectoryIcon tool={item} />
                         {item.name}
                       </Link>
                     ))}
