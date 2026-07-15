@@ -293,6 +293,8 @@ export function CropImageTool() {
   const [exactKb, setExactKb] = useState("");
 
   const activeImage = selectedImages.find((image) => image.id === activeId) ?? selectedImages[0];
+  const activePreviewDimensions = activeImage ? rotatedDimensions(activeImage.dimensions, activeImage.rotation) : null;
+  const activePreviewAspect = activePreviewDimensions ? activePreviewDimensions.width / activePreviewDimensions.height : 1;
 
   function scrollCropWorkflowToTop(behavior: ScrollBehavior = "smooth") {
     window.requestAnimationFrame(() => {
@@ -1322,6 +1324,7 @@ export function CropImageTool() {
 
   function renderCropPreview() {
     if (!activeImage) return null;
+    const isQuarterTurn = normalizeRotation(activeImage.rotation) === 90 || normalizeRotation(activeImage.rotation) === 270;
 
     return (
       <div
@@ -1338,8 +1341,15 @@ export function CropImageTool() {
         <img
           src={activeImage.previewUrl}
           alt="Uploaded image preview"
-          className="block h-full w-full object-contain"
-          style={{ objectFit: "contain", transform: `rotate(${activeImage.rotation}deg)` }}
+          className="absolute left-1/2 top-1/2 block object-contain"
+          style={{
+            width: isQuarterTurn ? `${100 / activePreviewAspect}%` : "100%",
+            height: isQuarterTurn ? `${activePreviewAspect * 100}%` : "100%",
+            maxWidth: "none",
+            maxHeight: "none",
+            objectFit: "contain",
+            transform: `translate(-50%, -50%) rotate(${activeImage.rotation}deg)`,
+          }}
           draggable={false}
         />
         {activeImage.cropBox && (
@@ -1386,7 +1396,7 @@ export function CropImageTool() {
           style={
             activeImage
               ? ({
-                  "--crop-aspect": String(rotatedDimensions(activeImage.dimensions, activeImage.rotation).width / rotatedDimensions(activeImage.dimensions, activeImage.rotation).height),
+                  "--crop-aspect": String(activePreviewAspect),
                 } as CSSProperties)
               : undefined
           }
@@ -1396,12 +1406,12 @@ export function CropImageTool() {
             {renderDesktopPreviewActions()}
             <div
               data-crop-image-frame="true"
-              className="relative mx-auto grid w-[min(74vw,18rem)] max-w-full place-items-center overflow-hidden rounded-none border-0 bg-transparent sm:rounded-lg sm:border sm:border-slate-100 sm:bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
+              className="relative mx-auto grid w-[min(74vw,18rem)] max-w-full place-items-center overflow-hidden rounded-none border-0 bg-transparent transition-[width,aspect-ratio] duration-200 ease-out sm:rounded-lg sm:border sm:border-slate-100 sm:bg-white sm:w-[min(100%,calc((100vh-31rem)*var(--crop-aspect)))] lg:w-[min(100%,calc((100vh-25rem)*var(--crop-aspect)))]"
               style={
-                activeImage
+                activePreviewDimensions
                   ? ({
-                      "--crop-aspect": String(rotatedDimensions(activeImage.dimensions, activeImage.rotation).width / rotatedDimensions(activeImage.dimensions, activeImage.rotation).height),
-                      aspectRatio: `${rotatedDimensions(activeImage.dimensions, activeImage.rotation).width} / ${rotatedDimensions(activeImage.dimensions, activeImage.rotation).height}`,
+                      "--crop-aspect": String(activePreviewAspect),
+                      aspectRatio: `${activePreviewDimensions.width} / ${activePreviewDimensions.height}`,
                     } as CSSProperties)
                   : undefined
               }

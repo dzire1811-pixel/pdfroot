@@ -8,7 +8,7 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span className={joinClasses("inline-flex items-center gap-2.5 sm:gap-3", className)}>
       <Image
-        src="/pdfroot-pr-monogram.svg"
+        src="/branding/logo.svg"
         alt="PDFRoot"
         width={512}
         height={512}
@@ -20,6 +20,27 @@ export function Logo({ className }: { className?: string }) {
         <span className="text-[#EF4444]">PDF</span>
         <span className="text-[#111111]">Root</span>
       </span>
+    </span>
+  );
+}
+
+export function HorizontalLogo({ className }: { className?: string }) {
+  return (
+    <span
+      className={joinClasses(
+        "relative block h-9 w-[124.39px] shrink-0 overflow-hidden sm:h-11 sm:w-[148.48px]",
+        className,
+      )}
+    >
+      <Image
+        src="/branding/horizontal-logo.svg"
+        alt="PDFRoot"
+        width={430}
+        height={160}
+        priority
+        sizes="(max-width: 640px) 129px, 158px"
+        className="absolute left-1/2 top-1/2 h-12 w-auto max-w-none -translate-x-1/2 -translate-y-1/2 sm:h-[58.72px]"
+      />
     </span>
   );
 }

@@ -8,6 +8,7 @@ import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { MergeResultExploreButton } from "@/components/MergeResultExploreButton";
 import { ToolCard } from "@/components/ToolCard";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { ToolFeedback } from "@/components/ToolFeedback";
 import { ToolRenderer } from "@/components/ToolRenderer";
 import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
@@ -19,6 +20,12 @@ type ToolPageProps = {
     slug: string;
   }>;
 };
+
+function withUniqueTitleSuffix(title: string, suffix: string) {
+  const escapedSuffix = suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const titleWithoutSuffix = title.trim().replace(new RegExp(`(?:\\s+${escapedSuffix})+$`, "i"), "").trim();
+  return titleWithoutSuffix ? `${titleWithoutSuffix} ${suffix}` : suffix;
+}
 
 export function generateStaticParams() {
   return tools.map((tool) => ({
@@ -34,24 +41,26 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     return {};
   }
 
+  const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
+
   return {
-    title: `${tool.name} Online`,
+    title: pageTitle,
     description: `${tool.description} Use PDFRoot ${tool.name} online with fast processing, secure files, instant download, and a clean mobile-friendly upload workflow.`,
     keywords: tool.keywords,
     alternates: {
       canonical: `/${tool.slug}`,
     },
     openGraph: {
-      title: `${tool.name} Online | PDFRoot`,
+      title: `${pageTitle} | PDFRoot`,
       description: tool.description,
       url: `https://pdfroot.com/${tool.slug}`,
-      images: ["/pdfroot-og-image.png"],
+      images: ["https://pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${tool.name} Online | PDFRoot`,
+      title: `${pageTitle} | PDFRoot`,
       description: tool.description,
-      images: ["/pdfroot-og-image.png"],
+      images: ["https://pdfroot.com/branding/twitter-card.png"],
     },
   };
 }
@@ -91,6 +100,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
     notFound();
   }
 
+  const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-photo-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
@@ -236,7 +246,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const pageSchema = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
-    name: `${tool.name} Online`,
+    name: pageTitle,
     applicationCategory: "UtilitiesApplication",
     operatingSystem: "Any",
     url: `https://pdfroot.com/${tool.slug}`,
@@ -430,7 +440,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
               {tool.category}
             </div>
             <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              {tool.name} Online
+              {pageTitle}
             </h1>
             <ToolRenderer slug={tool.slug} name={tool.name} description={tool.description} />
             <p data-tool-page-extra="intro" className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
@@ -442,6 +452,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
 
         {usesApprovedPdfResultPage && (
           <>
+            <ToolFeedback toolName={tool.name} toolSlug={tool.slug} />
+
             <section data-merge-result-only="related" className="h-auto overflow-visible bg-muted/40 px-4 pb-2 pt-2 sm:px-6 lg:px-8">
               <div className="mx-auto h-auto max-w-[1040px] overflow-visible rounded-2xl border border-border bg-card px-4 py-4 shadow-sm shadow-foreground/[0.03] sm:px-5">
                 <div role="heading" aria-level={2} className="text-lg font-semibold leading-snug tracking-tight text-foreground">
@@ -486,7 +498,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
                     ))}
                 </div>
                 <div className="mt-4 flex justify-center">
-                  <MergeResultExploreButton />
+                  <MergeResultExploreButton category={tool.category} />
                 </div>
               </div>
             </section>

@@ -45,20 +45,19 @@ export const metadata: Metadata = {
   authors: [{ name: "PDFRoot" }],
   creator: "PDFRoot",
   publisher: "PDFRoot",
+  manifest: "/branding/site.webmanifest",
   alternates: {
     canonical: "/",
   },
   icons: {
     icon: [
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
-      { url: "/favicon-64x64.png", sizes: "64x64", type: "image/png" },
-      { url: "/favicon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/favicon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: "/branding/favicon.ico", type: "image/x-icon" },
+      { url: "/branding/favicon.svg", type: "image/svg+xml" },
+      { url: "/branding/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/branding/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/branding/favicon-48x48.png", sizes: "48x48", type: "image/png" },
     ],
-    shortcut: [{ url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" }],
-    apple: [{ url: "/favicon-180x180.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/branding/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "PDFRoot - Smart PDF & Image Toolkit",
@@ -70,7 +69,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/pdfroot-og-image.png",
+        url: `${siteUrl}/branding/open-graph-image.png`,
         width: 1200,
         height: 630,
         alt: "PDFRoot logo",
@@ -82,7 +81,7 @@ export const metadata: Metadata = {
     title: "PDFRoot - Smart PDF & Image Toolkit",
     description:
       "Convert, compress, merge, split, edit, organize PDFs and images with PDFRoot.",
-    images: ["/pdfroot-og-image.png"],
+    images: [`${siteUrl}/branding/twitter-card.png`],
   },
   robots: {
     index: true,
@@ -107,8 +106,8 @@ const organizationSchema = {
   "@type": "Organization",
   name: "PDFRoot",
   url: siteUrl,
-  logo: `${siteUrl}/pdfroot-icon-logo.png`,
-  image: `${siteUrl}/pdfroot-og-image.png`,
+  logo: `${siteUrl}/branding/logo.png`,
+  image: `${siteUrl}/branding/open-graph-image.png`,
   sameAs: [
     "https://twitter.com/pdfroot",
     "https://www.linkedin.com/company/pdfroot",

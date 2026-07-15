@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, FileOutput, Home, Menu, Shapes, X } from "lucide-react";
-import { Logo } from "@/components/homepage/logo";
+import { HorizontalLogo } from "@/components/Logo";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
@@ -309,7 +309,7 @@ export function HomepageSiteHeader() {
     <header ref={headerRef} className="sticky top-0 z-50 border-b border-[#e5e7eb] bg-white shadow-sm">
       <div className="mx-auto flex h-16 max-w-[1800px] items-center justify-between gap-5 px-6 lg:px-8">
         <Link href="/" aria-label="PDFRoot home" className="shrink-0">
-          <Logo />
+          <HorizontalLogo />
         </Link>
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-[14px] min-[1320px]:flex" aria-label="Main navigation">

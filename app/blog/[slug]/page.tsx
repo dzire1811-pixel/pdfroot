@@ -36,13 +36,13 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
       title: `${post.title} | PDFRoot`,
       description: post.description,
       url: `https://pdfroot.com/blog/${post.slug}`,
-      images: ["/pdfroot-og-image.png"],
+      images: ["https://pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
       card: "summary_large_image",
       title: `${post.title} | PDFRoot`,
       description: post.description,
-      images: ["/pdfroot-og-image.png"],
+      images: ["https://pdfroot.com/branding/twitter-card.png"],
     },
   };
 }

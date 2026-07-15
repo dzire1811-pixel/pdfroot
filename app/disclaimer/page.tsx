@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     title: "Disclaimer | PDFRoot",
     description: "Important disclaimer for using PDFRoot PDF and image tools.",
     url: "https://pdfroot.com/disclaimer",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/open-graph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "Disclaimer | PDFRoot",
     description: "Important disclaimer for using PDFRoot PDF and image tools.",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/twitter-card.png"],
   },
 };
 

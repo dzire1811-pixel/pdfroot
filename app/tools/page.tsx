@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     title: "All PDF & Image Tools | PDFRoot",
     description: "Search and browse all PDFRoot tools for PDFs, images, exact KB resize, government forms, and document workflows.",
     url: "https://pdfroot.com/tools",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/open-graph-image.png"],
   },
 };
 

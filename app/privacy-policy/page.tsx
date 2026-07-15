@@ -15,13 +15,13 @@ export const metadata: Metadata = {
     title: "Privacy Policy | PDFRoot",
     description: "Learn how PDFRoot protects privacy while providing online PDF and image tools.",
     url: "https://pdfroot.com/privacy-policy",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/open-graph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "Privacy Policy | PDFRoot",
     description: "Learn how PDFRoot handles privacy, files, cookies, analytics, and contact information.",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/twitter-card.png"],
   },
 };
 

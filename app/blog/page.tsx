@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     title: "Blog | PDFRoot",
     description: "Simple guides for PDF tools, image tools, exact KB resize, and government form file preparation.",
     url: "https://pdfroot.com/blog",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/open-graph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "Blog | PDFRoot",
     description: "Simple guides for PDF tools, image tools, exact KB resize, and government form file preparation.",
-    images: ["/pdfroot-og-image.png"],
+    images: ["https://pdfroot.com/branding/twitter-card.png"],
   },
 };
 

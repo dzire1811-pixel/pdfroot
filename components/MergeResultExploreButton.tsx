@@ -6,11 +6,17 @@ import { type MouseEvent, useEffect, useRef, useState } from "react";
 
 const RELEASE_DELAY_MS = 180;
 
-export function MergeResultExploreButton() {
+export function MergeResultExploreButton({ category }: { category?: string }) {
   const router = useRouter();
   const [isPressed, setIsPressed] = useState(false);
   const isPressedRef = useRef(false);
   const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const target =
+    category === "Image Tools"
+      ? { href: "/#image-tools", label: "Explore All Image Tools" }
+      : category === "PDF Tools"
+        ? { href: "/#pdf-tools", label: "Explore All PDF Tools" }
+        : { href: "/tools", label: "Explore All Tools" };
 
   const clearReleaseTimer = () => {
     if (releaseTimerRef.current) {
@@ -38,14 +44,14 @@ export function MergeResultExploreButton() {
     if (!isPressedRef.current || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
     event.preventDefault();
-    setTimeout(() => router.push("/#pdf-tools"), RELEASE_DELAY_MS);
+    setTimeout(() => router.push(target.href), RELEASE_DELAY_MS);
   };
 
   useEffect(() => () => clearReleaseTimer(), []);
 
   return (
     <Link
-      href="/#pdf-tools"
+      href={target.href}
       onClick={handleClick}
       onPointerDown={press}
       onPointerUp={release}
@@ -63,7 +69,7 @@ export function MergeResultExploreButton() {
           : {}),
       }}
     >
-      Explore all PDF tools
+      {target.label}
     </Link>
   );
 }
