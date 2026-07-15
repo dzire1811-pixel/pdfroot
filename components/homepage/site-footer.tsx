@@ -63,7 +63,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
           <p className="text-sm text-muted-foreground">
-            Copyright 2026 <BrandText styled />. All rights reserved.
+            © 2026 <BrandText styled />. All rights reserved.
           </p>
           <p className="text-sm text-muted-foreground">PDF and image tools for everyday file preparation.</p>
         </div>
