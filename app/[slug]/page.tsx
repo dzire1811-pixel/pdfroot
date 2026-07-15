@@ -53,14 +53,14 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     openGraph: {
       title: `${pageTitle} | PDFRoot`,
       description: tool.description,
-      url: `https://pdfroot.com/${tool.slug}`,
-      images: ["https://pdfroot.com/branding/open-graph-image.png"],
+      url: `https://www.pdfroot.com/${tool.slug}`,
+      images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
       card: "summary_large_image",
       title: `${pageTitle} | PDFRoot`,
       description: tool.description,
-      images: ["https://pdfroot.com/branding/twitter-card.png"],
+      images: ["https://www.pdfroot.com/branding/twitter-card.png"],
     },
   };
 }
@@ -249,7 +249,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
     name: pageTitle,
     applicationCategory: "UtilitiesApplication",
     operatingSystem: "Any",
-    url: `https://pdfroot.com/${tool.slug}`,
+    url: `https://www.pdfroot.com/${tool.slug}`,
     description: tool.description,
     offers: {
       "@type": "Offer",
@@ -265,13 +265,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
         "@type": "ListItem",
         position: 1,
         name: "Home",
-        item: "https://pdfroot.com",
+        item: "https://www.pdfroot.com",
       },
       {
         "@type": "ListItem",
         position: 2,
         name: tool.name,
-        item: `https://pdfroot.com/${tool.slug}`,
+        item: `https://www.pdfroot.com/${tool.slug}`,
       },
     ],
   };

@@ -15,14 +15,14 @@ export const metadata: Metadata = {
     title: "About PDFRoot | Smart PDF & Image Toolkit",
     description:
       "PDFRoot helps students, government job applicants, cyber cafe users, office workers, and general users prepare PDF and image files quickly.",
-    url: "https://pdfroot.com/about",
-    images: ["https://pdfroot.com/branding/open-graph-image.png"],
+    url: "https://www.pdfroot.com/about",
+    images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "About PDFRoot | Smart PDF & Image Toolkit",
     description: "A free online PDF and image toolkit made for simple, fast, and practical document preparation.",
-    images: ["https://pdfroot.com/branding/twitter-card.png"],
+    images: ["https://www.pdfroot.com/branding/twitter-card.png"],
   },
 };
 

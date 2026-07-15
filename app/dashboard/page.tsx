@@ -5,6 +5,9 @@ import { BrandText, LogoMark } from "@/components/Brand";
 export const metadata = {
   title: "PDFRoot Dashboard",
   description: "PDFRoot dashboard for PDF and image toolkit workflows.",
+  alternates: {
+    canonical: "/dashboard",
+  },
 };
 
 export default function DashboardPage() {

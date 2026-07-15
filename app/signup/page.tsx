@@ -4,6 +4,9 @@ import { BrandText, LogoMark } from "@/components/Brand";
 export const metadata = {
   title: "Create PDFRoot Account",
   description: "Create a PDFRoot account for PDF and image tools.",
+  alternates: {
+    canonical: "/signup",
+  },
 };
 
 export default function SignupPage() {

@@ -35,14 +35,14 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
     openGraph: {
       title: `${post.title} | PDFRoot`,
       description: post.description,
-      url: `https://pdfroot.com/blog/${post.slug}`,
-      images: ["https://pdfroot.com/branding/open-graph-image.png"],
+      url: `https://www.pdfroot.com/blog/${post.slug}`,
+      images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
       card: "summary_large_image",
       title: `${post.title} | PDFRoot`,
       description: post.description,
-      images: ["https://pdfroot.com/branding/twitter-card.png"],
+      images: ["https://www.pdfroot.com/branding/twitter-card.png"],
     },
   };
 }
@@ -68,7 +68,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       "@type": "Organization",
       name: "PDFRoot",
     },
-    mainEntityOfPage: `https://pdfroot.com/blog/${post.slug}`,
+    mainEntityOfPage: `https://www.pdfroot.com/blog/${post.slug}`,
   };
 
   return (

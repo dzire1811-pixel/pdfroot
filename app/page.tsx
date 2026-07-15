@@ -26,9 +26,6 @@ export const metadata: Metadata = {
     "jpg to pdf",
     "pdf to jpg",
   ],
-  alternates: {
-    canonical: "/",
-  },
 };
 
 const governmentToolNames = [
@@ -105,7 +102,7 @@ const softwareSchema = {
   alternateName: "PDFRoot Smart PDF & Image Toolkit",
   applicationCategory: "UtilitiesApplication",
   operatingSystem: "Any",
-  url: "https://pdfroot.com",
+  url: "https://www.pdfroot.com",
   description:
     "PDFRoot is a smart PDF and image toolkit for conversion, compression, exact KB image resizing, government form photos, and everyday document work.",
   offers: {
@@ -123,7 +120,7 @@ const breadcrumbSchema = {
       "@type": "ListItem",
       position: 1,
       name: "Home",
-      item: "https://pdfroot.com",
+      item: "https://www.pdfroot.com",
     },
   ],
 };
@@ -131,6 +128,7 @@ const breadcrumbSchema = {
 export default function Home() {
   return (
     <div className="v0-homepage min-h-screen bg-background">
+      <link rel="canonical" href="https://www.pdfroot.com/" />
       <HomepageSiteHeader />
       <main>
         <Hero />

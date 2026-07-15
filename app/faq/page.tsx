@@ -14,14 +14,14 @@ export const metadata: Metadata = {
   openGraph: {
     title: "FAQ | PDFRoot",
     description: "Common questions and answers about using PDFRoot PDF and image tools.",
-    url: "https://pdfroot.com/faq",
-    images: ["https://pdfroot.com/branding/open-graph-image.png"],
+    url: "https://www.pdfroot.com/faq",
+    images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "FAQ | PDFRoot",
     description: "Common questions and answers about using PDFRoot PDF and image tools.",
-    images: ["https://pdfroot.com/branding/twitter-card.png"],
+    images: ["https://www.pdfroot.com/branding/twitter-card.png"],
   },
 };
 

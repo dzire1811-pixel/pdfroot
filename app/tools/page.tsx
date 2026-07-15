@@ -11,8 +11,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "All PDF & Image Tools | PDFRoot",
     description: "Search and browse all PDFRoot tools for PDFs, images, exact KB resize, government forms, and document workflows.",
-    url: "https://pdfroot.com/tools",
-    images: ["https://pdfroot.com/branding/open-graph-image.png"],
+    url: "https://www.pdfroot.com/tools",
+    images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
   },
 };
 

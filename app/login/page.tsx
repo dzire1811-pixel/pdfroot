@@ -4,6 +4,9 @@ import { BrandText, LogoMark } from "@/components/Brand";
 export const metadata = {
   title: "Login to PDFRoot",
   description: "Login to PDFRoot, the Smart PDF & Image Toolkit.",
+  alternates: {
+    canonical: "/login",
+  },
 };
 
 export default function LoginPage() {

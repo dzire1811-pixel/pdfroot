@@ -1,9 +1,9 @@
-const sitemapUrl = "https://pdfroot.com/sitemap.xml";
+const sitemapUrl = "https://www.pdfroot.com/sitemap.xml";
 const endpoint = "https://api.indexnow.org/indexnow";
-const host = "pdfroot.com";
+const host = "www.pdfroot.com";
 const key = "9c30dffae44740768f32460388f00b42";
 const keyLocation =
-  "https://pdfroot.com/9c30dffae44740768f32460388f00b42.txt";
+  "https://www.pdfroot.com/9c30dffae44740768f32460388f00b42.txt";
 
 function decodeXml(value) {
   return value

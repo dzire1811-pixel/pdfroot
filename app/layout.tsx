@@ -11,7 +11,7 @@ const inter = Inter({
   display: "swap",
 });
 
-const siteUrl = "https://pdfroot.com";
+const siteUrl = "https://www.pdfroot.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -47,9 +47,6 @@ export const metadata: Metadata = {
   creator: "PDFRoot",
   publisher: "PDFRoot",
   manifest: "/branding/site.webmanifest",
-  alternates: {
-    canonical: "/",
-  },
   icons: {
     icon: [
       { url: "/branding/favicon.ico", type: "image/x-icon" },
