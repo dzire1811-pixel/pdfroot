@@ -49,29 +49,29 @@ export function AnalyticsConsent() {
       {isOpen ? (
         <section
           aria-label="Analytics cookie preferences"
-          className="fixed inset-x-4 bottom-4 z-[70] rounded-2xl border border-border bg-background p-4 shadow-[0_16px_48px_rgba(15,23,42,0.16)] sm:bottom-6 sm:left-auto sm:right-6 sm:w-[min(26rem,calc(100vw-3rem))] sm:p-5"
+          className="fixed left-1/2 top-1/2 z-[70] max-h-[calc(100vh-32px)] w-[calc(100%-32px)] max-w-[460px] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-border bg-background p-5 shadow-[0_16px_48px_rgba(15,23,42,0.16)] sm:p-6"
           role="region"
         >
-          <h2 className="text-base font-semibold text-foreground">Analytics preferences</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          <h2 className="max-w-[16ch] text-balance text-[28px] font-semibold leading-[1.15] text-foreground sm:text-[34px]">Analytics preferences</h2>
+          <p className="mt-3 text-base leading-7 text-muted-foreground">
             Help us improve PDFRoot by allowing privacy-conscious website analytics. Essential PDF and image tools work either way. Read our{" "}
             <Link href="/privacy-policy" className="font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               Privacy Policy
             </Link>
             .
           </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="mt-5 grid gap-2 min-[420px]:grid-cols-2">
             <button
               type="button"
               onClick={() => saveConsent("accepted")}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+              className="inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
             >
               Accept analytics
             </button>
             <button
               type="button"
               onClick={() => saveConsent("rejected")}
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+              className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
             >
               Reject non-essential
             </button>
