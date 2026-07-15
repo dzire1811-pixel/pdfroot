@@ -3,7 +3,7 @@ import { blogPosts } from "@/lib/blog";
 import { tools } from "@/lib/tools";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = "https://pdfroot.com";
+  const siteUrl = "https://www.pdfroot.com";
   const now = new Date();
 
   const staticRoutes = ["", "/about", "/faq", "/blog", "/contact", "/privacy-policy", "/terms-and-conditions", "/disclaimer", "/tools", "/login", "/signup", "/dashboard"];
