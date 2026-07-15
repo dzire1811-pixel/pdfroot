@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import type { ReactNode } from "react";
@@ -131,6 +132,7 @@ export default function RootLayout({
             __html: JSON.stringify(organizationSchema),
           }}
         />
+        <GoogleAnalytics gaId="G-57Y4FZTFV6" />
       </body>
     </html>
   );

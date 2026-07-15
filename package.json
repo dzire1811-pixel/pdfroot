@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
+    "@next/third-parties": "15.5.19",
     "docx": "^9.7.1",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
