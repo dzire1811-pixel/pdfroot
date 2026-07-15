@@ -36,6 +36,7 @@ import { GpscPhotoSignatureTool, UpscPhotoSignatureTool } from "@/components/Gps
 import { FrontBackCardMergeTool } from "@/components/FrontBackCardMergeTool";
 
 export function ToolRenderer({ slug, name, description }: { slug: string; name: string; description: string }) {
+  const renderTool = () => {
   if (slug === "resize-image-to-exact-kb") return <ResizeImageExactKbTool />;
   if (slug === "compress-image" || slug === "image-compressor-for-government-forms") return <CompressImageTool governmentForms={slug === "image-compressor-for-government-forms"} />;
   if (slug === "jpg-to-png") return <JpgToPngTool />;
@@ -75,6 +76,13 @@ export function ToolRenderer({ slug, name, description }: { slug: string; name: 
   return (
     <div className="mx-auto mt-6 max-w-2xl">
       <UploadBox title={`Upload for ${name}`} description={description} restoreTransferredFiles />
+    </div>
+  );
+  };
+
+  return (
+    <div className="contents" data-clarity-mask="true">
+      {renderTool()}
     </div>
   );
 }

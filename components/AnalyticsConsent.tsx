@@ -3,6 +3,7 @@
 import { GoogleAnalytics } from "@next/third-parties/google";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { MicrosoftClarity } from "@/components/MicrosoftClarity";
 import {
   ANALYTICS_CONSENT_STORAGE_KEY,
   ANALYTICS_PREFERENCES_EVENT,
@@ -38,13 +39,29 @@ export function AnalyticsConsent() {
   function saveConsent(choice: AnalyticsConsentChoice) {
     window[gaDisableKey] = choice !== "accepted";
     window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, choice);
+
+    if (choice === "rejected" && consent === "accepted") {
+      window.clarity?.("consentv2", {
+        ad_Storage: "denied",
+        analytics_Storage: "denied",
+      });
+      window.clarity?.("consent", false);
+      window.location.reload();
+      return;
+    }
+
     setConsent(choice);
     setIsOpen(false);
   }
 
   return (
     <>
-      {consent === "accepted" ? <GoogleAnalytics gaId={measurementId} /> : null}
+      {consent === "accepted" ? (
+        <>
+          <GoogleAnalytics gaId={measurementId} />
+          <MicrosoftClarity />
+        </>
+      ) : null}
 
       {isOpen ? (
         <section
@@ -54,7 +71,7 @@ export function AnalyticsConsent() {
         >
           <h2 className="mb-[14px] whitespace-nowrap !text-[26px] font-bold !leading-[1.12] text-foreground max-[349px]:whitespace-normal min-[480px]:text-balance min-[480px]:!text-[32px]">Analytics preferences</h2>
           <p className="text-[15px] leading-[1.45] text-muted-foreground min-[480px]:text-base min-[480px]:leading-[1.55]">
-            Help us improve PDFRoot by allowing privacy-conscious website analytics. Essential PDF and image tools work either way. Read our{" "}
+            Help us improve PDFRoot with privacy-conscious analytics from Google Analytics and Microsoft Clarity. Essential PDF and image tools work either way. Read our{" "}
             <Link href="/privacy-policy" className="font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
               Privacy Policy
             </Link>

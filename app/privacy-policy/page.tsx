@@ -102,6 +102,22 @@ export default function PrivacyPolicyPage() {
           </a>
           .
         </p>
+        <div className="border-t border-border pt-5">
+          <h3 className="text-lg font-semibold text-foreground">Microsoft Clarity</h3>
+          <p className="mt-3"><BrandText styled /> uses Microsoft Clarity after analytics consent to understand website interactions through anonymous or aggregated heatmaps and session recordings.</p>
+          <p>Uploaded PDF or image contents, previews, filenames, signatures, photos, and generated files are masked and must not be intentionally sent to Clarity. Visitors can reject analytics or later change their choice through Cookie preferences in the website footer.</p>
+          <p>
+            Review the{" "}
+            <a href="https://privacy.microsoft.com/en-us/privacystatement" target="_blank" rel="noreferrer" className="font-medium text-primary hover:text-primary/80">
+              Microsoft Privacy Statement
+            </a>{" "}
+            and{" "}
+            <a href="https://clarity.microsoft.com/privacy?clang=en" target="_blank" rel="noreferrer" className="font-medium text-primary hover:text-primary/80">
+              Microsoft Clarity privacy information
+            </a>
+            .
+          </p>
+        </div>
       </InfoCard>
 
       <InfoCard title="Advertising">
