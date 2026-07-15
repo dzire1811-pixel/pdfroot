@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandText } from "@/components/Brand";
+import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 import { SocialLinks } from "@/components/SocialLinks";
 import { Logo } from "@/components/homepage/logo";
 import type { Tool } from "@/lib/tools";
@@ -65,7 +66,10 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
           <p className="text-sm text-muted-foreground">
             © 2026 <BrandText styled />. All rights reserved.
           </p>
-          <p className="text-sm text-muted-foreground">PDF and image tools for everyday file preparation.</p>
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
+            <p className="text-sm text-muted-foreground">PDF and image tools for everyday file preparation.</p>
+            <CookiePreferencesButton />
+          </div>
         </div>
       </div>
     </footer>

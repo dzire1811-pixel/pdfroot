@@ -56,7 +56,7 @@ const sensitiveItems = [
 
 export default function PrivacyPolicyPage() {
   return (
-    <InfoPageLayout eyebrow={<><BrandText styled /> Legal</>} title="Privacy Policy" subtitle="Last updated: June 15, 2026">
+    <InfoPageLayout eyebrow={<><BrandText styled /> Legal</>} title="Privacy Policy" subtitle="Last updated: July 15, 2026">
       <InfoCard title="Welcome to PDFRoot">
         <p>Your privacy is important to us. This Privacy Policy explains how <BrandText styled /> collects, uses, protects, and handles information when you use our website and tools.</p>
         <p><BrandText styled /> provides online PDF and image tools such as JPG to PDF, PDF to JPG, Compress PDF, Merge PDF, Resize Image to Exact KB, Photo and Signature Resize, Crop Image, Compress Image, and other related tools.</p>
@@ -87,9 +87,21 @@ export default function PrivacyPolicyPage() {
         <p>You can disable cookies from your browser settings. However, some website features may not work properly if cookies are disabled.</p>
       </InfoCard>
 
-      <InfoCard title="Analytics and Third-Party Services">
-        <p><BrandText styled /> may use third-party services such as analytics tools, advertising networks, or hosting services to understand website usage, improve performance, and support website operations.</p>
-        <p>These third-party services may collect information according to their own privacy policies.</p>
+      <InfoCard title="Google Analytics">
+        <p><BrandText styled /> uses Google Analytics 4 after you provide consent to understand page visits, tool-page usage, browser and device information, approximate location, and website performance.</p>
+        <p>Google Analytics may use cookies or similar technologies after consent. Uploaded PDF or image file contents are not sent to Google Analytics. <BrandText styled /> does not intentionally send names, email addresses, uploaded filenames, or document contents to Google Analytics.</p>
+        <p>You can accept or reject analytics when the cookie banner appears and can later change your choice through Cookie preferences in the website footer.</p>
+        <p>
+          Learn more about how Google uses information from sites that use its services in{" "}
+          <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noreferrer" className="font-medium text-primary hover:text-primary/80">
+            Google&apos;s partner-sites information
+          </a>{" "}
+          and review the{" "}
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" className="font-medium text-primary hover:text-primary/80">
+            Google Privacy Policy
+          </a>
+          .
+        </p>
       </InfoCard>
 
       <InfoCard title="Advertising">
