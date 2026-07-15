@@ -39,9 +39,15 @@ const toolIconColors: Record<string, string> = {
   "front-back-card-merge": "#2F9D5B",
 };
 
-type ToolRowTintStyle = CSSProperties & { "--tool-row-tint": string };
+type ToolRowTintStyle = CSSProperties & {
+  "--tool-row-color": string;
+  "--tool-row-tint": string;
+};
 
 export function getToolRowTintStyle(slug: string): ToolRowTintStyle {
   const iconColor = toolIconColors[slug] ?? "#64748B";
-  return { "--tool-row-tint": `${iconColor}14` };
+  return {
+    "--tool-row-color": iconColor,
+    "--tool-row-tint": `${iconColor}12`,
+  };
 }

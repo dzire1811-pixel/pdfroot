@@ -20,35 +20,33 @@ export function PopularTools({ tools }: { tools: Tool[] }) {
     <section id="tools" className="border-b border-border bg-background">
       <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-24">
         <div>
-          <div className="max-w-2xl">
-            <p className="text-sm font-semibold uppercase tracking-wider text-primary">Popular Tools</p>
-            <h2 className="mt-2 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <p className="text-sm font-semibold uppercase tracking-wider text-primary">Popular Tools</p>
+          <div className="mt-2 flex w-full flex-col items-start gap-3 sm:flex-row sm:items-center lg:pr-[100px] xl:pr-[200px]">
+            <h2 className="max-w-2xl text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               The tools people open every single day
             </h2>
+            <Link href="/tools" className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium leading-5 text-foreground transition-colors duration-200 hover:text-primary sm:ml-auto">
+              View all tools
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
           </div>
         </div>
 
         <div className="mt-10 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,14fr)_minmax(0,11fr)]">
           <div className="min-w-0 lg:self-center">
-            <div className="mb-3 grid h-5 min-w-0 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              <Link href="/tools" className="inline-flex h-5 items-center gap-1.5 justify-self-end text-sm font-medium leading-5 text-foreground hover:text-primary md:col-start-2 lg:col-start-3">
-                View all tools
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            </div>
             <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
               {tools.map((tool) => (
                 <Link
                   key={tool.slug}
                   href={`/${tool.slug}`}
                   style={getToolRowTintStyle(tool.slug)}
-                  className={`group flex h-[40px] min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-[var(--tool-row-tint)] hover:shadow-sm focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)] ${desktopToolOrder[tool.slug] ?? ""}`}
+                  className={`group flex h-[38px] min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-4 py-2 text-left transition-[background-color,border-color,box-shadow] duration-200 hover:border-primary/50 hover:bg-[var(--tool-row-tint)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)] ${desktopToolOrder[tool.slug] ?? ""}`}
                 >
                   <span className="h-4 w-4 shrink-0 [&>span]:!h-4 [&>span]:!w-4">
                     <ToolDirectoryIcon tool={tool} />
                   </span>
                   <span className="min-w-0 flex-1 truncate text-sm font-normal leading-5 text-foreground">{tool.name}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
               ))}
             </div>
@@ -65,7 +63,7 @@ export function PopularTools({ tools }: { tools: Tool[] }) {
 
 function PopularToolsWorkflowIllustration() {
   return (
-    <div className="flex aspect-[44/29] w-[92%] items-center justify-center lg:aspect-auto lg:h-[98%] lg:w-full">
+    <div className="flex aspect-[44/29] w-[92%] items-center justify-center contrast-[1.06] lg:translate-x-6 lg:aspect-auto lg:h-[98%] lg:w-full">
       <svg
         viewBox="-46 7 532 268"
         preserveAspectRatio="xMidYMid meet"

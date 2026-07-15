@@ -33,6 +33,12 @@ const governmentTools = governmentToolSlugs.flatMap((slug) => {
 });
 
 const mobileGovernmentTools = imageTools.filter((tool) => tool.government);
+const standardImageTools = imageTools.filter((tool) => !tool.government);
+const allToolGroups = [
+  { label: "PDF Tools", items: pdfTools },
+  { label: "Image Tools", items: standardImageTools },
+  { label: "Recruitment Resize Tools", items: mobileGovernmentTools },
+];
 const compactMenuToolLabels: Record<string, string> = {
   "image-compressor-for-government-forms": "Govt. Form Image Compressor",
   "ibps-photo-resize": "IBPS Photo, Sign, Thumb & Decl.",
@@ -64,9 +70,9 @@ function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadabl
       onTouchCancel={() => onTouchChange(false)}
       style={getToolRowTintStyle(tool.slug)}
       data-mobile-readable-tool={mobileReadable ? "true" : undefined}
-      className={`flex min-w-0 items-center rounded-lg font-normal text-sm text-foreground outline-none transition-colors [@media(hover:hover)]:hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)] ${mobileReadable ? "h-full min-h-10 gap-2 px-2 py-1 leading-5" : desktopCompact ? "h-10 gap-1.5 px-1.5 py-0.5 leading-4" : "h-10 gap-1.5 px-1.5 py-0.5 leading-4"} ${touched ? "bg-[var(--tool-row-tint)]" : ""}`}
+      className={`group flex min-w-0 rounded-xl font-normal text-sm text-foreground outline-none transition-[background-color,color] duration-200 hover:bg-[var(--tool-row-tint)] hover:text-[var(--tool-row-color)] focus-visible:bg-[var(--tool-row-tint)] focus-visible:text-[var(--tool-row-color)] focus-visible:ring-2 focus-visible:ring-[var(--tool-row-color)] focus-visible:ring-offset-1 active:bg-[var(--tool-row-tint)] ${mobileReadable ? "h-full min-h-11 items-center gap-2 px-2 py-1 leading-[1.25]" : desktopCompact ? "h-11 items-start gap-2 px-2 py-2.5 leading-[1.25]" : "h-11 items-center gap-2 px-2 py-1.5 leading-[1.25]"} ${touched ? "bg-[var(--tool-row-tint)] text-[var(--tool-row-color)]" : ""}`}
     >
-      <span className={`${mobileReadable || desktopCompact ? "flex h-[22px] w-[22px] items-center justify-center" : "flex h-8 w-8 items-center justify-center"} shrink-0 border-0 bg-transparent leading-none shadow-none [&_img]:border-0 [&_img]:bg-transparent [&_img]:shadow-none`} aria-hidden="true">
+      <span className={`${mobileReadable || desktopCompact ? "flex h-[22px] w-[22px] items-center justify-center" : "flex h-8 w-8 items-center justify-center"} shrink-0 border-0 bg-transparent leading-none shadow-none transition-transform duration-200 group-hover:scale-[1.04] group-focus-visible:scale-[1.04] [&_img]:border-0 [&_img]:bg-transparent [&_img]:shadow-none`} aria-hidden="true">
         {mobileReadable || desktopCompact ? (
           <ToolDirectoryIcon tool={tool} />
         ) : (
@@ -75,8 +81,8 @@ function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadabl
           </span>
         )}
       </span>
-      <span className={`flex min-w-0 items-center ${mobileReadable ? "min-h-0" : "min-h-8"}`}>
-        <span className={mobileSingleLine ? "min-w-0 whitespace-nowrap" : "line-clamp-2 min-w-0 break-words"}>{displayName ?? tool.name}</span>
+      <span className={`flex min-w-0 ${mobileReadable ? "min-h-0 items-center" : "min-h-0 items-start"}`}>
+        <span className={mobileSingleLine ? "min-w-0 whitespace-nowrap" : "line-clamp-2 min-w-0 break-words leading-[1.25]"}>{displayName ?? tool.name}</span>
       </span>
     </Link>
   );
@@ -218,7 +224,7 @@ export function HomepageSiteHeader() {
 
   const mobileAccordionSections = [
     { id: "convert" as const, label: "Convert PDF", items: conversionTools, icon: FileOutput, accent: "#d94b20" },
-    { id: "government" as const, label: "Government Recruitment Resize Tools", items: mobileGovernmentTools, icon: Shapes, accent: "#4a9b38" },
+    { id: "government" as const, label: "Recruitment Resize Tools", items: mobileGovernmentTools, icon: Shapes, accent: "#4a9b38" },
     { id: "all" as const, label: "All Tools", items: tools, icon: Menu, accent: "#64748b" },
   ];
 
@@ -227,7 +233,7 @@ export function HomepageSiteHeader() {
         <div
           ref={mobileMenuPanelRef}
           id="mobile-tools-menu"
-          className="fixed left-0 right-0 z-[100] flex w-screen flex-col overflow-hidden border-t border-border bg-background shadow-2xl xl:hidden"
+          className="fixed left-0 right-0 z-[100] flex w-screen flex-col overflow-hidden border-t border-border bg-background shadow-2xl min-[1320px]:hidden"
           style={{
             "--mobile-header-height": `${mobileMenuTop}px`,
             top: "var(--mobile-header-height)",
@@ -270,11 +276,24 @@ export function HomepageSiteHeader() {
                     <span className="min-w-0 flex-1">{section.label}</span>
                     <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--mobile-accent)] transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
                   </button>
-                  {isExpanded && (
-                    <div id={`mobile-nav-section-${section.id}`} className="grid grid-cols-1 items-stretch gap-y-0 px-1 pb-2 pt-1 [grid-auto-rows:44px]">
-                      {section.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeMobileMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} mobileReadable mobileSingleLine displayName={section.id === "government" || section.id === "all" ? compactMenuToolLabels[tool.slug] : undefined} />)}
+                  {isExpanded && (section.id === "all" ? (
+                    <div id={`mobile-nav-section-${section.id}`} className="space-y-3 px-1 pb-3 pt-1">
+                      {allToolGroups.map((group) => (
+                        <section key={group.label} aria-labelledby={`mobile-${section.id}-${group.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                          <h3 id={`mobile-${section.id}-${group.label.toLowerCase().replace(/\s+/g, "-")}`} className="px-2 pb-1.5 pt-1 text-xs font-semibold text-zinc-800">
+                            {group.label}
+                          </h3>
+                          <div className="grid grid-cols-1 items-stretch gap-y-0 [grid-auto-rows:44px]">
+                            {group.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeMobileMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} mobileReadable displayName={compactMenuToolLabels[tool.slug]} />)}
+                          </div>
+                        </section>
+                      ))}
                     </div>
-                  )}
+                  ) : (
+                    <div id={`mobile-nav-section-${section.id}`} className="grid grid-cols-1 items-stretch gap-y-0 px-1 pb-2 pt-1 [grid-auto-rows:44px]">
+                      {section.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeMobileMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} mobileReadable mobileSingleLine displayName={section.id === "government" ? compactMenuToolLabels[tool.slug] : undefined} />)}
+                    </div>
+                  ))}
                 </section>
               );
             })}
@@ -293,7 +312,7 @@ export function HomepageSiteHeader() {
           <Logo />
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 xl:flex" aria-label="Main navigation">
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-[14px] min-[1320px]:flex" aria-label="Main navigation">
           {directNavItems.map((item) => {
             return (
               <Link key={item.label} href={item.href} onClick={closeDesktopMenu} onTouchStart={() => setTouchedDesktopNav(item.label)} onTouchEnd={() => setTouchedDesktopNav(null)} onTouchCancel={() => setTouchedDesktopNav(null)} style={{ "--nav-accent": item.accent } as CSSProperties} className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground outline-none transition-colors [@media(hover:hover)]:hover:text-[var(--nav-accent)] focus-visible:text-[var(--nav-accent)] 2xl:px-3 2xl:text-sm ${touchedDesktopNav === item.label ? "text-[var(--nav-accent)]" : ""}`}>
@@ -322,7 +341,7 @@ export function HomepageSiteHeader() {
 
           <div className="relative" onMouseEnter={() => openDesktopMenu("government")} onMouseLeave={scheduleClose}>
             <button type="button" onClick={() => openMenu === "government" ? closeDesktopMenu() : openDesktopMenu("government")} onTouchStart={() => setTouchedDesktopNav("government")} onTouchEnd={() => setTouchedDesktopNav(null)} onTouchCancel={() => setTouchedDesktopNav(null)} style={{ "--nav-accent": "#4a9b38" } as CSSProperties} className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground outline-none transition-colors [@media(hover:hover)]:hover:text-[var(--nav-accent)] focus-visible:text-[var(--nav-accent)] 2xl:px-3 2xl:text-sm ${touchedDesktopNav === "government" ? "text-[var(--nav-accent)]" : ""}`} aria-expanded={openMenu === "government"} aria-haspopup="menu">
-              Government Recruitment Resize Tools
+              Recruitment Resize Tools
               <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${openMenu === "government" ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
             {openMenu === "government" && (
@@ -339,15 +358,15 @@ export function HomepageSiteHeader() {
           </div>
 
           <div onMouseEnter={() => openDesktopMenu("all")} onMouseLeave={scheduleClose}>
-            <button type="button" onClick={() => openMenu === "all" ? closeDesktopMenu() : openDesktopMenu("all")} className="inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground 2xl:px-3 2xl:text-sm" aria-expanded={openMenu === "all"} aria-haspopup="menu">
-              <Menu className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <button type="button" onClick={() => openMenu === "all" ? closeDesktopMenu() : openDesktopMenu("all")} className="inline-flex h-10 shrink-0 items-center !gap-0 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground 2xl:px-3 2xl:text-sm" aria-expanded={openMenu === "all"} aria-haspopup="menu">
+              <Menu className="mr-1 h-4 w-4 shrink-0" aria-hidden="true" />
               All Tools
-              <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${openMenu === "all" ? "rotate-180" : ""}`} aria-hidden="true" />
+              <ChevronDown className={`ml-1.5 h-3.5 w-3.5 shrink-0 transition-transform ${openMenu === "all" ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
           </div>
         </nav>
 
-        <div className="hidden shrink-0 items-center gap-2 xl:flex">
+        <div className="hidden shrink-0 items-center gap-2 min-[1320px]:flex">
           <Link href="/login" className="inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium transition-all hover:bg-muted hover:text-foreground">
             Sign in
           </Link>
@@ -356,25 +375,36 @@ export function HomepageSiteHeader() {
           </Link>
         </div>
 
-        <button ref={mobileMenuButtonRef} type="button" onClick={toggleMobileMenu} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-foreground xl:hidden" aria-label={isMobileMenuOpen ? "Close mobile menu" : "Open mobile menu"} aria-expanded={isMobileMenuOpen} aria-controls="mobile-tools-menu">
+        <button ref={mobileMenuButtonRef} type="button" onClick={toggleMobileMenu} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-foreground min-[1320px]:hidden" aria-label={isMobileMenuOpen ? "Close mobile menu" : "Open mobile menu"} aria-expanded={isMobileMenuOpen} aria-controls="mobile-tools-menu">
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
 
       </div>
 
       {openMenu === "all" && (
-        <div className="absolute inset-x-0 top-full hidden border-t border-border bg-background shadow-2xl xl:block" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
-          <div className="mx-auto grid max-h-[calc(100vh-4rem)] max-w-[1800px] grid-cols-2 gap-4 overflow-y-auto px-8 pb-1 pt-3">
-            {[
-              { label: "PDF Tools", items: pdfTools },
-              { label: "Image Tools", items: imageTools },
-            ].map((group) => (
-              <section key={group.label}>
-                <div className="grid grid-cols-2 items-stretch gap-x-1 gap-y-0 2xl:grid-cols-3">
-                  {group.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeDesktopMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} desktopCompact displayName={compactMenuToolLabels[tool.slug]} />)}
-                </div>
-              </section>
-            ))}
+        <div data-all-tools-mega-menu className="absolute inset-x-0 top-full hidden border-t border-border bg-background shadow-2xl min-[1320px]:block" onMouseEnter={cancelScheduledClose} onMouseLeave={scheduleClose}>
+          <div className="mx-auto max-h-[calc(100vh-4rem)] w-[68%] max-w-[1300px] overflow-y-auto pb-4 pt-4">
+            <section aria-labelledby="desktop-pdf-tools">
+              <h3 id="desktop-pdf-tools" className="mb-3 px-2 text-base font-semibold leading-tight text-zinc-800">
+                {allToolGroups[0].label}
+              </h3>
+              <div data-all-tools-menu-grid className="grid grid-cols-5 items-stretch gap-x-2 gap-y-0 [grid-auto-rows:44px]">
+                {allToolGroups[0].items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeDesktopMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} desktopCompact displayName={compactMenuToolLabels[tool.slug]} />)}
+              </div>
+            </section>
+
+            <div className="mt-5 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start gap-x-6">
+              {allToolGroups.slice(1).map((group) => (
+                <section key={group.label} aria-labelledby={`desktop-${group.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <h3 id={`desktop-${group.label.toLowerCase().replace(/\s+/g, "-")}`} className="mb-3 px-2 text-base font-semibold leading-tight text-zinc-800">
+                    {group.label}
+                  </h3>
+                  <div data-all-tools-menu-grid className="grid grid-cols-2 items-stretch gap-x-2 gap-y-0 [grid-auto-rows:44px]">
+                    {group.items.map((tool) => <MegaMenuToolLink key={tool.slug} tool={tool} onClick={closeDesktopMenu} touched={touchedMegaTool === tool.slug} onTouchChange={(touched) => setTouchedMegaTool(touched ? tool.slug : null)} desktopCompact displayName={compactMenuToolLabels[tool.slug]} />)}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
         </div>
       )}

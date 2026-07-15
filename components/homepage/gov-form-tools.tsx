@@ -9,16 +9,16 @@ const exams = ["SSC", "RRB", "UPSC", "GPSC", "IBPS", "OJAS", "Railway"];
 export function GovFormTools({ tools }: { tools: Tool[] }) {
   return (
     <section id="gov-tools" className="border-b border-border bg-muted/40">
-      <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-20">
+      <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-[50px]">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Built for India&apos;s exams</p>
-          <h2 className="mt-2 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+          <h2 className="gov-form-heading mt-2 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Never get your application rejected because of incorrect photo or signature size
           </h2>
           <p className="mt-4 text-pretty text-lg leading-relaxed text-muted-foreground">
             Built for SSC, RRB, UPSC, GPSC, IBPS, OJAS and Railway recruitment forms.
           </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <div className="mt-6 flex flex-wrap justify-center gap-[5px]">
             {exams.map((exam) => (
               <span key={exam} className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground">
                 {exam}
@@ -27,7 +27,7 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
           </div>
         </div>
 
-        <div className="mt-8 grid items-stretch gap-6 lg:mt-11 lg:grid-cols-[minmax(0,48fr)_minmax(0,52fr)] lg:gap-11">
+        <div className="mt-6 grid items-stretch gap-6 lg:mt-8 lg:grid-cols-[minmax(0,48fr)_minmax(0,52fr)] lg:gap-11">
           <ApplicationFileValidator />
 
           <div className="grid gap-3 sm:grid-cols-2 lg:self-center lg:gap-[14px]">
@@ -37,7 +37,7 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
                   key={tool.slug}
                   href={`/${tool.slug}`}
                   style={getToolRowTintStyle(tool.slug)}
-                  className="group flex h-[52px] min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-[var(--tool-row-tint)] hover:shadow-sm focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]"
+                  className="group flex h-[47px] min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 transition-[background-color,border-color,box-shadow] hover:border-primary/40 hover:bg-[var(--tool-row-tint)] hover:shadow-sm focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]"
                 >
                   <span className="h-[18px] w-[18px] shrink-0 [&>span]:!h-[18px] [&>span]:!w-[18px]">
                     <ToolDirectoryIcon tool={tool} />
@@ -56,7 +56,7 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
 
 function ApplicationFileValidator() {
   return (
-    <div className="flex min-w-0 items-center justify-center lg:h-full lg:p-3">
+    <div className="flex min-w-0 items-center justify-center lg:-translate-y-[6px] lg:self-center lg:p-3">
       <GovernmentFormValidatorIllustration />
     </div>
   );
@@ -64,7 +64,7 @@ function ApplicationFileValidator() {
 
 function GovernmentFormValidatorIllustration() {
   return (
-    <svg viewBox="0 0 720 260" className="block h-full w-full object-contain" role="img" aria-label="Government application document with validated passport photo and signature">
+    <svg viewBox="0 0 720 260" className="block h-full w-full scale-[1.06] object-contain" role="img" aria-label="Government application document with validated passport photo and signature">
       <rect x="174" y="22" width="150" height="112" rx="18" fill="#EFF6FF" transform="rotate(-8 249 78)" />
       <rect x="520" y="132" width="142" height="102" rx="20" fill="#ECFDF5" transform="rotate(-7 591 183)" />
       <circle cx="656" cy="46" r="25" fill="#FEF2F2" />
@@ -115,7 +115,7 @@ function GovernmentFormValidatorIllustration() {
         <path d="m217 186 3 3 6-7" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </g>
 
-      <g transform="rotate(-3 567 221)">
+      <g transform="translate(567 221) rotate(-3) scale(.975) translate(-567 -221)">
         <rect x="482" y="203" width="170" height="36" rx="10" fill="#F0FDF4" stroke="#16A34A" strokeWidth="1.6" />
         <circle cx="502" cy="221" r="9" fill="#16A34A" />
         <path d="m498 221 3 3 5-7" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

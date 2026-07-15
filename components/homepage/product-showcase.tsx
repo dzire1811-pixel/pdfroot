@@ -24,7 +24,7 @@ export function ProductShowcase() {
   const activeTab = tabs.find((tab) => tab.id === active) ?? tabs[0];
 
   return (
-    <section id="showcase" className="border-b border-border bg-background">
+    <section id="showcase" className="overflow-visible border-b border-border bg-background">
       <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-24">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Product Preview</p>
@@ -36,7 +36,7 @@ export function ProductShowcase() {
           </p>
         </div>
 
-        <div className="mt-10 flex flex-wrap justify-center gap-2">
+        <div className="mt-10 flex flex-wrap justify-center gap-x-[3px] gap-y-2">
           {tabs.map((tab) => {
             const isActive = active === tab.id;
             return (
@@ -45,8 +45,8 @@ export function ProductShowcase() {
                 type="button"
                 onClick={() => setActive(tab.id)}
                 className={
-                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-normal transition-colors " +
-                  (isActive ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:text-foreground")
+                  "inline-flex items-center gap-2 rounded-full border py-2 text-sm font-normal transition-colors " +
+                  (isActive ? "border-primary bg-primary px-4 text-primary-foreground" : "preview-tab-inactive border-border bg-card text-muted-foreground hover:text-foreground")
                 }
               >
                 <ToolDirectoryIcon tool={tab.tool} />
@@ -56,13 +56,13 @@ export function ProductShowcase() {
           })}
         </div>
 
-        <div className="mx-auto mt-10 max-w-4xl">
+        <div className="mx-auto mt-7 max-w-[960px]">
           <AppWindow title={`pdfroot.com/${activeTab.slug}`}>
             {active === "resize" && <ResizeScreen />}
             {active === "passport" && <PassportScreen />}
             {active === "jpg" && <JpgScreen />}
             <div className="mt-5 flex justify-end">
-              <Link href={`/${activeTab.slug}`} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-normal text-primary-foreground transition hover:bg-primary/90">
+              <Link href={`/${activeTab.slug}`} className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-normal text-primary-foreground transition hover:bg-primary/90">
                 Open {activeTab.tool.name}
               </Link>
             </div>
@@ -75,8 +75,8 @@ export function ProductShowcase() {
 
 function AppWindow({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-foreground/10">
-      <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-4 py-3">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_23px_46px_-12px_rgba(0,0,0,0.25)]">
+      <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-4 py-[11px]">
         <div className="flex gap-1.5">
           <span className="h-3 w-3 rounded-full bg-border" />
           <span className="h-3 w-3 rounded-full bg-border" />
@@ -104,11 +104,11 @@ function ResizeScreen() {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <div className="flex items-center justify-center rounded-xl border border-border bg-muted/40 p-6">
-        <PhotoMock className="h-44 w-auto rounded-lg" />
+        <PhotoMock className="h-[185px] w-auto rounded-lg" />
       </div>
       <div className="flex flex-col">
         <h3 className="text-lg font-semibold text-foreground">Resize settings</h3>
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-[13px]">
           <Field label="Target size" value="20 KB" />
           <div>
             <div className="flex items-center justify-between text-sm">
@@ -136,7 +136,7 @@ function PassportScreen() {
     <div className="grid gap-6 md:grid-cols-2">
       <div className="relative flex items-center justify-center rounded-xl border border-border bg-muted/40 p-6">
         <div className="relative">
-          <PhotoMock className="h-44 w-auto rounded-lg" />
+          <PhotoMock className="h-[185px] w-auto rounded-lg" />
           <div className="pointer-events-none absolute inset-0 rounded-lg border-2 border-dashed border-primary/60" />
         </div>
       </div>
