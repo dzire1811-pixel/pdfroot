@@ -277,10 +277,10 @@ export function HomepageSiteHeader() {
                     <ChevronDown className={`h-4 w-4 shrink-0 text-[var(--mobile-accent)] transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
                   </button>
                   {isExpanded && (section.id === "all" ? (
-                    <div id={`mobile-nav-section-${section.id}`} className="space-y-3 px-1 pb-3 pt-1">
+                    <div id={`mobile-nav-section-${section.id}`} className="space-y-0 px-1 pb-3 pt-0 md:space-y-3 md:pt-1">
                       {allToolGroups.map((group) => (
                         <section key={group.label} aria-labelledby={`mobile-${section.id}-${group.label.toLowerCase().replace(/\s+/g, "-")}`}>
-                          <h3 id={`mobile-${section.id}-${group.label.toLowerCase().replace(/\s+/g, "-")}`} className="px-2 pb-1.5 pt-1 text-xs font-semibold text-zinc-800">
+                          <h3 id={`mobile-${section.id}-${group.label.toLowerCase().replace(/\s+/g, "-")}`} className="px-2 pb-3.5 pt-3 text-[15px] font-semibold leading-5 text-zinc-800 md:pb-1.5 md:pt-1 md:text-xs md:leading-4">
                             {group.label}
                           </h3>
                           <div className="grid grid-cols-1 items-stretch gap-y-0 [grid-auto-rows:44px]">

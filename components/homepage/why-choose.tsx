@@ -37,14 +37,17 @@ export function WhyChoose() {
           </h2>
         </div>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-10 grid auto-rows-fr gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {reasons.map((reason) => (
-            <div key={reason.title} className="flex flex-col rounded-2xl border border-border bg-card p-6">
+            <div
+              key={reason.title}
+              className="flex h-full flex-col rounded-2xl border border-border bg-card px-6 py-9 transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_14px_30px_-18px_rgba(15,23,42,0.28)]"
+            >
               <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <reason.icon className="h-5 w-5" aria-hidden="true" />
+                <reason.icon className="h-[22px] w-[22px]" aria-hidden="true" />
               </span>
-              <h3 className="mt-5 text-base font-semibold text-foreground">{reason.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{reason.desc}</p>
+              <h3 className="mt-6 text-base font-semibold text-foreground">{reason.title}</h3>
+              <p className="mt-[14px] text-sm leading-relaxed text-muted-foreground">{reason.desc}</p>
             </div>
           ))}
         </div>

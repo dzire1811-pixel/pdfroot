@@ -9,7 +9,7 @@ const exams = ["SSC", "RRB", "UPSC", "GPSC", "IBPS", "OJAS", "Railway"];
 export function GovFormTools({ tools }: { tools: Tool[] }) {
   return (
     <section id="gov-tools" className="border-b border-border bg-muted/40">
-      <div className="mx-auto max-w-[1800px] px-6 py-16 lg:px-8 lg:py-[50px]">
+      <div className="mx-auto max-w-[1800px] px-6 pb-8 pt-16 md:py-16 lg:px-8 lg:py-[50px]">
         <div className="mx-auto max-w-2xl text-center">
           <p className="text-sm font-semibold uppercase tracking-wider text-primary">Built for India&apos;s exams</p>
           <h2 className="gov-form-heading mt-2 text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
@@ -27,10 +27,10 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
           </div>
         </div>
 
-        <div className="mt-6 grid items-stretch gap-6 lg:mt-8 lg:grid-cols-[minmax(0,48fr)_minmax(0,52fr)] lg:gap-11">
+        <div className="mt-6 grid items-stretch gap-8 md:gap-6 lg:mt-8 lg:grid-cols-[minmax(0,48fr)_minmax(0,52fr)] lg:gap-11">
           <ApplicationFileValidator />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:self-center lg:gap-[14px]">
+          <div className="order-1 grid gap-3 md:order-none md:grid-cols-2 lg:self-center lg:gap-[14px]">
             {tools.slice(0, 6).map((tool) => {
               return (
                 <Link
@@ -56,7 +56,7 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
 
 function ApplicationFileValidator() {
   return (
-    <div className="flex min-w-0 items-center justify-center lg:-translate-y-[6px] lg:self-center lg:p-3">
+    <div className="order-2 flex min-w-0 items-center justify-center md:order-none lg:-translate-y-[6px] lg:self-center lg:p-3">
       <GovernmentFormValidatorIllustration />
     </div>
   );
@@ -64,7 +64,7 @@ function ApplicationFileValidator() {
 
 function GovernmentFormValidatorIllustration() {
   return (
-    <svg viewBox="0 0 720 260" className="block h-full w-full scale-[1.06] object-contain" role="img" aria-label="Government application document with validated passport photo and signature">
+    <svg viewBox="0 0 720 260" className="block h-auto w-full max-w-[360px] object-contain md:h-full md:w-full md:max-w-none md:scale-[1.06]" role="img" aria-label="Government application document with validated passport photo and signature">
       <rect x="174" y="22" width="150" height="112" rx="18" fill="#EFF6FF" transform="rotate(-8 249 78)" />
       <rect x="520" y="132" width="142" height="102" rx="20" fill="#ECFDF5" transform="rotate(-7 591 183)" />
       <circle cx="656" cy="46" r="25" fill="#FEF2F2" />

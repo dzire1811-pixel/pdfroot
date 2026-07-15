@@ -422,7 +422,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         <section data-tool-workspace-hero className={`relative border-b border-border bg-background px-6 pb-12 pt-10 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,oklch(0.92_0_0/0.5)_1px,transparent_1px),linear-gradient(to_bottom,oklch(0.92_0_0/0.5)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]"
+            className="pointer-events-none absolute inset-0 bg-white bg-[radial-gradient(ellipse_at_8%_14%,rgba(255,45,45,0.065)_0%,rgba(255,45,45,0.025)_24%,transparent_48%),radial-gradient(ellipse_at_92%_18%,rgba(59,130,246,0.06)_0%,rgba(59,130,246,0.022)_26%,transparent_50%),radial-gradient(ellipse_at_52%_78%,rgba(255,45,45,0.025)_0%,transparent_44%)]"
           />
           <div className="relative mx-auto max-w-4xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
