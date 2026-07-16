@@ -60,6 +60,13 @@ const directNavItems = [
   { label: "Crop Image", href: "/crop-image", tool: toolBySlug.get("crop-image")!, accent: "#8b4bab" },
 ];
 
+const desktopDirectNavItems = [
+  directNavItems[0],
+  directNavItems[1],
+  { label: "Compress PDF", href: "/compress-pdf", tool: toolBySlug.get("compress-pdf")!, accent: "#e23d28" },
+  directNavItems[2],
+];
+
 function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadable = false, mobileSingleLine = false, desktopCompact = false, displayName }: { tool: Tool; onClick: () => void; touched: boolean; onTouchChange: (touched: boolean) => void; mobileReadable?: boolean; mobileSingleLine?: boolean; desktopCompact?: boolean; displayName?: string }) {
   return (
     <Link
@@ -312,8 +319,8 @@ export function HomepageSiteHeader() {
           <HorizontalLogo />
         </Link>
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-[14px] min-[1320px]:flex" aria-label="Main navigation">
-          {directNavItems.map((item) => {
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-[10px] pr-[148px] min-[1320px]:flex" aria-label="Main navigation">
+          {desktopDirectNavItems.map((item) => {
             return (
               <Link key={item.label} href={item.href} onClick={closeDesktopMenu} onTouchStart={() => setTouchedDesktopNav(item.label)} onTouchEnd={() => setTouchedDesktopNav(null)} onTouchCancel={() => setTouchedDesktopNav(null)} style={{ "--nav-accent": item.accent } as CSSProperties} className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground outline-none transition-colors [@media(hover:hover)]:hover:text-[var(--nav-accent)] focus-visible:text-[var(--nav-accent)] 2xl:px-3 2xl:text-sm ${touchedDesktopNav === item.label ? "text-[var(--nav-accent)]" : ""}`}>
                 {item.label}
@@ -365,15 +372,6 @@ export function HomepageSiteHeader() {
             </button>
           </div>
         </nav>
-
-        <div className="hidden shrink-0 items-center gap-2 min-[1320px]:flex">
-          <Link href="/login" className="inline-flex h-8 items-center justify-center rounded-lg px-2.5 text-sm font-medium transition-all hover:bg-muted hover:text-foreground">
-            Sign in
-          </Link>
-          <Link href="/signup" className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-all hover:bg-primary/90">
-            Get Started
-          </Link>
-        </div>
 
         <button ref={mobileMenuButtonRef} type="button" onClick={toggleMobileMenu} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-foreground min-[1320px]:hidden" aria-label={isMobileMenuOpen ? "Close mobile menu" : "Open mobile menu"} aria-expanded={isMobileMenuOpen} aria-controls="mobile-tools-menu">
           <Menu className="h-5 w-5" aria-hidden="true" />

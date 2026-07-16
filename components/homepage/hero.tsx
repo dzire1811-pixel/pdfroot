@@ -17,7 +17,7 @@ export function Hero() {
             Convert, edit and prepare PDFs and images in just a few clicks.
           </p>
 
-          <div className="mt-9 flex flex-col items-stretch justify-center gap-3 pb-7 sm:flex-row sm:items-center lg:justify-start">
+          <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
             <Link
               href="/tools"
               className="focus-ring group inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-base font-semibold text-primary-foreground shadow-[0_14px_30px_rgba(220,38,38,0.2)] transition-[transform,box-shadow,background-color] hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-[0_18px_36px_rgba(220,38,38,0.25)]"
@@ -32,6 +32,17 @@ export function Hero() {
               Popular Tools
             </Link>
           </div>
+
+          <p className="mt-3.5 text-center text-xs leading-relaxed text-zinc-600 sm:hidden">
+            <span className="block whitespace-nowrap">
+              Files Processed Locally <span className="text-zinc-400">|</span> Fast &amp; Free
+            </span>
+            <span className="block whitespace-nowrap">Works on Mobile &amp; Desktop</span>
+          </p>
+
+          <p className="mt-4 hidden max-w-[550px] text-left text-sm leading-relaxed text-zinc-600 sm:block">
+            Files Processed Locally <span className="text-zinc-400">|</span> Fast &amp; Free <span className="text-zinc-400">|</span> Works on Mobile &amp; Desktop
+          </p>
         </div>
 
         <div className="pdfroot-hero-artwork relative mx-auto flex w-full max-w-[760px] items-center justify-center overflow-visible lg:translate-x-6" aria-hidden="true">
