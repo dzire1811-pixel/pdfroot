@@ -3,7 +3,6 @@ import { BlogSection } from "@/components/homepage/blog-section";
 import { Faq } from "@/components/homepage/faq";
 import { GovFormTools } from "@/components/homepage/gov-form-tools";
 import { Hero } from "@/components/homepage/hero";
-import { LaunchCelebration } from "@/components/homepage/launch-celebration";
 import { PopularTools } from "@/components/homepage/popular-tools";
 import { ProductShowcase } from "@/components/homepage/product-showcase";
 import { HomepageSiteFooter } from "@/components/homepage/site-footer";
@@ -131,7 +130,6 @@ export default function Home() {
     <div className="v0-homepage min-h-screen bg-background">
       <link rel="canonical" href="https://www.pdfroot.com/" />
       <HomepageSiteHeader />
-      <LaunchCelebration />
       <main>
         <Hero />
         <PopularTools tools={popularTools} />
