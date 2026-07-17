@@ -2347,7 +2347,18 @@ section[id$="-tool"] label {
 
 .v0-tool-page:has(#resize-tool [data-workflow-step="download"]) [data-tool-workspace-hero] {
   border-bottom: 0 !important;
-  padding-bottom: 26px !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+
+.v0-tool-page:has(#resize-tool [data-workflow-step="download"]) [data-tool-workspace-hero] > [aria-hidden="true"],
+.v0-tool-page:has(#resize-tool [data-workflow-step="download"]) [data-tool-workspace-hero] > .relative > .inline-flex,
+.v0-tool-page:has(#resize-tool [data-workflow-step="download"]) [data-tool-workspace-hero] > .relative > h1 {
+  display: none !important;
+}
+
+.v0-tool-page:has(#resize-tool [data-workflow-step="download"]) [data-tool-workspace-hero] > .relative {
+  max-width: none !important;
 }
 
 .v0-tool-page:has(#resize-tool [data-workflow-step="download"]) > main {
