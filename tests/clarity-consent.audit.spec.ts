@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const consentKey = "pdfroot_analytics_consent";
-const clarityTagUrl = "https://www.clarity.ms/tag/xmz4aowjy1";
-const clarityScriptSelector = 'script[data-pdfroot-clarity="xmz4aowjy1"]';
+const clarityTagUrl = "https://www.clarity.ms/tag/xmz4aowjyl";
+const clarityScriptSelector = 'script[data-pdfroot-clarity="xmz4aowjyl"]';
 
 async function clearConsentAndReload(page: Page) {
   await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -36,8 +36,12 @@ test.describe("Microsoft Clarity analytics consent audit", () => {
     expect(clarityRequests).toHaveLength(0);
 
     const firstTagRequest = page.waitForRequest((request) => request.url() === clarityTagUrl);
+    const firstTagResponse = page.waitForResponse((response) => response.url() === clarityTagUrl);
     await page.getByRole("button", { name: "Accept analytics" }).click();
     await firstTagRequest;
+    const tagResponse = await firstTagResponse;
+    expect(tagResponse.status()).toBe(200);
+    expect(tagResponse.headers()["content-type"]).toContain("javascript");
     await expect(page.locator(clarityScriptSelector)).toHaveCount(1);
     await expect(page.locator(clarityScriptSelector)).toHaveAttribute("src", clarityTagUrl);
     expect(await page.evaluate(() => typeof window.clarity)).toBe("function");

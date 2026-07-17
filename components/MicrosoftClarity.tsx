@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const projectId = "xmz4aowjy1";
+const projectId = "xmz4aowjyl";
 const scriptSelector = `script[data-pdfroot-clarity="${projectId}"]`;
 
 type ClarityFunction = {
