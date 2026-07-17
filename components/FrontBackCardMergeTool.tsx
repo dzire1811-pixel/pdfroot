@@ -31,6 +31,16 @@ function isImage(file: File) {
   return ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
 }
 
+function isFileDrag(dataTransfer: DataTransfer | null) {
+  return Boolean(dataTransfer && Array.from(dataTransfer.types).includes("Files"));
+}
+
+function isSupportedFileDrag(dataTransfer: DataTransfer | null) {
+  if (!dataTransfer || !isFileDrag(dataTransfer)) return false;
+  const fileItems = Array.from(dataTransfer.items).filter((item) => item.kind === "file");
+  return fileItems.length === 0 || fileItems.some((item) => !item.type || ["image/jpeg", "image/png", "image/webp"].includes(item.type));
+}
+
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
 }
@@ -174,6 +184,8 @@ export function FrontBackCardMergeTool() {
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
   const settingsDrawerClosingRef = useRef(false);
+  const draggedSideRef = useRef<Side | null>(null);
+  const pageFileDragDepthRef = useRef(0);
   const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [back, setBack] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
   const [layout, setLayout] = useState<LayoutMode>("horizontal");
@@ -302,6 +314,29 @@ export function FrontBackCardMergeTool() {
     if (files[1]) handleFile("back", files[1]);
   }
 
+  function setFileDragActive(active: boolean, side?: Side) {
+    setFront((state) => ({ ...state, isDragging: active && (!side || side === "front") }));
+    setBack((state) => ({ ...state, isDragging: active && (!side || side === "back") }));
+  }
+
+  function handleDroppedFiles(fileList: FileList | File[] | undefined, preferredSide?: Side) {
+    setError(null);
+    const files = Array.from(fileList ?? []).filter(isImage).slice(0, 2);
+    if (!files.length) {
+      setError("Please upload JPG, JPEG, PNG, or WEBP images.");
+      return;
+    }
+
+    if (files.length === 2) {
+      handleFile("front", files[0]);
+      handleFile("back", files[1]);
+      return;
+    }
+
+    const destination = preferredSide ?? (!front.file ? "front" : !back.file ? "back" : "front");
+    handleFile(destination, files[0]);
+  }
+
   function onMultiInputChange(event: ChangeEvent<HTMLInputElement>) {
     handleFiles(event.target.files ?? undefined);
     event.target.value = "";
@@ -309,10 +344,77 @@ export function FrontBackCardMergeTool() {
 
   function onMultiDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
-    setFront((state) => ({ ...state, isDragging: false }));
-    setBack((state) => ({ ...state, isDragging: false }));
-    handleFiles(event.dataTransfer.files);
+    event.stopPropagation();
+    setFileDragActive(false);
+    handleDroppedFiles(event.dataTransfer.files);
   }
+
+  function moveOrSwapSides(source: Side, target: Side) {
+    if (source === target) return;
+    const sourceState = source === "front" ? front : back;
+    const targetState = target === "front" ? front : back;
+    if (!sourceState.file) return;
+
+    clearOutput();
+    if (source === "front") {
+      setFront({ ...targetState, isDragging: false });
+      setBack({ ...sourceState, isDragging: false });
+    } else {
+      setFront({ ...sourceState, isDragging: false });
+      setBack({ ...targetState, isDragging: false });
+    }
+    setStatus(`${source === "front" ? "Front" : "Back"} and ${target === "front" ? "front" : "back"} positions updated.`);
+  }
+
+  useEffect(() => {
+    function isInsideToolPage(target: EventTarget | null) {
+      const page = toolSectionRef.current?.closest(".v0-tool-page");
+      return Boolean(page && target instanceof Node && page.contains(target));
+    }
+
+    function onPageDragEnter(event: globalThis.DragEvent) {
+      if (!isInsideToolPage(event.target) || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      if (!isSupportedFileDrag(event.dataTransfer)) return;
+      pageFileDragDepthRef.current += 1;
+      setFileDragActive(true);
+    }
+
+    function onPageDragOver(event: globalThis.DragEvent) {
+      if (!isInsideToolPage(event.target) || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = isSupportedFileDrag(event.dataTransfer) ? "copy" : "none";
+      if (isSupportedFileDrag(event.dataTransfer)) setFileDragActive(true);
+    }
+
+    function onPageDragLeave(event: globalThis.DragEvent) {
+      if (!isFileDrag(event.dataTransfer)) return;
+      pageFileDragDepthRef.current = Math.max(0, pageFileDragDepthRef.current - 1);
+      if (pageFileDragDepthRef.current === 0) setFileDragActive(false);
+    }
+
+    function onPageDrop(event: globalThis.DragEvent) {
+      if (!isInsideToolPage(event.target) || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      pageFileDragDepthRef.current = 0;
+      setFileDragActive(false);
+      handleDroppedFiles(event.dataTransfer?.files);
+    }
+
+    document.addEventListener("dragenter", onPageDragEnter);
+    document.addEventListener("dragover", onPageDragOver);
+    document.addEventListener("dragleave", onPageDragLeave);
+    document.addEventListener("drop", onPageDrop);
+    return () => {
+      document.removeEventListener("dragenter", onPageDragEnter);
+      document.removeEventListener("dragover", onPageDragOver);
+      document.removeEventListener("dragleave", onPageDragLeave);
+      document.removeEventListener("drop", onPageDrop);
+    };
+    // Rebind when slot availability changes so one-file drops always fill the first empty slot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [front.file, back.file]);
 
   function rotate(side: Side) {
     clearOutput();
@@ -624,14 +726,22 @@ export function FrontBackCardMergeTool() {
       <label
         data-primary-upload="true"
         htmlFor="front-back-card-upload"
-        onDragOver={(event) => {
+        onDragEnter={(event) => {
+          if (!isFileDrag(event.dataTransfer)) return;
           event.preventDefault();
-          setFront((state) => ({ ...state, isDragging: true }));
-          setBack((state) => ({ ...state, isDragging: true }));
+          event.stopPropagation();
+          if (isSupportedFileDrag(event.dataTransfer)) setFileDragActive(true);
         }}
-        onDragLeave={() => {
-          setFront((state) => ({ ...state, isDragging: false }));
-          setBack((state) => ({ ...state, isDragging: false }));
+        onDragOver={(event) => {
+          if (!isFileDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = isSupportedFileDrag(event.dataTransfer) ? "copy" : "none";
+          if (isSupportedFileDrag(event.dataTransfer)) setFileDragActive(true);
+        }}
+        onDragLeave={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+          setFileDragActive(false);
         }}
         onDrop={onMultiDrop}
         className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
@@ -655,7 +765,59 @@ export function FrontBackCardMergeTool() {
     const displayName = state.file ? splitFileName(state.file.name) : null;
     const details = state.file && state.dimensions ? `${formatKb(state.file.size)} KB \u2022 ${state.dimensions.width}\u00d7${state.dimensions.height} px` : state.file ? `${formatKb(state.file.size)} KB` : "";
     return (
-      <article className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:p-4">
+      <article
+        data-card-side={side}
+        data-card-file-name={state.file?.name ?? ""}
+        data-drag-active={state.isDragging ? "true" : "false"}
+        draggable={Boolean(state.file)}
+        onDragStart={(event) => {
+          if (!state.file) {
+            event.preventDefault();
+            return;
+          }
+          draggedSideRef.current = side;
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("application/x-pdfroot-card-side", side);
+          event.dataTransfer.setData("text/plain", side);
+        }}
+        onDragEnd={() => {
+          draggedSideRef.current = null;
+          setFileDragActive(false);
+        }}
+        onDragEnter={(event) => {
+          const isInternal = Boolean(draggedSideRef.current || event.dataTransfer.types.includes("application/x-pdfroot-card-side"));
+          if (!isInternal && !isFileDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (isInternal || isSupportedFileDrag(event.dataTransfer)) setFileDragActive(true, side);
+        }}
+        onDragOver={(event) => {
+          const isInternal = Boolean(draggedSideRef.current || event.dataTransfer.types.includes("application/x-pdfroot-card-side"));
+          if (!isInternal && !isFileDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = isInternal ? "move" : isSupportedFileDrag(event.dataTransfer) ? "copy" : "none";
+          if (isInternal || isSupportedFileDrag(event.dataTransfer)) setFileDragActive(true, side);
+        }}
+        onDragLeave={(event) => {
+          if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+          setFileDragActive(false);
+        }}
+        onDrop={(event) => {
+          const source = (event.dataTransfer.getData("application/x-pdfroot-card-side") || draggedSideRef.current) as Side | null;
+          if (!source && !isFileDrag(event.dataTransfer)) return;
+          event.preventDefault();
+          event.stopPropagation();
+          draggedSideRef.current = null;
+          setFileDragActive(false);
+          if (source) {
+            moveOrSwapSides(source, side);
+            return;
+          }
+          handleDroppedFiles(event.dataTransfer.files, side);
+        }}
+        className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:p-4 ${state.isDragging ? "border-[#FF2D2D] ring-2 ring-red-100" : "border-slate-200"}`}
+      >
         <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white sm:aspect-[4/3]">
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{side === "front" ? "F" : "B"}</span>
           {state.file && (
@@ -913,20 +1075,9 @@ export function FrontBackCardMergeTool() {
         data-v0-managed-flow="true"
         data-crop-image-workspace="true"
         id="front-back-card-merge-tool"
-        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+        className="mx-auto mt-0 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
       >
-        <div className="relative mx-auto max-w-4xl px-4 text-center" style={{ paddingTop: "calc(var(--header-height, 72px) + 3rem)" }}>
-          <div className="mx-auto flex max-w-3xl justify-center">
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
-              <FileImage className="h-3.5 w-3.5" aria-hidden="true" />
-              Image Tools
-            </div>
-          </div>
-          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Front &amp; Back Card Merge Online
-          </h1>
-        </div>
-        <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100">
+        <div className="relative mt-0 min-w-0 overflow-visible bg-slate-100">
           <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
