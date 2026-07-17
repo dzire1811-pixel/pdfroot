@@ -109,7 +109,12 @@ test.describe("Front & Back Card Merge drag and result behavior", () => {
     const result = page.locator('[data-workflow-step="download"]');
     await expect(result).toBeVisible({ timeout: 20_000 });
     await expect(result.getByText("Card Merge Ready", { exact: true })).toBeVisible();
-    await expect(result.getByRole("link", { name: "Download Merged Card" })).toHaveAttribute("href", /^blob:/);
+    const downloadLink = result.getByRole("link", { name: "Download Merged Card" });
+    await expect(downloadLink).toHaveAttribute("href", /^blob:/);
+    const downloadPromise = page.waitForEvent("download");
+    await downloadLink.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("front-back-card-merge.jpg");
     await expect(result.getByRole("button", { name: "Merge Another Card" })).toBeVisible();
 
     const hero = page.locator("[data-tool-workspace-hero]");
