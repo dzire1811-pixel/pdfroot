@@ -313,7 +313,7 @@ for (const viewport of viewports) {
         await page.screenshot({ path: path.join(screenshots, '18-desktop-government-dropdown.png'), animations: 'disabled' });
         await page.keyboard.press('Escape');
         await nav.getByRole('button', { name: 'All Tools' }).click();
-        const allToolsPanel = page.locator('header > div.absolute');
+        const allToolsPanel = page.locator('[data-all-tools-mega-menu]');
         await expect(allToolsPanel).toBeVisible();
         await page.screenshot({ path: path.join(screenshots, '19-desktop-all-tools-dropdown.png'), animations: 'disabled' });
         navigationState = {
