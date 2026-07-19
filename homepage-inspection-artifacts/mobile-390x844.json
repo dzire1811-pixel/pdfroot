@@ -343,7 +343,7 @@
       }
     },
     {
-      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Frrb-photo-resize.png&w=96&q=75",
+      "src": "http://127.0.0.1:3000/_next/image?url=%2Ficons%2Ftools%2Frrb-signature-resize.png&w=96&q=75",
       "alt": "",
       "complete": true,
       "naturalWidth": 96,

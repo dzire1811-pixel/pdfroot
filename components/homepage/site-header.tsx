@@ -18,7 +18,7 @@ const governmentToolSlugs = [
   "image-compressor-for-government-forms",
   "signature-resize-tool",
   "ssc-photo-resize",
-  "rrb-photo-resize",
+  "rrb-signature-resize",
   "ibps-photo-resize",
   "ojas-photo-resize",
   "gpsc-photo-resize",

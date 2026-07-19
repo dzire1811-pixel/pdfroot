@@ -13,7 +13,7 @@ const aliases: Record<string, string[]> = {
   "signature-resize-tool": ["kb", "20kb", "50kb", "sign", "signature kb"],
   "resize-image-to-exact-kb": ["kb", "exact kb", "photo kb", "image kb", "government form"],
   "ssc-photo-resize": ["ssc helper", "ssc signature", "ssc signature 10kb", "ssc signature 20kb"],
-  "rrb-photo-resize": ["rrb helper", "railway", "rrb signature", "rrb signature 30kb", "rrb signature 49kb"],
+  "rrb-signature-resize": ["rrb helper", "railway", "rrb signature", "rrb signature 30kb", "rrb signature 49kb"],
   "ibps-photo-resize": ["ibps helper", "banking", "thumb impression", "handwritten declaration", "ibps declaration", "ibps thumb"],
 };
 

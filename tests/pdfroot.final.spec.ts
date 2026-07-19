@@ -8,7 +8,7 @@ const toolSlugs = [
   'rotate-pdf', 'organize-pdf-pages', 'delete-pdf-pages', 'watermark-pdf', 'crop-pdf', 'protect-pdf',
   'unlock-pdf', 'resize-image-to-exact-kb', 'compress-image', 'background-remover', 'crop-image',
   'resize-image', 'jpg-to-png', 'png-to-jpg', 'passport-photo-maker', 'signature-resize-tool',
-  'image-compressor-for-government-forms', 'ssc-photo-resize', 'rrb-photo-resize', 'ibps-photo-resize',
+  'image-compressor-for-government-forms', 'ssc-photo-resize', 'rrb-signature-resize', 'ibps-photo-resize',
   'ojas-photo-resize', 'gpsc-photo-resize', 'upsc-photo-resize', 'front-back-card-merge',
 ] as const;
 
@@ -29,7 +29,7 @@ const expectedConvertRoutes = [
 ];
 const expectedGovernmentRoutes = [
   '/image-compressor-for-government-forms', '/signature-resize-tool', '/ssc-photo-resize',
-  '/rrb-photo-resize', '/ibps-photo-resize', '/ojas-photo-resize', '/gpsc-photo-resize',
+  '/rrb-signature-resize', '/ibps-photo-resize', '/ojas-photo-resize', '/gpsc-photo-resize',
   '/upsc-photo-resize', '/passport-photo-maker', '/front-back-card-merge',
 ];
 const expectedMobileGovernmentRoutes = ['/resize-image-to-exact-kb', ...expectedGovernmentRoutes];
@@ -226,6 +226,14 @@ test.describe('all public HTML routes', () => {
 });
 
 test.describe('site-wide integrity', () => {
+  test('legacy RRB photo route permanently redirects to the signature tool', async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile-chromium', 'Redirect contract is viewport-independent.');
+
+    const response = await request.get('/rrb-photo-resize', { maxRedirects: 0 });
+    expect(response.status()).toBe(308);
+    expect(response.headers().location).toBe('/rrb-signature-resize');
+  });
+
   test('all same-origin links resolve without HTTP errors', async ({ request }, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop-chromium', 'Run the crawl once from desktop.');
     const links = await collectInternalLinks(request);

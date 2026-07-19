@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   outputFileTracingRoot: process.cwd(),
+  async redirects() {
+    return [
+      {
+        source: "/rrb-photo-resize",
+        destination: "/rrb-signature-resize",
+        permanent: true,
+      },
+    ];
+  },
   webpack(config, { isServer, webpack }) {
     if (!isServer) {
       config.plugins.push(new webpack.IgnorePlugin({ resourceRegExp: /^node:(fs|https)$/ }));

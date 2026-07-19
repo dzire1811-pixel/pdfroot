@@ -31,7 +31,7 @@ const toolIconColors: Record<string, string> = {
   "signature-resize-tool": "#2F9D5B",
   "image-compressor-for-government-forms": "#2F9D5B",
   "ssc-photo-resize": "#2F9D5B",
-  "rrb-photo-resize": "#2F9D5B",
+  "rrb-signature-resize": "#2F9D5B",
   "ibps-photo-resize": "#2F9D5B",
   "ojas-photo-resize": "#2F9D5B",
   "gpsc-photo-resize": "#2F9D5B",

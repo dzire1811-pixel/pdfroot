@@ -252,7 +252,7 @@ export const imageTools: Tool[] = [
   },
   {
     name: "RRB Signature Resize",
-    slug: "rrb-photo-resize",
+    slug: "rrb-signature-resize",
     category: "Image Tools",
     description: "Resize RRB signatures to JPG/JPEG, 30-49 KB, minimum 140 x 60 px, and 100 DPI requirements.",
     keywords: ["rrb signature resize", "railway signature resize", "rrb signature 30kb 49kb", "rrb signature 140x60"],

@@ -66,7 +66,7 @@ export function ToolRenderer({ slug, name, description }: { slug: string; name: 
   if (slug === "signature-resize-tool") return <SignatureResizeTool />;
   if (slug === "passport-photo-maker") return <PassportPhotoMakerTool />;
   if (slug === "ssc-photo-resize") return <SscPhotoSignatureHelperTool />;
-  if (slug === "rrb-photo-resize") return <RrbPhotoSignatureHelperTool />;
+  if (slug === "rrb-signature-resize") return <RrbPhotoSignatureHelperTool />;
   if (slug === "ibps-photo-resize") return <IbpsPhotoSignatureHelperTool />;
   if (slug === "ojas-photo-resize") return <OjasPhotoSignatureTool />;
   if (slug === "gpsc-photo-resize") return <GpscPhotoSignatureTool />;

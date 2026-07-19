@@ -42,24 +42,30 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
   }
 
   const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
+  const isRrbSignatureResize = tool.slug === "rrb-signature-resize";
+  const metadataDescription = isRrbSignatureResize
+    ? "Resize your RRB signature online to the required dimensions and file size. Create a clear JPG or JPEG signature for Railway recruitment forms."
+    : `${tool.description} Use PDFRoot ${tool.name} online with fast processing, secure files, instant download, and a clean mobile-friendly upload workflow.`;
+  const socialDescription = isRrbSignatureResize ? metadataDescription : tool.description;
+  const canonicalUrl = isRrbSignatureResize ? "https://www.pdfroot.com/rrb-signature-resize" : `/${tool.slug}`;
 
   return {
     title: pageTitle,
-    description: `${tool.description} Use PDFRoot ${tool.name} online with fast processing, secure files, instant download, and a clean mobile-friendly upload workflow.`,
+    description: metadataDescription,
     keywords: tool.keywords,
     alternates: {
-      canonical: `/${tool.slug}`,
+      canonical: canonicalUrl,
     },
     openGraph: {
       title: `${pageTitle} | PDFRoot`,
-      description: tool.description,
+      description: socialDescription,
       url: `https://www.pdfroot.com/${tool.slug}`,
       images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
       card: "summary_large_image",
       title: `${pageTitle} | PDFRoot`,
-      description: tool.description,
+      description: socialDescription,
       images: ["https://www.pdfroot.com/branding/twitter-card.png"],
     },
   };
@@ -103,7 +109,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
-  const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-photo-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
+  const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-signature-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
   const resultPrimaryActions = tool.slug === "upsc-photo-resize"
     ? [
         ["crop-image", "Crop Image", "Crop photos for online forms."],
@@ -128,7 +134,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
         ["compress-image", "Compress Image", "Reduce image size for easier uploads."],
       ]
-    : tool.slug === "rrb-photo-resize"
+    : tool.slug === "rrb-signature-resize"
     ? [
         ["crop-image", "Crop Image", "Crop signatures for online forms."],
         ["resize-image-to-exact-kb", "Resize to Exact KB", "Prepare an image for an exact upload limit."],
@@ -370,7 +376,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
           }
         `}</style>
       )}
-      {tool.slug === "rrb-photo-resize" && (
+      {tool.slug === "rrb-signature-resize" && (
         <style>{`
           .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) main > [data-tool-page-extra],
           .v0-tool-page:has(#rrb-signature-resize-tool [data-workflow-step="download"]) > [data-tool-page-extra="footer"],
