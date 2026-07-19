@@ -216,7 +216,14 @@ a {
 }
 
 .pdfroot-float {
-  animation: pdfroot-float 6s ease-in-out infinite;
+  opacity: 1;
+  transform: translateY(0);
+  animation-name: pdfroot-float;
+  animation-duration: 6s;
+  animation-timing-function: ease-in-out;
+  animation-delay: 0s;
+  animation-iteration-count: infinite;
+  animation-fill-mode: none;
   transform-box: fill-box;
   transform-origin: center;
 }

@@ -94,11 +94,11 @@ function PdfRootHeroArtwork() {
         </g>
       </g>
 
-      <g className="pdfroot-float" filter="url(#hero-shadow)">
+      <g className="pdfroot-float" filter="url(#hero-shadow)" opacity="1" transform="translate(0 0)">
         <path d="M277 83h264l56 56v322H277Z" fill="url(#hero-page)" stroke="#D4D4D8" strokeWidth="2" strokeLinejoin="round" />
         <path d="M541 83v56h56" fill="#FEF2F2" stroke="#D4D4D8" strokeWidth="2" strokeLinejoin="round" />
         <rect x="317" y="124" width="81" height="34" rx="17" fill="#EF3030" />
-        <text x="357.5" y="147" textAnchor="middle" fill="#FFFFFF" fontSize="16" fontWeight="800" fontFamily="Inter, ui-sans-serif, sans-serif">PDF</text>
+        <text x="357.5" y="147" textAnchor="middle" fill="#FFFFFF" fontSize="16" fontWeight="800" fontFamily="Inter, ui-sans-serif, sans-serif" opacity="1">PDF</text>
         <rect x="317" y="187" width="211" height="11" rx="5.5" fill="#D4D4D8" />
         <rect x="317" y="214" width="171" height="9" rx="4.5" fill="#E4E4E7" />
         <rect x="317" y="241" width="206" height="9" rx="4.5" fill="#E4E4E7" />
