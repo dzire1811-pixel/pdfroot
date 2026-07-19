@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { stubLocalSpeedInsights } from "./playwright-local-telemetry";
 
 const consentKey = "pdfroot_analytics_consent";
 const clarityTagUrl = "https://www.clarity.ms/tag/xmz4aowjyl";
@@ -22,6 +23,7 @@ function captureRuntimeErrors(page: Page) {
 
 test.describe("Microsoft Clarity analytics consent audit", () => {
   test("accept loads one Clarity tag and keeps it active across pages", async ({ page }) => {
+    await stubLocalSpeedInsights(page);
     const errors = captureRuntimeErrors(page);
     const clarityRequests: string[] = [];
     page.on("request", (request) => {
@@ -58,6 +60,7 @@ test.describe("Microsoft Clarity analytics consent audit", () => {
   });
 
   test("reject never initializes or requests Clarity", async ({ page }) => {
+    await stubLocalSpeedInsights(page);
     const errors = captureRuntimeErrors(page);
     const clarityRequests: string[] = [];
     page.on("request", (request) => {

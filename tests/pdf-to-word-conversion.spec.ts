@@ -5,7 +5,7 @@ import JSZip from "jszip";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import sharp from "sharp";
 
-const sourcePdf = "C:\\Users\\Asus\\Desktop\\PRIYANSHI.pdf";
+const sourcePdf = process.env.PLAYWRIGHT_PDF_TO_WORD_FIXTURE ?? "C:\\Users\\Asus\\Desktop\\PRIYANSHI.pdf";
 const outputDir = path.resolve("test-results", "pdf-to-word");
 const fixtureDir = path.join(outputDir, "fixtures");
 
@@ -110,10 +110,10 @@ function hasVector(blocks: string[], x: number, top: number, width: number, heig
 
 test.beforeAll(createFixturePdfs);
 
-async function uploadPdf(page: import("@playwright/test").Page) {
+async function uploadPdf(page: import("@playwright/test").Page, pdfPath = path.join(fixtureDir, "simple-text.pdf")) {
   await page.addInitScript(() => localStorage.setItem("pdfroot_analytics_consent", "rejected"));
   await page.goto("/pdf-to-word");
-  await page.locator("#pdf-word-upload").setInputFiles(sourcePdf);
+  await page.locator("#pdf-word-upload").setInputFiles(pdfPath);
   const isMobile = (page.viewportSize()?.width ?? 1440) < 640;
   if (isMobile) {
     await expect(page.locator('[data-pdf-to-word-action-bar="true"]')).toBeVisible();
@@ -143,9 +143,10 @@ async function selectConversionMode(page: import("@playwright/test").Page, name:
 }
 
 test("desktop editable Word conversion preserves filename and creates a valid download", async ({ page }) => {
+  test.skip(!(await fs.stat(sourcePdf).then(() => true).catch(() => false)), "Set PLAYWRIGHT_PDF_TO_WORD_FIXTURE to run the resume-specific conversion regression.");
   await fs.mkdir(outputDir, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await uploadPdf(page);
+  await uploadPdf(page, sourcePdf);
 
   await page.getByRole("button", { name: "Convert to Word" }).click();
   await expect(page.getByRole("heading", { name: "Your Word file is ready!" })).toBeVisible({ timeout: 60_000 });
@@ -216,9 +217,10 @@ test("desktop editable Word conversion preserves filename and creates a valid do
 });
 
 test("mobile preserve mode creates one full-page image Word file", async ({ page }) => {
+  test.skip(!(await fs.stat(sourcePdf).then(() => true).catch(() => false)), "Set PLAYWRIGHT_PDF_TO_WORD_FIXTURE to run the resume-specific conversion regression.");
   await fs.mkdir(outputDir, { recursive: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await uploadPdf(page);
+  await uploadPdf(page, sourcePdf);
 
   await selectConversionMode(page, "Preserve Exact Appearance");
   await page.getByRole("button", { name: "Convert to Word" }).click();
