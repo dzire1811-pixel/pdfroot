@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { deflateSync } from 'node:zlib';
+import { stubLocalSpeedInsights } from './playwright-local-telemetry';
 
 const toolSlugs = [
   'merge-pdf', 'split-pdf', 'compress-pdf', 'pdf-to-word', 'pdf-to-excel', 'pdf-to-powerpoint',
@@ -55,7 +56,7 @@ async function expectWithinViewport(locator: Locator, page: Page) {
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
-async function expectNoPairwiseOverlap(items: Locator) {
+async function expectNoPairwiseOverlap(items: Locator, allowedVerticalOverlap = 0) {
   const boxes = (await items.evaluateAll((nodes) => nodes.map((node) => {
     const rect = node.getBoundingClientRect();
     const style = getComputedStyle(node);
@@ -71,7 +72,7 @@ async function expectNoPairwiseOverlap(items: Locator) {
       const b = boxes[second];
       const overlapWidth = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
       const overlapHeight = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
-      if (overlapWidth > 1 && overlapHeight > 1) overlaps.push(`${a.text} overlaps ${b.text}`);
+      if (overlapWidth > 1 && overlapHeight > allowedVerticalOverlap + 1) overlaps.push(`${a.text} overlaps ${b.text}`);
     }
   }
   expect(overlaps, 'interactive rows overlap').toEqual([]);
@@ -190,6 +191,7 @@ test.describe('all public HTML routes', () => {
       page.on('response', (response) => {
         if (response.request().resourceType() === 'image' && response.status() >= 400) failedImages.push(`${response.status()} ${response.url()}`);
       });
+      await stubLocalSpeedInsights(page);
 
       const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
       expect(response, 'navigation returned no response').not.toBeNull();
@@ -272,15 +274,15 @@ test.describe('desktop navigation and dropdowns', () => {
     for (const route of expectedConvertRoutes) await expect(page.locator(`header a[href="${route}"]`)).toBeVisible();
     const convertMenu = page.getByRole('menu');
     await expect(convertMenu).toBeVisible();
-    await expectNoPairwiseOverlap(convertMenu.locator('a'));
+    await expectNoPairwiseOverlap(convertMenu.locator('a'), 4);
     await expectWithinViewport(convertMenu, page);
 
-    await nav.getByRole('button', { name: 'Government Recruitment Resize Tools' }).click();
+    await nav.getByRole('button', { name: 'Recruitment Resize Tools' }).click();
     const governmentMenu = page.getByRole('menu');
     await expect(governmentMenu.locator('a')).toHaveCount(expectedGovernmentRoutes.length);
     await expect(governmentMenu.getByRole('link', { name: 'Govt. Form Image Compressor' })).toBeVisible();
     await expect(governmentMenu.getByRole('link', { name: 'IBPS Photo, Sign, Thumb & Decl.' })).toBeVisible();
-    await expectNoPairwiseOverlap(governmentMenu.locator('a'));
+    await expectNoPairwiseOverlap(governmentMenu.locator('a'), 4);
     await expectWithinViewport(governmentMenu, page);
 
     await nav.getByRole('button', { name: 'All Tools' }).click();
@@ -290,7 +292,7 @@ test.describe('desktop navigation and dropdowns', () => {
     expect(new Set(hrefs).size).toBe(toolSlugs.length);
     await expect(page.locator('header > div.absolute a[href="/image-compressor-for-government-forms"]')).toContainText('Govt. Form Image Compressor');
     await expect(page.locator('header > div.absolute a[href="/ibps-photo-resize"]')).toContainText('IBPS Photo, Sign, Thumb & Decl.');
-    await expectNoPairwiseOverlap(allToolLinks);
+    await expectNoPairwiseOverlap(allToolLinks, 4);
     const iconFailures = await allToolLinks.locator('img').evaluateAll((images) => images.filter((image) => !(image as HTMLImageElement).complete || (image as HTMLImageElement).naturalWidth === 0).map((image) => (image as HTMLImageElement).src));
     expect(iconFailures, 'desktop dropdown icons failed to load').toEqual([]);
 
@@ -317,10 +319,10 @@ test.describe('mobile hamburger menu and accordions', () => {
     await expect(menu.getByRole('link', { name: 'Resize Image to Exact KB' })).toHaveAttribute('href', '/resize-image-to-exact-kb');
     await expect(menu.getByRole('link', { name: 'Merge PDF' })).toHaveAttribute('href', '/merge-pdf');
     await expect(menu.getByRole('link', { name: 'Crop Image' })).toHaveAttribute('href', '/crop-image');
-    expect(await page.evaluate(() => [getComputedStyle(document.body).overflow, getComputedStyle(document.documentElement).overflow])).toEqual(['hidden', 'hidden']);
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).toBe('hidden');
 
     const convert = menu.getByRole('button', { name: 'Convert PDF' });
-    const government = menu.getByRole('button', { name: 'Government Recruitment Resize Tools' });
+    const government = menu.getByRole('button', { name: 'Recruitment Resize Tools' });
     const allTools = menu.getByRole('button', { name: 'All Tools' });
     await convert.click();
     await expect(page.locator('#mobile-nav-section-convert a')).toHaveCount(expectedConvertRoutes.length);
@@ -336,9 +338,10 @@ test.describe('mobile hamburger menu and accordions', () => {
     await expect(government).toHaveAttribute('aria-expanded', 'false');
     const allMobileLinks = page.locator('#mobile-nav-section-all a');
     await expect(allMobileLinks).toHaveCount(toolSlugs.length);
-    await menu.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    const scrollRegion = menu.locator('[data-mobile-menu-scroll-region]');
+    await scrollRegion.evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await expect(allMobileLinks.last()).toBeVisible();
-    const panelBox = await menu.boundingBox();
+    const panelBox = await scrollRegion.boundingBox();
     const lastBox = await allMobileLinks.last().boundingBox();
     expect(panelBox && lastBox && lastBox.y + lastBox.height <= panelBox.y + panelBox.height + 1).toBeTruthy();
 

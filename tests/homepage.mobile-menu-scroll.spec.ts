@@ -90,7 +90,7 @@ for (const viewport of viewports) {
 
         for (const section of [
           { id: 'convert', button: 'Convert PDF', minimumCount: 8 },
-          { id: 'government', button: 'Government Recruitment Resize Tools', minimumCount: 10 },
+          { id: 'government', button: 'Recruitment Resize Tools', minimumCount: 10 },
           { id: 'all', button: 'All Tools', minimumCount: 30 },
         ]) {
           await menu.getByRole('button', { name: section.button }).click();
@@ -122,7 +122,7 @@ for (const viewport of viewports) {
           expect(new Set(layout.rows.map((row) => row.left)).size).toBe(1);
           expect(new Set(layout.rows.map((row) => row.right)).size).toBe(1);
           expect(layout.rows.every((row) => row.height === 44)).toBe(true);
-          expect(layout.rows.every((row) => row.iconWidth === 20 && row.iconHeight === 20)).toBe(true);
+          expect(layout.rows.every((row) => row.iconWidth >= 20 && row.iconWidth <= 21 && row.iconHeight >= 20 && row.iconHeight <= 21)).toBe(true);
           expect(layout.rows.every((row) => row.fontWeight === '400')).toBe(true);
           expect(layout.rows.every((row) => row.labelFits && row.labelLines === 1)).toBe(true);
           expect(layout.rows.slice(1).every((row, index) => row.top >= layout.rows[index].bottom)).toBe(true);

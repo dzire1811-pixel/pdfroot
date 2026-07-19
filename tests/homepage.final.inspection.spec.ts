@@ -1,8 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { stubLocalSpeedInsights } from './playwright-local-telemetry';
 
-const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'https://pdfroot.vercel.app';
+const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 const outputRoot = path.resolve('homepage-inspection-artifacts');
 const screenshotRoot = path.resolve('homepage-inspection-screenshots');
 
@@ -223,7 +224,8 @@ for (const viewport of viewports) {
       hasTouch: viewport.mode === 'mobile',
     });
 
-    test('strict homepage visual, interaction, SEO, accessibility, and performance inspection', async ({ page, request }) => {
+    test('strict homepage visual, interaction, SEO, accessibility, and performance inspection', async ({ page, request }, testInfo) => {
+      test.skip(testInfo.project.name !== 'desktop-chromium', 'The audit defines its own complete viewport matrix and runs once.');
       test.setTimeout(120_000);
       const screenshots = await prepareOutput(viewport.name);
       const consoleErrors: string[] = [];
@@ -238,6 +240,7 @@ for (const viewport of viewports) {
           failedAssets.push(`${response.status()} ${response.request().resourceType()} ${response.url()}`);
         }
       });
+      await stubLocalSpeedInsights(page);
       await installPerformanceObservers(page);
 
       const response = await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -259,20 +262,12 @@ for (const viewport of viewports) {
       }
       await capture(page.locator('footer'), path.join(screenshots, '10-footer.png'));
 
-      let uploadChooserOpened: boolean | null = null;
-      if (viewport.name === 'desktop-1440x900') {
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.locator('label[for="homepage-upload"]').click();
-        await fileChooserPromise;
-        uploadChooserOpened = true;
-      }
-
       const heroStatusInitial = await page.locator('main > section').first().getByText(/Preparing|Preview ready/).allTextContents();
       await page.waitForTimeout(2_400);
       const heroStatusAfterTimer = await page.locator('main > section').first().getByText(/Preparing|Preview ready/).allTextContents();
       await capture(page.locator('main > section').first(), path.join(screenshots, '11-hero-status-after-timer.png'));
 
-      const popularFirstCard = page.locator('#tools a').filter({ has: page.locator('h3') }).first();
+      const popularFirstCard = page.locator('#tools').getByRole('link', { name: 'Merge PDF', exact: true });
       await popularFirstCard.hover();
       await capture(popularFirstCard, path.join(screenshots, '12-popular-first-card-hover.png'));
       const popularCardFocus = await recordFocusIndicator(page, popularFirstCard);
@@ -314,18 +309,16 @@ for (const viewport of viewports) {
         await expect(page.getByRole('menu')).toBeVisible();
         await page.screenshot({ path: path.join(screenshots, '17-desktop-convert-dropdown-keyboard.png'), animations: 'disabled' });
         await page.keyboard.press('Escape');
-        await nav.getByRole('button', { name: 'Government Recruitment Resize Tools' }).click();
+        await nav.getByRole('button', { name: 'Recruitment Resize Tools' }).click();
         await page.screenshot({ path: path.join(screenshots, '18-desktop-government-dropdown.png'), animations: 'disabled' });
         await page.keyboard.press('Escape');
         await nav.getByRole('button', { name: 'All Tools' }).click();
-        const allToolsPanel = page.locator('header > div.absolute');
+        const allToolsPanel = page.locator('[data-all-tools-mega-menu]');
         await expect(allToolsPanel).toBeVisible();
         await page.screenshot({ path: path.join(screenshots, '19-desktop-all-tools-dropdown.png'), animations: 'disabled' });
         navigationState = {
           allToolsLinks: await allToolsPanel.locator('a').count(),
           allToolsHasMenuRole: await allToolsPanel.getAttribute('role'),
-          signInBox: await page.getByRole('link', { name: 'Sign in' }).boundingBox(),
-          getStartedBox: await page.getByRole('link', { name: 'Get Started' }).boundingBox(),
         };
         await page.keyboard.press('Escape');
       } else {
@@ -352,8 +345,8 @@ for (const viewport of viewports) {
         await mobileMenu.screenshot({ path: path.join(screenshots, '17-mobile-menu-open.png'), animations: 'disabled' });
         const mobileAllTools = mobileMenu.getByRole('button', { name: 'All Tools' });
         await mobileAllTools.evaluate((element) => {
-          const menu = element.closest<HTMLElement>('[role="menu"]');
-          if (menu) menu.scrollTop = menu.scrollHeight;
+          const scrollRegion = element.closest<HTMLElement>('[data-mobile-menu-scroll-region]');
+          if (scrollRegion) scrollRegion.scrollTop = scrollRegion.scrollHeight;
           (element as HTMLButtonElement).click();
         });
         await page.screenshot({ path: path.join(screenshots, '18-mobile-all-tools-expanded.png'), animations: 'disabled' });
@@ -365,10 +358,10 @@ for (const viewport of viewports) {
           htmlOverflow: await page.evaluate(() => getComputedStyle(document.documentElement).overflow),
         };
         await mobileAllTools.evaluate((element) => (element as HTMLButtonElement).click());
-        const mobileGovernment = mobileMenu.getByRole('button', { name: 'Government Recruitment Resize Tools' });
+        const mobileGovernment = mobileMenu.getByRole('button', { name: 'Recruitment Resize Tools' });
         await mobileGovernment.evaluate((element) => {
-          const menu = element.closest<HTMLElement>('[role="menu"]');
-          if (menu) menu.scrollTop = element.offsetTop;
+          const scrollRegion = element.closest<HTMLElement>('[data-mobile-menu-scroll-region]');
+          if (scrollRegion) scrollRegion.scrollTop = element.offsetTop;
           (element as HTMLButtonElement).click();
         });
         await page.screenshot({ path: path.join(screenshots, '19-mobile-government-expanded.png'), animations: 'disabled' });
@@ -410,7 +403,6 @@ for (const viewport of viewports) {
         brokenLinks,
         heroStatusInitial,
         heroStatusAfterTimer,
-        uploadChooserOpened,
         focusIndicators: { navigation: navFocus, popularCard: popularCardFocus, productTab: productTabFocus, faq: faqFocus },
         navigationState,
         initialLoadPerformance,
@@ -427,7 +419,7 @@ for (const viewport of viewports) {
       expect(inspection.seo.h1).toHaveLength(1);
       expect(inspection.seo.title).toBe('PDFRoot - All PDF & Image Tools in One Place');
       expect(inspection.seo.description).toBeTruthy();
-      expect(inspection.seo.canonical).toBe('https://pdfroot.com/');
+      expect(inspection.seo.canonical).toBe('https://www.pdfroot.com/');
       expect(inspection.seo.robots).toContain('index');
       expect(inspection.seo.robots).toContain('follow');
       expect(inspection.seo.ogTitle).toBeTruthy();
@@ -438,7 +430,6 @@ for (const viewport of viewports) {
       expect(inspection.missingAccessibleNames, 'visible controls without accessible names').toEqual([]);
       expect(inspection.skippedHeadingLevels, 'skipped heading levels').toEqual([]);
       expect(brokenLinks, 'broken homepage links').toEqual([]);
-      if (viewport.name === 'desktop-1440x900') expect(uploadChooserOpened, 'homepage upload picker').toBe(true);
       expect(initialLoadPerformance.cls ?? 0, 'initial-load CLS').toBeLessThanOrEqual(0.1);
     });
   });

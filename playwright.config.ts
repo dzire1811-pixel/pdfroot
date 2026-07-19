@@ -14,8 +14,14 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }],
   ],
   outputDir: 'test-results/artifacts',
+  webServer: {
+    command: 'npm run build && npm run start -- --hostname 127.0.0.1 --port 3000',
+    url: 'http://127.0.0.1:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 300_000,
+  },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'https://pdfroot.vercel.app',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000',
     browserName: 'chromium',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
