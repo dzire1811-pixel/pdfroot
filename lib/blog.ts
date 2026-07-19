@@ -5,6 +5,12 @@ export type BlogPost = {
   category: string;
   date: string;
   readTime: string;
+  seoTitle?: string;
+  canonicalUrl?: string;
+  image?: {
+    src: string;
+    alt: string;
+  };
   relatedTool?: {
     label: string;
     href: string;
@@ -18,7 +24,64 @@ export type BlogPost = {
   };
 };
 
+export const resizeImageExactKbFaq = [
+  {
+    question: "What does KB mean in an image?",
+    answer: "KB stands for kilobytes. It represents the storage size of an image file. A form asking for a 50 KB image is referring to the file size, not necessarily its width or height.",
+  },
+  {
+    question: "Can I resize an image to 20 KB or 50 KB?",
+    answer: "Yes. Enter the required target size in the PDFRoot tool, process the image, and preview the final result before downloading it.",
+  },
+  {
+    question: "Can I use this tool on a mobile phone?",
+    answer: "Yes. The tool is designed to work on both mobile phones and desktop computers.",
+  },
+  {
+    question: "Is image file size the same as image dimensions?",
+    answer: "No. File size is measured in KB or MB, while image dimensions are measured in pixels, such as 200 × 230 pixels. Some forms specify both requirements.",
+  },
+  {
+    question: "Will resizing reduce image quality?",
+    answer: "Reducing an image’s file size may affect its quality. Always preview the processed image and make sure the photograph, signature, or document remains clear and readable.",
+  },
+  {
+    question: "Can I resize JPG and PNG images?",
+    answer: "Yes. The tool currently supports JPG, JPEG, PNG, and WebP images.",
+  },
+  {
+    question: "Should I check the official recruitment notification?",
+    answer: "Yes. Always follow the official notification or application instructions because every examination, recruitment, admission, or scholarship form may have different image requirements.",
+  },
+  {
+    question: "Why is my image not being accepted after resizing?",
+    answer: "The form may also require a specific image format, width, height, background, or minimum and maximum file-size range. Check every requirement mentioned on the official form.",
+  },
+] as const;
+
 export const blogPosts: BlogPost[] = [
+  {
+    slug: "resize-image-to-exact-kb",
+    title: "Resize Image to Exact KB – A Useful Tool for Students and Job Applicants",
+    seoTitle: "Resize Image to Exact KB Online for Forms | PDFRoot",
+    description: "Resize JPG, JPEG or PNG images to 20 KB, 50 KB, 100 KB, 200 KB or a custom size for government, exam and job application forms.",
+    category: "Image Tools",
+    date: "July 2026",
+    readTime: "9 min read",
+    canonicalUrl: "https://pdfroot.com/blog/resize-image-to-exact-kb",
+    image: {
+      src: "/blog/resize-image-to-exact-kb-online-pdfroot.webp",
+      alt: "PDFRoot Resize Image to Exact KB tool for online application forms",
+    },
+    relatedTool: {
+      label: "Resize Your Image to Exact KB Now",
+      href: "/resize-image-to-exact-kb",
+    },
+    content: {
+      intro: "PDFRoot’s Resize Image to Exact KB tool helps students and job applicants prepare photographs, signatures, and document images for online forms.",
+      sections: [],
+    },
+  },
   {
     slug: "resize-image-exact-kb-government-forms",
     title: "How to Resize Image to Exact KB for Government Forms",
@@ -26,6 +89,10 @@ export const blogPosts: BlogPost[] = [
     category: "Image Tools",
     date: "June 22, 2026",
     readTime: "4 min read",
+    image: {
+      src: "/blog/government-form-photo-signature-resize-guide.webp",
+      alt: "Government form photo and signature resizing guide",
+    },
     relatedTool: {
       label: "Resize Image to Exact KB",
       href: "/resize-image-to-exact-kb",

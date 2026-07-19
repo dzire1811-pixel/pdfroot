@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CalendarDays } from "lucide-react";
 import { BrandText } from "@/components/Brand";
+import { BlogArticleLayout } from "@/components/blog/BlogArticleLayout";
+import { BlogListingLayout } from "@/components/blog/BlogListingLayout";
+import { ResizeImageExactKbArticle } from "@/components/blog/ResizeImageExactKbArticle";
 import { InfoPageLayout } from "@/components/InfoPageLayout";
-import { blogPosts, getBlogPost } from "@/lib/blog";
+import { blogPosts, getBlogPost, resizeImageExactKbFaq } from "@/lib/blog";
 
 type BlogPostPageProps = {
   params: Promise<{
@@ -26,23 +30,28 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
     };
   }
 
+  const canonicalUrl = post.canonicalUrl ?? `https://www.pdfroot.com/blog/${post.slug}`;
+  const imageUrl = post.image ? `https://pdfroot.com${post.image.src}` : "https://www.pdfroot.com/branding/open-graph-image.png";
+  const socialTitle = post.seoTitle ?? `${post.title} | PDFRoot`;
+
   return {
-    title: post.title,
+    title: post.seoTitle ? { absolute: post.seoTitle } : post.title,
     description: post.description,
     alternates: {
-      canonical: `/blog/${post.slug}`,
+      canonical: canonicalUrl,
     },
     openGraph: {
-      title: `${post.title} | PDFRoot`,
+      title: socialTitle,
       description: post.description,
-      url: `https://www.pdfroot.com/blog/${post.slug}`,
-      images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
+      url: canonicalUrl,
+      type: "article",
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: post.image?.alt ?? post.title }],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${post.title} | PDFRoot`,
+      title: socialTitle,
       description: post.description,
-      images: ["https://www.pdfroot.com/branding/twitter-card.png"],
+      images: [imageUrl],
     },
   };
 }
@@ -52,6 +61,70 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const post = getBlogPost(slug);
 
   if (!post) notFound();
+
+  if (post.slug === "resize-image-to-exact-kb") {
+    const canonicalUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb";
+    const imageUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb-online-pdfroot.webp";
+    const articleSchema = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: post.title,
+      description: post.description,
+      author: {
+        "@type": "Person",
+        name: "Anand Joshi",
+        jobTitle: "Founder of PDFRoot",
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "PDFRoot",
+        logo: {
+          "@type": "ImageObject",
+          url: "https://pdfroot.com/branding/logo.png",
+        },
+      },
+      datePublished: "2026-07-19",
+      dateModified: "2026-07-19",
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": canonicalUrl,
+      },
+      image: imageUrl,
+      url: canonicalUrl,
+    };
+    const faqSchema = {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: resizeImageExactKbFaq.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: item.answer,
+        },
+      })),
+    };
+
+    return (
+      <BlogArticleLayout
+        breadcrumb={(
+          <nav aria-label="Breadcrumb" className="inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <Link href="/" className="hover:text-foreground">Home</Link>
+            <span aria-hidden="true">›</span>
+            <Link href="/blog" className="hover:text-foreground">Blog</Link>
+            <span aria-hidden="true">›</span>
+            <span aria-current="page">Resize Image to Exact KB</span>
+          </nav>
+        )}
+        title={post.title}
+        subtitle={post.description}
+      >
+        <ResizeImageExactKbArticle />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+      </BlogArticleLayout>
+    );
+  }
 
   const articleSchema = {
     "@context": "https://schema.org",
@@ -69,16 +142,31 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       name: "PDFRoot",
     },
     mainEntityOfPage: `https://www.pdfroot.com/blog/${post.slug}`,
+    image: post.image ? `https://pdfroot.com${post.image.src}` : undefined,
   };
+  const ArticlePageLayout = post.slug === "resize-image-exact-kb-government-forms" ? BlogListingLayout : InfoPageLayout;
 
   return (
-    <InfoPageLayout
+    <ArticlePageLayout
       eyebrow={<><BrandText styled /> Blog</>}
       title={post.title}
       subtitle={post.description}
+      {...(post.slug === "resize-image-exact-kb-government-forms" ? { alignPaddedArticleImage: true } : {})}
     >
       <article className="rounded-lg border border-border bg-card p-6 text-left sm:p-8">
-        <div className="flex flex-wrap items-center gap-3 text-sm font-medium text-muted-foreground">
+        {post.image ? (
+          <Image
+            src={post.image.src}
+            alt={post.image.alt}
+            width={1200}
+            height={630}
+            priority
+            className="h-auto w-full rounded-lg border border-border object-contain"
+            sizes="(max-width: 768px) calc(100vw - 5rem), 832px"
+          />
+        ) : null}
+
+        <div className={`flex flex-wrap items-center gap-3 text-sm font-medium text-muted-foreground ${post.image ? "mt-6" : ""}`}>
           <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">{post.category}</span>
           <span className="inline-flex items-center gap-1.5">
             <CalendarDays className="h-4 w-4" aria-hidden="true" />
@@ -117,6 +205,6 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
           __html: JSON.stringify(articleSchema),
         }}
       />
-    </InfoPageLayout>
+    </ArticlePageLayout>
   );
 }
