@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import Script from "next/script";
 import type { ReactNode } from "react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { AnalyticsConsent } from "@/components/AnalyticsConsent";
 import "./globals.css";
 
@@ -133,6 +134,7 @@ export default function RootLayout({
           }}
         />
         <AnalyticsConsent />
+        <SpeedInsights />
       </body>
     </html>
   );
