@@ -57,13 +57,12 @@ export function MergeResultExploreButton({ category }: { category?: string }) {
       onPointerUp={release}
       onPointerCancel={release}
       onPointerLeave={release}
-      className="inline-flex cursor-pointer items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:brightness-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+      className={`inline-flex cursor-pointer items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition-[background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:brightness-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2${isPressed ? " merge-result-explore-pressed" : ""}`}
       style={{
         touchAction: "manipulation",
         ...(isPressed
           ? {
-              backgroundColor: "color-mix(in oklch, var(--primary) 82%, black)",
-              boxShadow: "0 2px 5px rgb(15 23 42 / 10%)",
+              boxShadow: "0 2px 5px rgba(15, 23, 42, 0.1)",
               transform: "translateY(2px) scale(0.95)",
             }
           : {}),

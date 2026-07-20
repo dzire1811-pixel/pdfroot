@@ -1,4 +1,8 @@
 import { defineConfig } from '@playwright/test';
+import path from 'node:path';
+
+const chromium109Executable = process.env.CHROMIUM_109_EXECUTABLE
+  ?? path.join(process.env.LOCALAPPDATA ?? '', 'ms-playwright', 'chromium-1041', 'chrome-win', 'chrome.exe');
 
 export default defineConfig({
   testDir: './tests',
@@ -46,6 +50,28 @@ export default defineConfig({
         deviceScaleFactor: 1,
         isMobile: true,
         hasTouch: true,
+      },
+    },
+    {
+      name: 'desktop-chromium-109',
+      testMatch: /legacy-browser-compat\.spec\.ts/,
+      use: {
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 1,
+        isMobile: false,
+        hasTouch: false,
+        launchOptions: { executablePath: chromium109Executable },
+      },
+    },
+    {
+      name: 'mobile-chromium-109',
+      testMatch: /legacy-browser-compat\.spec\.ts/,
+      use: {
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 1,
+        isMobile: true,
+        hasTouch: true,
+        launchOptions: { executablePath: chromium109Executable },
       },
     },
   ],

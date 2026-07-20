@@ -7,7 +7,23 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:compat": "playwright test tests/legacy-browser-compat.spec.ts",
     "indexnow": "node scripts/submit-indexnow.mjs"
+  },
+  "browserslist": {
+    "production": [
+      "Chrome >= 109",
+      "Edge >= 109",
+      "Firefox >= 121",
+      "Safari >= 15.4",
+      "iOS >= 15.4",
+      "Android >= 109"
+    ],
+    "development": [
+      "last 1 Chrome version",
+      "last 1 Firefox version",
+      "last 1 Safari version"
+    ]
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",
@@ -35,12 +51,16 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.5",
+    "@types/pngjs": "6.0.5",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.18.0",
     "eslint-config-next": "^15.1.6",
+    "pixelmatch": "7.1.0",
+    "pngjs": "7.0.0",
     "postcss": "^8.4.49",
+    "postcss-preset-env": "10.4.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3"
   }
