@@ -1,5 +1,11 @@
 /* Crop Image Online owns every rule in this module. The scope class is attached only while its workspace is active. */
 
+.scope section[id$="-tool"].v0-upload-workflow:not(.v0-upload-ready) [data-v0-upload-screen="true"] label[data-crop-image-upload-zone="true"][class*="border-dashed"]::after,
+.scope section[data-v0-managed-flow="true"] label[data-crop-image-upload-zone="true"][data-exact-kb-upload="true"]::after {
+  content: none !important;
+  display: none !important;
+}
+
 @media (min-width: 1024px) {
   .scope[data-crop-image-active-workspace="true"]:has([data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"])) > main {
     height: calc(100dvh - var(--crop-editor-header-height, 4rem)) !important;
@@ -1216,6 +1222,14 @@
   scrollbar-width: thin;
 }
 
+:global(.dark) .scope {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --card: #111827;
+  --border: #334155;
+  --secondary: #1e293b;
+}
+
 :global(.dark) .scope[data-crop-image-pan-surface="true"] {
   filter: none !important;
 }
@@ -1223,6 +1237,16 @@
 :global(.dark) .scope[data-crop-image-active-workspace="true"] [data-tool-workspace-hero],
 :global(.dark) .scope[data-crop-image-active-workspace="true"] [data-crop-image-preview-area="true"] {
   background: var(--background) !important;
+}
+
+:global(.dark) .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  background: var(--background) !important;
+}
+
+:global(.dark) .scope[data-crop-image-active-workspace="true"] [aria-label="Crop image settings"] {
+  border-color: var(--border) !important;
+  background: var(--card) !important;
+  color: var(--foreground) !important;
 }
 
 :global(.dark) .scope[data-crop-image-active-workspace="true"] [data-crop-image-preview-card="true"],

@@ -52,16 +52,20 @@ test("Crop isolation preserves dark mode, duplication, edit, delete, and complet
   await page.addInitScript(() => {
     localStorage.setItem("pdfroot_analytics_consent", "rejected");
     localStorage.setItem("pdfroot-theme", "dark");
+    document.documentElement.classList.add("dark");
   });
   await page.goto("/crop-image", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
   await page.locator("#crop-image-upload").setInputFiles(await sampleImage());
-  await expect(page.getByRole("heading", { name: "Crop Image Online" })).toHaveCSS("color", "rgb(248, 250, 252)");
   if (isMobile) {
+    await expect(page.locator('[data-crop-image-preview-area="true"]')).toHaveCSS("background-color", "rgb(15, 23, 42)");
     await page.getByRole("button", { name: "Settings" }).click();
     await expect(page.getByLabel("Crop image settings")).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     return;
   }
+
+  await expect(page.getByRole("heading", { name: "Crop Image Online" })).toHaveCSS("color", "rgb(248, 250, 252)");
 
   await page.getByRole("button", { name: "Duplicate original image crop-isolation.png" }).click();
   await expect(page.locator('[data-crop-image-upload-card="true"]')).toHaveCount(2);
