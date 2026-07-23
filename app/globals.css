@@ -1005,10 +1005,6 @@ section[id$="-tool"] label {
   width: 100% !important;
 }
 
-.v0-tool-page .max-w-4xl:has(> section[data-crop-image-workspace="true"]) {
-  max-width: none !important;
-  width: 100% !important;
-}
 
 .v0-tool-page .max-w-4xl:has(> section[data-resize-image-workspace="true"]) {
   max-width: none !important;
@@ -1060,243 +1056,21 @@ section[id$="-tool"] label {
   width: 100% !important;
 }
 
-.v0-tool-page section[data-crop-image-workspace="true"] {
-  width: calc(100% + 3rem) !important;
-  max-width: calc(100% + 3rem) !important;
-  margin-left: -1.5rem !important;
-  margin-right: -1.5rem !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
 
-@media (min-width: 1024px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] {
-    width: calc(100% + 4rem) !important;
-    max-width: calc(100% + 4rem) !important;
-    margin-left: -2rem !important;
-    margin-right: -2rem !important;
-  }
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] > div {
-  padding: 0 !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] {
-  padding: 0.75rem clamp(1rem, 2vw, 1.5rem) calc(0.75rem + env(safe-area-inset-bottom)) !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] > div {
-  width: min(100%, 1600px) !important;
-  padding: 0 !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] {
-  box-sizing: border-box !important;
-  width: min(100%, 1600px) !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  padding: clamp(1rem, 2vw, 1.5rem) !important;
-  padding-bottom: 12rem !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] {
-  min-height: calc(100vh - 12.5rem) !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: flex-start !important;
-  padding-top: 0.5rem !important;
-  padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] > div {
-  width: 100% !important;
-  max-width: 100% !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: flex-start !important;
-  margin: 0 auto !important;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] > div > div {
-  margin: 0 auto !important;
-}
 
-.v0-tool-page[data-crop-image-active-workspace="true"] [data-tool-page-extra] {
-  display: none !important;
-}
 
-@media (min-width: 640px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] {
-    padding-bottom: clamp(7.5rem, 14vh, 9rem) !important;
-  }
 
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-v0-result-screen="true"] {
-    padding-bottom: clamp(1.25rem, 4vw, 2.5rem) !important;
-  }
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-  padding: clamp(1rem, 2vw, 1.5rem) !important;
-  padding-bottom: 18rem !important;
-}
 
-@media (min-width: 1024px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-    padding: clamp(1rem, 2vw, 1.5rem) !important;
-    padding-bottom: 13rem !important;
-  }
-}
 
-@media (min-width: 640px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-  }
 
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > .grid {
-    width: auto !important;
-    max-width: min(100%, 72rem) !important;
-    grid-template-columns: minmax(0, auto) !important;
-    justify-content: center !important;
-    align-items: start !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
-    width: fit-content !important;
-    max-width: 100% !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    border-color: transparent !important;
-    background: transparent !important;
-    background-color: transparent !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
-    border-color: rgb(226 232 240) !important;
-    background: rgb(241 245 249) !important;
-    background-color: rgb(241 245 249) !important;
-    box-shadow: none !important;
-    width: min(72vw, calc((100vh - 25rem) * var(--crop-aspect))) !important;
-    min-width: 12rem !important;
-    max-width: min(100%, 48rem) !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
-    width: min(100%, 44rem) !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-
-@media (min-width: 1024px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > .grid:has(> [data-crop-image-thumbnail-list="true"]) {
-    width: 100% !important;
-    max-width: 100% !important;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
-    justify-content: center !important;
-    column-gap: 0 !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
-    grid-column: 2 !important;
-    order: initial !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
-    grid-column: 3 !important;
-    justify-self: start !important;
-    order: initial !important;
-    display: flex !important;
-    flex-direction: column !important;
-    width: 11.5rem !important;
-    height: min(calc(72vw / var(--crop-aspect)), calc(100vh - 25rem), calc(48rem / var(--crop-aspect))) !important;
-    min-height: 0 !important;
-    max-height: min(calc(72vw / var(--crop-aspect)), calc(100vh - 25rem), calc(48rem / var(--crop-aspect))) !important;
-    margin-top: 3rem !important;
-    margin-left: 1rem !important;
-    margin-right: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] > p {
-    flex: 0 0 auto !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] > div {
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain !important;
-  }
-}
-
-@media (max-width: 639px) {
-  .v0-tool-page section[data-crop-image-workspace="true"] > div,
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-    background: transparent !important;
-    background-color: transparent !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
-    min-height: calc(100svh - 7rem) !important;
-    padding: 0.75rem 1rem calc(16rem + env(safe-area-inset-bottom)) !important;
-    scroll-padding-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
-    position: static !important;
-    z-index: auto !important;
-    background: transparent !important;
-    background-color: transparent !important;
-    padding-bottom: 0 !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-card="true"] {
-    border-color: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-frame="true"] {
-    background: rgb(241 245 249) !important;
-    background-color: rgb(241 245 249) !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
-    max-height: calc(100svh - 24rem) !important;
-    min-height: 8rem !important;
-    width: min(74vw, 18rem, calc((100svh - 24rem) * var(--crop-aspect))) !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] {
-    margin-bottom: 0 !important;
-    scroll-margin-bottom: calc(16rem + env(safe-area-inset-bottom)) !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-resize-handle="true"] {
-    background: transparent !important;
-    background-color: transparent !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
-  }
-
-  .v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-action-bar="true"] {
-    padding-left: 1rem !important;
-    padding-right: 1rem !important;
-  }
-}
 
 .v0-tool-page section[data-resize-image-workspace="true"] {
   width: calc(100% + 3rem) !important;
@@ -2402,33 +2176,10 @@ section[id$="-tool"] label {
   padding-bottom: 0.5rem !important;
 }
 
-.v0-tool-page:has(#crop-image-tool [data-workflow-step="download"]) [data-merge-result-only] {
-  display: block !important;
-}
 
-.v0-tool-page:has(#crop-image-tool [data-workflow-step="download"]) [data-tool-workspace-hero] {
-  border-bottom: 0 !important;
-  padding-bottom: 26px !important;
-}
 
-.v0-tool-page:has(#crop-image-tool [data-workflow-step="download"]) > main {
-  overflow: visible !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"]:has([data-workflow-step="download"]) {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  margin-left: calc(50% - 50vw) !important;
-  margin-right: 0 !important;
-}
 
-.v0-tool-page section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"][data-workflow-step="download"] {
-  min-height: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
-}
 
 .v0-tool-page section[data-exact-kb-workspace="true"] [data-exact-kb-preview-area="true"][data-workflow-step="download"] {
   min-height: 0 !important;
