@@ -63,6 +63,7 @@ test.describe("Crop Image desktop zoom, pan, crop, and upload stability", () => 
           zoomRight: zoom?.right,
           zoomBottom: zoom?.bottom,
           uploadedHeight: uploaded?.height,
+          uploadedBottom: uploaded?.bottom,
           uploadedLeft: uploaded?.left,
           uploadedRight: uploaded?.right,
           workspaceRight: workspace?.right,
@@ -73,7 +74,7 @@ test.describe("Crop Image desktop zoom, pan, crop, and upload stability", () => 
           actionBarTop: actionBar?.top,
         };
       });
-      expect(priorityLayout.uploadedHeight).toBeCloseTo(Math.min(672, priorityLayout.previewHeight ?? Infinity), 0);
+      expect(priorityLayout.uploadedBottom).toBeCloseTo(priorityLayout.workspaceAreaBottom ?? Infinity, 0);
       expect(priorityLayout.uploadedLeft).toBeGreaterThanOrEqual(priorityLayout.previewRight ?? Infinity);
       expect(priorityLayout.zoomRight).toBeLessThanOrEqual(priorityLayout.previewRight ?? -Infinity);
       expect(priorityLayout.zoomBottom).toBeLessThanOrEqual(priorityLayout.previewBottom ?? -Infinity);

@@ -697,13 +697,13 @@
               --crop-panel-flip-height: 2.75rem;
               --crop-panel-delete-height: 2.75rem;
               display: flex !important;
-              align-self: start !important;
+              align-self: stretch !important;
               flex-direction: column !important;
               width: var(--crop-panel-width) !important;
               max-width: var(--crop-panel-width) !important;
-              height: auto !important;
-              min-height: 0 !important;
-              max-height: 100% !important;
+              height: calc(100% + 0.5rem) !important;
+              min-height: 100% !important;
+              max-height: calc(100% + 0.5rem) !important;
               margin-bottom: 0 !important;
               overflow-x: hidden !important;
               overflow-y: auto !important;
@@ -801,7 +801,7 @@
             .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > [data-crop-image-preview-grid="true"] > [data-crop-image-thumbnail-list="true"] > [data-crop-image-panel-controls-wrap="true"] {
               display: flex !important;
               min-height: 0 !important;
-              flex: 0 0 auto !important;
+              flex: 1 1 auto !important;
               flex-direction: column !important;
             }
 
@@ -809,10 +809,10 @@
               display: flex !important;
               height: auto !important;
               min-height: 0 !important;
-              flex: 0 0 auto !important;
+              flex: 1 1 auto !important;
               flex-direction: column !important;
-              justify-content: flex-start !important;
-              gap: 0 !important;
+              justify-content: space-between !important;
+              gap: var(--crop-panel-gap) !important;
               margin-top: 0.5rem !important;
               font-family: var(--font-inter), Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
             }
@@ -827,7 +827,15 @@
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > section + section {
-              margin-top: 0.5rem !important;
+              margin-top: 0 !important;
+            }
+
+            .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > [data-crop-image-panel-slider-row="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > [data-crop-image-panel-flip-grid="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > [data-crop-image-panel-file-actions="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > [data-crop-image-device-save-notice="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > [data-crop-image-panel-tips="true"] {
+              margin-top: 0 !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-uploaded-list="true"] > [role="button"] {
