@@ -697,11 +697,11 @@
               --crop-panel-flip-height: 2.75rem;
               --crop-panel-delete-height: 2.75rem;
               display: flex !important;
-              align-self: stretch !important;
+              align-self: start !important;
               flex-direction: column !important;
               width: var(--crop-panel-width) !important;
               max-width: var(--crop-panel-width) !important;
-              height: 100% !important;
+              height: auto !important;
               min-height: 0 !important;
               max-height: 100% !important;
               margin-bottom: 0 !important;

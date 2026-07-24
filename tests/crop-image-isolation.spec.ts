@@ -74,13 +74,23 @@ for (const viewport of [
     await expect(page.getByRole("button", { name: "Crop Image Now" })).toBeVisible();
 
     const layout = await page.evaluate(() => {
-      const panel = document.querySelector<HTMLElement>('[data-crop-image-thumbnail-list="true"]')?.getBoundingClientRect();
+      const panelElement = document.querySelector<HTMLElement>('[data-crop-image-thumbnail-list="true"]');
+      const panel = panelElement?.getBoundingClientRect();
       const preview = document.querySelector<HTMLElement>('[data-crop-image-preview-area="true"]')?.getBoundingClientRect();
       const card = document.querySelector<HTMLElement>('[data-crop-image-upload-card="true"]')?.getBoundingClientRect();
       const actionBar = document.querySelector<HTMLElement>('[data-crop-image-action-bar="true"]')?.getBoundingClientRect();
+      const visiblePanelChildren = panelElement
+        ? Array.from(panelElement.children)
+          .map((child) => (child as HTMLElement).getBoundingClientRect())
+          .filter((rect) => rect.height > 0)
+        : [];
       return {
         horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         panelBottom: panel?.bottom,
+        panelContentBottom: visiblePanelChildren.length
+          ? Math.max(...visiblePanelChildren.map((rect) => rect.bottom))
+          : undefined,
+        panelPaddingBottom: panelElement ? Number.parseFloat(getComputedStyle(panelElement).paddingBottom) : undefined,
         previewBottom: preview?.bottom,
         cardTop: card?.top,
         cardBottom: card?.bottom,
@@ -88,7 +98,8 @@ for (const viewport of [
       };
     });
     expect(layout.horizontalOverflow).toBeLessThanOrEqual(0);
-    expect(Math.abs((layout.previewBottom ?? Infinity) - (layout.panelBottom ?? -Infinity))).toBeLessThanOrEqual(8.5);
+    expect(layout.panelBottom).toBeLessThanOrEqual((layout.previewBottom ?? -Infinity) + 1);
+    expect((layout.panelBottom ?? -Infinity) - (layout.panelContentBottom ?? Infinity)).toBeLessThanOrEqual((layout.panelPaddingBottom ?? 0) + 1);
     expect(layout.panelBottom).toBeLessThanOrEqual(layout.actionBarTop ?? -Infinity);
     expect(layout.cardBottom).toBeGreaterThan(layout.cardTop ?? Infinity);
   });
