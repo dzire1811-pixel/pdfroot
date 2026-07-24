@@ -80,8 +80,8 @@ test.describe("Crop Image desktop zoom, pan, crop, and upload stability", () => 
       expect(priorityLayout.zoomBottom).toBeLessThanOrEqual(priorityLayout.previewBottom ?? -Infinity);
       expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.uploadedBottom ?? Infinity)).toBeGreaterThanOrEqual(10);
       expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.uploadedBottom ?? Infinity)).toBeLessThanOrEqual(12);
-      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeGreaterThanOrEqual(10);
-      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeLessThanOrEqual(12);
+      expect((priorityLayout.previewBottom ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeGreaterThanOrEqual(10);
+      expect((priorityLayout.previewBottom ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeLessThanOrEqual(12);
       expect((priorityLayout.workspaceRight ?? -Infinity) - (priorityLayout.uploadedRight ?? Infinity)).toBeLessThanOrEqual(8.5);
       expect(priorityLayout.workspaceAreaLeft).toBeCloseTo(0, 0);
       expect(priorityLayout.workspaceAreaRight).toBeCloseTo(viewport.width, 0);

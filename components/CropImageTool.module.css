@@ -104,7 +104,7 @@
   }
 
   .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-zoom-control="true"] {
-    bottom: 0 !important;
+    bottom: 0.6875rem !important;
   }
 
   .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > [data-crop-image-preview-grid="true"] > [data-crop-image-thumbnail-list="true"] {
@@ -1011,9 +1011,14 @@
           @media (min-width: 1024px) and (max-height: 47.5rem) {
             .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-preview-area="true"] > [data-crop-image-preview-grid="true"] > [data-crop-image-thumbnail-list="true"] {
               --crop-panel-control-gap: 0.5rem;
-              --crop-panel-action-height: 3rem;
+              --crop-panel-action-height: 2.625rem;
               padding: 0.5rem 0.625rem 0.75rem !important;
               overflow-y: hidden !important;
+            }
+
+            .scope[data-crop-image-active-workspace="true"] [data-crop-image-uploaded-list="true"] > [role="button"] {
+              padding-top: 0.25rem !important;
+              padding-bottom: 0.25rem !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-side-heading="true"],
@@ -1048,22 +1053,39 @@
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] {
-              margin-top: 0.5rem !important;
+              justify-content: flex-start !important;
+              gap: 0.375rem !important;
+              margin-top: 0.375rem !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > section {
-              padding-top: 0.5rem !important;
+              padding-top: 0.375rem !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > section > h2 {
-              margin-bottom: 0.5rem !important;
+              margin-bottom: 0.375rem !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] > section + section,
 .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-slider-row="true"],
 .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-flip-grid="true"],
 .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-file-actions="true"] {
-              margin-top: 0.5rem !important;
+              margin-top: 0.375rem !important;
+            }
+
+            .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-flip="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-save-device="true"],
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-delete="true"] {
+              gap: 0.25rem !important;
+            }
+
+            .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"] svg,
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-flip="true"] svg,
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-save-device="true"] svg,
+.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-delete="true"] svg {
+              width: 1rem !important;
+              height: 1rem !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-device-save-notice="true"] {
