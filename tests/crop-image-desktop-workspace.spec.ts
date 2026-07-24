@@ -74,10 +74,14 @@ test.describe("Crop Image desktop zoom, pan, crop, and upload stability", () => 
           actionBarTop: actionBar?.top,
         };
       });
-      expect(priorityLayout.uploadedBottom).toBeCloseTo(priorityLayout.workspaceAreaBottom ?? Infinity, 0);
+      expect(priorityLayout.uploadedBottom).toBeCloseTo(priorityLayout.previewBottom ?? Infinity, 0);
       expect(priorityLayout.uploadedLeft).toBeGreaterThanOrEqual(priorityLayout.previewRight ?? Infinity);
       expect(priorityLayout.zoomRight).toBeLessThanOrEqual(priorityLayout.previewRight ?? -Infinity);
       expect(priorityLayout.zoomBottom).toBeLessThanOrEqual(priorityLayout.previewBottom ?? -Infinity);
+      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.uploadedBottom ?? Infinity)).toBeGreaterThanOrEqual(10);
+      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.uploadedBottom ?? Infinity)).toBeLessThanOrEqual(12);
+      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeGreaterThanOrEqual(10);
+      expect((priorityLayout.actionBarTop ?? -Infinity) - (priorityLayout.zoomBottom ?? Infinity)).toBeLessThanOrEqual(12);
       expect((priorityLayout.workspaceRight ?? -Infinity) - (priorityLayout.uploadedRight ?? Infinity)).toBeLessThanOrEqual(8.5);
       expect(priorityLayout.workspaceAreaLeft).toBeCloseTo(0, 0);
       expect(priorityLayout.workspaceAreaRight).toBeCloseTo(viewport.width, 0);
