@@ -1222,6 +1222,47 @@
   scrollbar-width: thin;
 }
 
+/* Light-mode inspector colors are owned by Crop Image. Keep this contract here so
+   shared utility/theme rules cannot turn the inspector copy into accent text. */
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-side-heading="true"] h1,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-controls="true"] h2,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-adjustment-heading="true"] label,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-flip-straighten="true"] label,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-tips="true"] > summary {
+  color: #111827 !important;
+}
+
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-side-heading="true"] + p,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-side-heading="true"] + p span,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-card="true"] > span:nth-child(2),
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-card="true"] > span:nth-child(2) > span,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-card="true"] input,
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-status="true"],
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-device-save-notice="true"],
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-tips="true"] > ul {
+  color: #334155 !important;
+}
+
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [aria-label="Crop image settings"],
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"] {
+  border-color: #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+}
+
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"]:hover {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #1e293b !important;
+}
+
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"][data-action="crop"][aria-pressed="true"],
+:global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"][data-action="crop"][aria-pressed="true"]:hover {
+  border-color: #fecaca !important;
+  background: #fef2f2 !important;
+  color: #ff2d2d !important;
+}
+
 :global(.dark) .scope {
   --background: #0f172a;
   --foreground: #f8fafc;

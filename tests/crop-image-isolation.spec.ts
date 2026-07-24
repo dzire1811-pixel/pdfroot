@@ -11,6 +11,52 @@ async function sampleImage() {
   };
 }
 
+async function openInspector(page: import("@playwright/test").Page, isMobile: boolean) {
+  if (isMobile) {
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(page.getByLabel("Crop image settings")).toBeVisible();
+  }
+}
+
+test("Crop isolation preserves the approved light-mode inspector palette", async ({ page, isMobile }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("pdfroot_analytics_consent", "rejected");
+    localStorage.setItem("pdfroot-theme", "light");
+    document.documentElement.classList.remove("dark");
+  });
+  await page.goto("/crop-image", { waitUntil: "networkidle" });
+  await page.locator("#crop-image-upload").setInputFiles(await sampleImage());
+  await openInspector(page, isMobile);
+
+  if (isMobile) {
+    const drawer = page.getByLabel("Crop image settings");
+    await expect(drawer).toHaveCSS("background-color", /^(rgb\(255, 255, 255\)|oklch\(1 0 0\))$/);
+    await expect(drawer.getByText("Settings", { exact: true })).toHaveCSS("color", /rgb\((15, 23, 42|17, 24, 39|51, 65, 85)\)/);
+    await expect(drawer.getByText("Flip & Straighten", { exact: true })).toHaveCSS("color", /rgb\((15, 23, 42|17, 24, 39|51, 65, 85)\)/);
+    return;
+  }
+
+  const inspector = page.locator('[data-crop-image-thumbnail-list="true"]');
+  const quickActions = inspector.locator('[data-crop-image-panel-quick-action="true"]');
+  await expect(inspector.getByRole("heading", { name: "Quick Actions" })).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(inspector.getByRole("heading", { name: "Adjustments" })).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(inspector.getByText("Flip & Straighten", { exact: true })).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(inspector.getByRole("heading", { name: "Crop Tips" })).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(inspector.getByText("Complete at least one image before saving.", { exact: true })).toHaveCSS("color", "rgb(51, 65, 85)");
+
+  await expect(quickActions.nth(1)).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(quickActions.nth(1)).toHaveCSS("color", "rgb(51, 65, 85)");
+  await expect(quickActions.nth(1).locator("svg")).toHaveCSS("color", "rgb(51, 65, 85)");
+  await quickActions.first().click();
+  await expect(quickActions.first()).toHaveAttribute("aria-pressed", "true");
+  await expect(quickActions.first()).toHaveCSS("color", "rgb(255, 45, 45)");
+
+  await expect(inspector.getByRole("heading", { name: "Crop Image Online" })).toHaveCSS("color", "rgb(17, 24, 39)");
+  await expect(inspector.getByText("Uploaded", { exact: true })).toHaveCSS("color", "rgb(51, 65, 85)");
+  await expect(inspector.locator('[data-crop-image-upload-card="true"] > span:nth-child(2) > span').first()).toHaveCSS("color", "rgb(51, 65, 85)");
+  await expect(inspector.getByText("Pending", { exact: true })).toHaveCSS("color", "rgb(51, 65, 85)");
+});
+
 for (const viewport of [
   { width: 1024, height: 600 },
   { width: 1280, height: 720 },
@@ -60,12 +106,16 @@ test("Crop isolation preserves dark mode, duplication, edit, delete, and complet
   if (isMobile) {
     await expect(page.locator('[data-crop-image-preview-area="true"]')).toHaveCSS("background-color", "rgb(15, 23, 42)");
     await page.getByRole("button", { name: "Settings" }).click();
-    await expect(page.getByLabel("Crop image settings")).toBeVisible();
+    const drawer = page.getByLabel("Crop image settings");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toHaveCSS("background-color", "rgb(17, 24, 39)");
+    await expect(drawer.getByText("Settings", { exact: true })).toHaveCSS("color", "rgb(248, 250, 252)");
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     return;
   }
 
   await expect(page.getByRole("heading", { name: "Crop Image Online" })).toHaveCSS("color", "rgb(248, 250, 252)");
+  await expect(page.locator('[data-crop-image-panel-quick-action="true"]').nth(1)).toHaveCSS("color", "rgb(203, 213, 225)");
 
   await page.getByRole("button", { name: "Duplicate original image crop-isolation.png" }).click();
   await expect(page.locator('[data-crop-image-upload-card="true"]')).toHaveCount(2);
