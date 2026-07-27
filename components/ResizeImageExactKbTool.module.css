@@ -1,0 +1,93 @@
+.resultStage {
+  overflow: visible !important;
+}
+
+@media (max-width: 1023px) {
+  .workspacePreview.workspacePreview {
+    min-height: calc(100vh - 9rem);
+    min-height: calc(100dvh - 9rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .workspaceStage.workspaceStage {
+    box-sizing: border-box !important;
+    height: calc(100dvh - var(--exact-kb-workspace-top, 0px) - var(--exact-kb-action-bar-height, 0px)) !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - var(--exact-kb-workspace-top, 0px) - var(--exact-kb-action-bar-height, 0px)) !important;
+    overflow: hidden !important;
+  }
+
+  .workspaceStage.workspaceStage.workspaceStage .workspaceShell.workspaceShell.workspaceShell,
+  .workspaceStage.workspaceStage.workspaceStage .workspacePreview.workspacePreview.workspacePreview {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .workspaceStage.workspaceStage.workspaceStage .workspacePreview.workspacePreview.workspacePreview {
+    container-type: size;
+  }
+
+  .workspaceStage.workspaceStage .workspaceGrid.workspaceGrid {
+    box-sizing: border-box !important;
+    width: min(100%, 60rem) !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    margin: 0 auto !important;
+    align-content: start !important;
+    padding-bottom: 0 !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .workspaceStage.workspaceStage .singleImageGrid.singleImageGrid {
+    place-content: center !important;
+    overflow-y: hidden !important;
+  }
+
+  .workspaceStage.workspaceStage .singleImageGrid.singleImageGrid > [data-exact-kb-image-card="true"] {
+    width: min(14rem, max(7.5rem, calc((100cqh - 6.125rem) * 0.75 + 1.5rem))) !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 100% !important;
+    justify-self: center !important;
+  }
+
+  .workspaceStage.workspaceStage .multipleImageGrid.multipleImageGrid {
+    overflow-y: auto !important;
+  }
+}
+
+.resultStage.resultStage .resultHeading.resultHeading {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  scroll-margin-top: calc(var(--exact-kb-result-header-height, 4rem) + 1.125rem) !important;
+  transform: none !important;
+}
+
+.resultStage.resultStage .resultBadgeRow.resultBadgeRow {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
+  overflow: visible !important;
+  transform: none !important;
+}
+
+/* Preserve the shared upload badge's pill radius inside the result tool shell. */
+.resultStage.resultStage.resultStage [data-exact-kb-success-badge="true"][data-exact-kb-success-badge="true"] {
+  border-radius: 9999px !important;
+}

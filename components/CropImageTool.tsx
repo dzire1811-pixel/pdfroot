@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { CSSProperties, ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, ChevronDown, Copy, Crop, Download, FileArchive, FlipHorizontal2, FlipVertical2, ImageUp, Info, Minus, Pencil, Plus, RefreshCw, RotateCcw, RotateCw, Save, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, Copy, Crop, Download, FileArchive, FlipHorizontal2, FlipVertical2, ImageUp, Minus, Pencil, Plus, RefreshCw, RotateCcw, RotateCw, Save, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { imageTools } from "@/lib/tools";
@@ -23,6 +23,36 @@ type CropBox = {
   height: number;
 };
 
+type ImageAdjustments = {
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  highlights: number;
+  shadows: number;
+  autoAdjusted: boolean;
+};
+
+type ImageAdjustmentKey = Exclude<keyof ImageAdjustments, "autoAdjusted">;
+
+const imageAdjustmentFields: Array<{ key: ImageAdjustmentKey; label: string }> = [
+  { key: "brightness", label: "Brightness" },
+  { key: "contrast", label: "Contrast" },
+  { key: "saturation", label: "Saturation" },
+  { key: "highlights", label: "Highlights" },
+  { key: "shadows", label: "Shadows" },
+];
+
+function createDefaultImageAdjustments(): ImageAdjustments {
+  return {
+    brightness: 0,
+    contrast: 0,
+    saturation: 0,
+    highlights: 0,
+    shadows: 0,
+    autoAdjusted: false,
+  };
+}
+
 type DragState = {
   mode: DragMode;
   startX: number;
@@ -40,6 +70,7 @@ type PanState = {
 
 type SelectedImage = {
   id: string;
+  copyGroupId: string;
   file: File;
   outputFileName: string;
   previewUrl: string;
@@ -56,6 +87,7 @@ type SelectedImage = {
   zoom: number;
   panX: number;
   panY: number;
+  adjustments: ImageAdjustments;
 };
 
 type CropResult = {
@@ -68,6 +100,16 @@ type CropResult = {
   width: number;
   height: number;
 };
+
+let imageIdSequence = 0;
+
+function createImageId(kind: "upload" | "copy") {
+  imageIdSequence += 1;
+  const randomPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+  return `${kind}-${Date.now()}-${imageIdSequence}-${randomPart}`;
+}
 
 type SaveFileHandle = {
   createWritable: () => Promise<{
@@ -99,6 +141,112 @@ function formatFineRotation(angle: number) {
 function clamp(value: number, min: number, max: number) {
   if (Number.isNaN(value)) return min;
   return Math.min(Math.max(value, min), max);
+}
+
+function hasImageAdjustments(adjustments: ImageAdjustments) {
+  return imageAdjustmentFields.some(({ key }) => adjustments[key] !== 0);
+}
+
+function applyImageAdjustments(canvas: HTMLCanvasElement, adjustments: ImageAdjustments) {
+  if (!hasImageAdjustments(adjustments)) return canvas;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    throw new Error("Your browser does not support image adjustments.");
+  }
+
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  const brightnessOffset = adjustments.brightness * 2.15;
+  const contrastFactor = 1 + adjustments.contrast / 100;
+  const saturationFactor = 1 + adjustments.saturation / 100;
+
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] === 0) continue;
+
+    let red = (pixels[index] - 128) * contrastFactor + 128 + brightnessOffset;
+    let green = (pixels[index + 1] - 128) * contrastFactor + 128 + brightnessOffset;
+    let blue = (pixels[index + 2] - 128) * contrastFactor + 128 + brightnessOffset;
+    const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+
+    red = luminance + (red - luminance) * saturationFactor;
+    green = luminance + (green - luminance) * saturationFactor;
+    blue = luminance + (blue - luminance) * saturationFactor;
+
+    const normalizedLuminance = clamp(luminance / 255, 0, 1);
+    const shadowWeight = (1 - normalizedLuminance) ** 2;
+    const highlightWeight = normalizedLuminance ** 2;
+    const tonalOffset = adjustments.shadows * 1.05 * shadowWeight + adjustments.highlights * 1.05 * highlightWeight;
+
+    pixels[index] = clamp(Math.round(red + tonalOffset), 0, 255);
+    pixels[index + 1] = clamp(Math.round(green + tonalOffset), 0, 255);
+    pixels[index + 2] = clamp(Math.round(blue + tonalOffset), 0, 255);
+  }
+
+  context.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+function imageToPreviewCanvas(image: HTMLImageElement, maxDimension: number) {
+  const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Your browser does not support image preview adjustments.");
+  }
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+async function createAdjustedPreviewUrl(file: File, adjustments: ImageAdjustments) {
+  const image = await loadImage(file);
+  const canvas = applyImageAdjustments(imageToPreviewCanvas(image, 900), adjustments);
+  const blob = await canvasToBlob(canvas, outputMimeType(file));
+  return URL.createObjectURL(blob);
+}
+
+async function calculateAutoAdjustments(file: File): Promise<ImageAdjustments> {
+  const image = await loadImage(file);
+  const canvas = imageToPreviewCanvas(image, 420);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    throw new Error("Your browser does not support automatic image adjustment.");
+  }
+
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const luminances: number[] = [];
+  let saturationTotal = 0;
+
+  for (let index = 0; index < pixels.length; index += 16) {
+    if (pixels[index + 3] === 0) continue;
+    const red = pixels[index] / 255;
+    const green = pixels[index + 1] / 255;
+    const blue = pixels[index + 2] / 255;
+    const maximum = Math.max(red, green, blue);
+    const minimum = Math.min(red, green, blue);
+    luminances.push(0.2126 * red + 0.7152 * green + 0.0722 * blue);
+    saturationTotal += maximum === 0 ? 0 : (maximum - minimum) / maximum;
+  }
+
+  if (!luminances.length) return { ...createDefaultImageAdjustments(), autoAdjusted: true };
+  luminances.sort((left, right) => left - right);
+  const mean = luminances.reduce((total, value) => total + value, 0) / luminances.length;
+  const low = luminances[Math.floor((luminances.length - 1) * 0.1)];
+  const high = luminances[Math.floor((luminances.length - 1) * 0.9)];
+  const dynamicRange = high - low;
+  const averageSaturation = saturationTotal / luminances.length;
+
+  return {
+    brightness: clamp(Math.round((0.46 - mean) * 48), -16, 16),
+    contrast: clamp(Math.round((0.52 - dynamicRange) * 34), 0, 16),
+    saturation: averageSaturation < 0.18 ? clamp(Math.round((0.18 - averageSaturation) * 38), 0, 7) : 0,
+    highlights: high > 0.88 ? clamp(-Math.round((high - 0.88) * 52 + 3), -14, 0) : 0,
+    shadows: low < 0.2 ? clamp(Math.round((0.2 - low) * 62 + 4), 0, 16) : 0,
+    autoAdjusted: true,
+  };
 }
 
 function isSupportedImage(file: File) {
@@ -416,7 +564,10 @@ async function cropOneImage(
     throw new Error("Please select a crop area first.");
   }
   const mimeType = outputMimeType(image.file);
-  const rotatedSource = imageToRotatedCanvas(loadedImage, image.rotation, mimeType);
+  const rotatedSource = applyImageAdjustments(
+    imageToRotatedCanvas(loadedImage, image.rotation, mimeType),
+    image.adjustments,
+  );
   const rotatedCropBox = originalCropBoxToRotated(cropBox, image.dimensions, image.rotation);
   const sx = clamp(Math.round(rotatedCropBox.x), 0, rotatedSource.width - 1);
   const sy = clamp(Math.round(rotatedCropBox.y), 0, rotatedSource.height - 1);
@@ -508,6 +659,8 @@ export function CropImageTool() {
   const previousOverflowAnchorRef = useRef<string | null>(null);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resultsRef = useRef<CropResult[]>([]);
+  const cropInProgressRef = useRef(false);
+  const adjustedPreviewUrlRef = useRef<string | null>(null);
   const zipUrlRef = useRef<string | null>(null);
   const deviceSaveNoticeTimeoutRef = useRef<number | null>(null);
   const [stage, setStage] = useState<Stage>("upload");
@@ -534,6 +687,8 @@ export function CropImageTool() {
   const [outputNameDraft, setOutputNameDraft] = useState("");
   const [isSavingToDevice, setIsSavingToDevice] = useState(false);
   const [deviceSaveNotice, setDeviceSaveNotice] = useState<string | null>(null);
+  const [adjustedPreview, setAdjustedPreview] = useState<{ imageId: string; url: string } | null>(null);
+  const [autoAdjustingId, setAutoAdjustingId] = useState<string | null>(null);
 
   const activeImage = selectedImages.find((image) => image.id === activeId) ?? selectedImages[0];
   const activePreviewDimensions = activeImage ? transformedDimensions(activeImage.dimensions, activeImage.rotation, activeImage.fineRotation) : null;
@@ -612,11 +767,6 @@ export function CropImageTool() {
       window.clearTimeout(deviceSaveNoticeTimeoutRef.current);
       deviceSaveNoticeTimeoutRef.current = null;
     }
-  }
-
-  function resetCompletedCropsForOutputChange() {
-    if (!results.length && !zipUrl) return;
-    clearProcessedOutput();
   }
 
   function resetTool() {
@@ -722,7 +872,7 @@ export function CropImageTool() {
     const completedResults = results.filter((result) => result.blob.size > 0);
     if (!completedResults.length || isSavingToDevice) return;
 
-    const skippedCount = Math.max(0, selectedImages.length - completedResults.length);
+    const skippedCount = selectedImages.length;
     const pickerWindow = window as typeof window & {
       showDirectoryPicker?: () => Promise<SaveDirectoryHandle>;
     };
@@ -815,8 +965,8 @@ export function CropImageTool() {
       deviceSaveNoticeTimeoutRef.current = null;
     }
 
-    const duplicateId = `${sourceImage.id}-duplicate-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const duplicateFileName = uniqueDuplicateSourceName(sourceImage.file);
+    const duplicateId = createImageId("copy");
+    const duplicateFileName = uniqueDuplicateSourceName(sourceImage.file, selectedImages);
     const originalFile = new File(
       [sourceImage.file.slice(0, sourceImage.file.size, sourceImage.file.type)],
       duplicateFileName,
@@ -827,22 +977,25 @@ export function CropImageTool() {
     );
     const duplicate: SelectedImage = {
       id: duplicateId,
+      copyGroupId: sourceImage.copyGroupId,
       file: originalFile,
       outputFileName: uniqueOutputFileName(
         defaultOutputFileName(originalFile, selectedImages.length, selectedImages.length + 1),
         duplicateId,
+        selectedImages,
       ),
       previewUrl: URL.createObjectURL(originalFile),
       dimensions: { ...sourceImage.dimensions },
-      cropBox: null,
-      cropModeEnabled: false,
-      rotation: 0,
-      fineRotation: 0,
-      flipHorizontal: false,
-      flipVertical: false,
-      zoom: 1,
-      panX: 0,
-      panY: 0,
+      cropBox: sourceImage.cropBox ? { ...sourceImage.cropBox } : null,
+      cropModeEnabled: sourceImage.cropModeEnabled,
+      rotation: sourceImage.rotation,
+      fineRotation: sourceImage.fineRotation,
+      flipHorizontal: sourceImage.flipHorizontal,
+      flipVertical: sourceImage.flipVertical,
+      zoom: sourceImage.zoom,
+      panX: sourceImage.panX,
+      panY: sourceImage.panY,
+      adjustments: { ...sourceImage.adjustments },
     };
 
     setSelectedImages((current) => {
@@ -851,13 +1004,18 @@ export function CropImageTool() {
         URL.revokeObjectURL(duplicate.previewUrl);
         return current;
       }
+      const copyGroupId = current[sourceIndex].copyGroupId;
+      let insertionIndex = sourceIndex + 1;
+      while (insertionIndex < current.length && current[insertionIndex].copyGroupId === copyGroupId) {
+        insertionIndex += 1;
+      }
       const next = [...current];
-      next.splice(sourceIndex + 1, 0, duplicate);
+      next.splice(insertionIndex, 0, duplicate);
       return next;
     });
     setDragState(null);
     setPanState(null);
-    setActiveId(duplicateId);
+    setActiveId(sourceImage.id);
   }
 
   function commitOutputName(image: SelectedImage) {
@@ -1024,8 +1182,74 @@ export function CropImageTool() {
     );
   }
 
+  function updateActiveImageAdjustment(key: ImageAdjustmentKey, value: number) {
+    if (!activeImage) return;
+    const imageId = activeImage.id;
+    const nextValue = clamp(Math.round(value), -100, 100);
+    setError(null);
+    setSelectedImages((current) =>
+      current.map((image) =>
+        image.id === imageId
+          ? {
+              ...image,
+              adjustments: {
+                ...image.adjustments,
+                [key]: nextValue,
+                autoAdjusted: false,
+              },
+            }
+          : image,
+      ),
+    );
+  }
+
+  function resetActiveImageAdjustments() {
+    if (!activeImage) return;
+    const imageId = activeImage.id;
+    setError(null);
+    setSelectedImages((current) =>
+      current.map((image) =>
+        image.id === imageId
+          ? { ...image, adjustments: createDefaultImageAdjustments() }
+          : image,
+      ),
+    );
+  }
+
+  async function autoAdjustActiveImage() {
+    if (!activeImage || autoAdjustingId) return;
+    const imageId = activeImage.id;
+    const file = activeImage.file;
+    setError(null);
+    setAutoAdjustingId(imageId);
+
+    try {
+      const adjustments = await calculateAutoAdjustments(file);
+      setSelectedImages((current) =>
+        current.map((image) =>
+          image.id === imageId
+            ? { ...image, adjustments: { ...adjustments } }
+            : image,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not automatically adjust this image.");
+    } finally {
+      setAutoAdjustingId((current) => (current === imageId ? null : current));
+    }
+  }
+
   function fitActiveImageToPreview() {
     if (!activeImage) return;
+    const frame = cropFrameRef.current;
+    if (frame) {
+      const safeFrameSize = { width: frame.clientWidth, height: frame.clientHeight };
+      setPreviewFrameSize((current) =>
+        current.width === safeFrameSize.width && current.height === safeFrameSize.height
+          ? current
+          : safeFrameSize,
+      );
+    }
     setPanState(null);
     setSelectedImages((current) =>
       current.map((image) => (image.id === activeImage.id ? { ...image, zoom: 1, panX: 0, panY: 0 } : image)),
@@ -1049,16 +1273,10 @@ export function CropImageTool() {
     setActiveId(id);
   }
 
-  function chooseNextUncropped(currentId: string, nextResults = results) {
-    const completedIds = new Set(nextResults.map((result) => result.id));
-    const currentIndex = selectedImages.findIndex((image) => image.id === currentId);
-    const ordered = [...selectedImages.slice(currentIndex + 1), ...selectedImages.slice(0, currentIndex + 1)];
-    return ordered.find((image) => !completedIds.has(image.id)) ?? null;
-  }
-
   async function moveToFinalDownload(nextResults: CropResult[]) {
     if (zipUrl) URL.revokeObjectURL(zipUrl);
     const finalResults = ensureUniqueResultFileNames(nextResults);
+    resultsRef.current = finalResults;
     setResults(finalResults);
 
     if (finalResults.length > 1) {
@@ -1155,8 +1373,10 @@ export function CropImageTool() {
       const loaded = await Promise.all(
         files.map(async (file, index) => {
           const image = await loadImage(file);
+          const id = createImageId("upload");
           return {
-            id: `${file.name}-${file.lastModified}-${file.size}-${Date.now()}-${index}`,
+            id,
+            copyGroupId: id,
             file,
             outputFileName: defaultOutputFileName(file, existingImageCount + index, totalImageCount),
             previewUrl: URL.createObjectURL(file),
@@ -1170,6 +1390,7 @@ export function CropImageTool() {
             zoom: 1,
             panX: 0,
             panY: 0,
+            adjustments: createDefaultImageAdjustments(),
           };
         }),
       );
@@ -1419,6 +1640,8 @@ export function CropImageTool() {
   }
 
   async function cropActiveImage() {
+    if (cropInProgressRef.current) return;
+
     if (!activeImage) {
       setError("Please upload an image first.");
       setStage("upload");
@@ -1445,6 +1668,7 @@ export function CropImageTool() {
       return;
     }
 
+    cropInProgressRef.current = true;
     setStage("processing");
     setError(null);
 
@@ -1456,24 +1680,41 @@ export function CropImageTool() {
         outputHeight,
         exactKb,
       });
-      const replaced = results.find((result) => result.id === cropped.id);
+      const currentResults = resultsRef.current;
+      const replaced = currentResults.find((result) => result.id === cropped.id);
       if (replaced) URL.revokeObjectURL(replaced.url);
-      const nextResults = [...results.filter((result) => result.id !== cropped.id), cropped];
+      const nextResults = [...currentResults.filter((result) => result.id !== cropped.id), cropped];
+      const activeQueue = selectedImagesRef.current;
+      const completedIndex = activeQueue.findIndex((image) => image.id === activeImage.id);
+      if (completedIndex < 0) {
+        throw new Error("The selected image is no longer in the active crop queue.");
+      }
+      const remainingImages = activeQueue.filter((image) => image.id !== activeImage.id);
+      const nextImage = remainingImages[completedIndex] ?? remainingImages[completedIndex - 1] ?? null;
 
+      resultsRef.current = nextResults;
       setResults(nextResults);
+      selectedImagesRef.current = remainingImages;
+      setSelectedImages(remainingImages);
+      URL.revokeObjectURL(activeImage.previewUrl);
+      setEditingOutputId((current) => (current === activeImage.id ? null : current));
+      setDragState(null);
+      setPanState(null);
 
-      if (nextResults.length === selectedImages.length) {
+      if (!remainingImages.length) {
+        setActiveId(null);
         await moveToFinalDownload(nextResults);
         return;
       }
 
-      const nextImage = chooseNextUncropped(activeImage.id, nextResults);
-      setActiveId(nextImage?.id ?? activeImage.id);
+      setActiveId(nextImage?.id ?? null);
       setStage("workspace");
       scrollCropWorkflowToTop("smooth");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not crop this image.");
       setStage("workspace");
+    } finally {
+      cropInProgressRef.current = false;
     }
   }
 
@@ -1486,6 +1727,50 @@ export function CropImageTool() {
   }, [results]);
 
   useEffect(() => {
+    const imageId = activeImage?.id;
+    const adjustments = activeImage?.adjustments;
+    let cancelled = false;
+    let previewTimer: number | null = null;
+
+    if (!imageId || !adjustments || !hasImageAdjustments(adjustments)) {
+      if (adjustedPreviewUrlRef.current) {
+        URL.revokeObjectURL(adjustedPreviewUrlRef.current);
+        adjustedPreviewUrlRef.current = null;
+      }
+      setAdjustedPreview(null);
+      return;
+    }
+
+    previewTimer = window.setTimeout(() => {
+      const image = selectedImagesRef.current.find((item) => item.id === imageId);
+      if (!image) return;
+
+      void createAdjustedPreviewUrl(image.file, image.adjustments)
+        .then((url) => {
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          if (adjustedPreviewUrlRef.current) {
+            URL.revokeObjectURL(adjustedPreviewUrlRef.current);
+          }
+          adjustedPreviewUrlRef.current = url;
+          setAdjustedPreview({ imageId, url });
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : "Could not update the adjusted image preview.");
+          }
+        });
+    }, 80);
+
+    return () => {
+      cancelled = true;
+      if (previewTimer !== null) window.clearTimeout(previewTimer);
+    };
+  }, [activeImage?.adjustments, activeImage?.id]);
+
+  useEffect(() => {
     zipUrlRef.current = zipUrl;
   }, [zipUrl]);
 
@@ -1496,6 +1781,7 @@ export function CropImageTool() {
       }
       selectedImagesRef.current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
       resultsRef.current.forEach((result) => URL.revokeObjectURL(result.url));
+      if (adjustedPreviewUrlRef.current) URL.revokeObjectURL(adjustedPreviewUrlRef.current);
       if (zipUrlRef.current) URL.revokeObjectURL(zipUrlRef.current);
       if (previousOverflowAnchorRef.current !== null) {
         document.documentElement.style.overflowAnchor = previousOverflowAnchorRef.current;
@@ -1831,11 +2117,11 @@ export function CropImageTool() {
         </span>
         <span className="sr-only">Drag & Drop Image</span>
         <span className="sr-only">Upload JPG, JPEG, PNG, or WEBP and crop freely in your browser.</span>
-        <span data-crop-image-upload-button="true" className="mt-4 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
+        <span data-crop-image-upload-button="true" className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
           CHOOSE FILES
           <UploadCloud className="h-5 w-5" aria-hidden="true" />
         </span>
-        <span data-crop-image-upload-drop-copy="true" className="mt-3 text-sm font-semibold text-white/85">or drop files here</span>
+        <span data-crop-image-upload-drop-copy="true" className="mt-4 text-base font-medium leading-[1.4] text-white">or drop files here</span>
       </label>
     );
   }
@@ -1891,7 +2177,6 @@ export function CropImageTool() {
               type="button"
               onClick={() => {
                 setOutputSizeMode(mode);
-                resetCompletedCropsForOutputChange();
                 setError(null);
               }}
               className={`h-10 rounded-lg px-3 text-xs font-black transition ${outputSizeMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
@@ -1907,7 +2192,6 @@ export function CropImageTool() {
               type="button"
               onClick={() => {
                 setOutputUnit(unit);
-                resetCompletedCropsForOutputChange();
                 setError(null);
               }}
               className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black transition ${outputUnit === unit ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}
@@ -1928,7 +2212,6 @@ export function CropImageTool() {
           disabled={outputSizeMode === "free"}
           onChange={(event) => {
             setOutputWidth(event.target.value);
-            resetCompletedCropsForOutputChange();
             setError(null);
           }}
           className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
@@ -1945,7 +2228,6 @@ export function CropImageTool() {
           disabled={outputSizeMode === "free"}
           onChange={(event) => {
             setOutputHeight(event.target.value);
-            resetCompletedCropsForOutputChange();
             setError(null);
           }}
           className="h-12 w-24 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
@@ -1961,7 +2243,6 @@ export function CropImageTool() {
           value={exactKb}
           onChange={(event) => {
             setExactKb(event.target.value);
-            resetCompletedCropsForOutputChange();
             setError(null);
           }}
           className="h-12 w-28 shrink-0 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100"
@@ -2220,18 +2501,111 @@ export function CropImageTool() {
     );
   }
 
+  function renderImageAdjustmentControls(idPrefix: string, touchFriendly = false, embeddedHeading = false, expanded = false) {
+    if (!activeImage) return null;
+    const isAutoAdjusting = autoAdjustingId === activeImage.id;
+
+    const adjustmentBody = (
+      <div
+        data-crop-image-adjustments-body="true"
+        className={embeddedHeading ? "mb-3 mt-1 rounded-lg border border-slate-100 bg-slate-50/70 p-2" : "mt-3 border-t border-slate-100 pt-3"}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => void autoAdjustActiveImage()}
+            disabled={isAutoAdjusting}
+            aria-label="Auto Adjust image"
+            aria-pressed={activeImage.adjustments.autoAdjusted}
+            data-crop-image-auto-adjust="true"
+            className={`${touchFriendly ? "h-10" : "h-8"} rounded-lg border px-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+              activeImage.adjustments.autoAdjusted
+                ? "border-red-200 bg-red-50 text-[#FF2D2D]"
+                : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:text-[#FF2D2D]"
+            }`}
+          >
+            {isAutoAdjusting ? "Adjusting..." : "Auto Adjust"}
+          </button>
+          <button
+            type="button"
+            onClick={resetActiveImageAdjustments}
+            aria-label="Reset image adjustments"
+            data-crop-image-adjustments-reset="true"
+            className={`${touchFriendly ? "h-10" : "h-8"} rounded-lg border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]`}
+          >
+            Reset
+          </button>
+        </div>
+        <div data-crop-image-adjustment-list="true" className="mt-3 space-y-2">
+          {imageAdjustmentFields.map(({ key, label }) => {
+            const controlId = `${idPrefix}-${key}`;
+            const value = activeImage.adjustments[key];
+            return (
+              <div key={key} data-crop-image-adjustment-row={key}>
+                <div className="mb-0.5 flex items-center justify-between gap-3">
+                  <label htmlFor={controlId} className="text-[0.68rem] font-medium text-slate-600">{label}</label>
+                  <output htmlFor={controlId} className="text-[0.68rem] font-semibold tabular-nums text-slate-500">
+                    {value > 0 ? `+${value}` : value}
+                  </output>
+                </div>
+                <input
+                  id={controlId}
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={value}
+                  onChange={(event) => updateActiveImageAdjustment(key, Number(event.target.value))}
+                  aria-label={`${label} adjustment`}
+                  data-crop-image-adjustment={key}
+                  className={`${touchFriendly ? "h-8" : "h-5"} w-full cursor-pointer accent-[#FF2D2D]`}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    if (expanded) {
+      return (
+        <div data-crop-image-adjustments="true" data-crop-image-panel-adjustments-expanded="true" className="w-full">
+          <div data-crop-image-adjustments-heading="true" className="flex items-center gap-2">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-[#FF2D2D]" aria-hidden="true" />
+            <h2 className="text-xs font-normal text-black">Adjust Image</h2>
+          </div>
+          {adjustmentBody}
+        </div>
+      );
+    }
+
+    return (
+      <details
+        data-crop-image-adjustments="true"
+        className={embeddedHeading ? "group" : "group rounded-xl border border-slate-200 bg-white px-3 py-2"}
+      >
+        <summary className={`flex cursor-pointer list-none items-center gap-2 text-slate-800 marker:content-none ${embeddedHeading ? "mb-2 min-h-4" : ""}`}>
+          <SlidersHorizontal className={`${embeddedHeading ? "h-3.5 w-3.5" : "h-4 w-4"} text-[#FF2D2D]`} aria-hidden="true" />
+          <span className={embeddedHeading ? "text-[0.68rem] font-semibold" : "text-xs font-semibold"}>Adjust Image</span>
+          <ChevronDown className="ml-auto h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        {adjustmentBody}
+      </details>
+    );
+  }
+
   function renderImageToolsPanelControls() {
     if (!activeImage) return null;
     const sliderId = "crop-image-panel-fine-rotation";
     const completedCount = results.length;
     const saveToDeviceMessage = deviceSaveNotice ?? (completedCount === 0 ? "Complete at least one image before saving." : null);
     const saveToDeviceSucceeded = Boolean(deviceSaveNotice && (deviceSaveNotice.includes("saved to") || deviceSaveNotice.includes("downloaded as")));
-    const quickActionClass = "flex h-20 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-1.5 text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98]";
+    const quickActionClass = "relative isolate flex h-20 min-w-0 flex-col items-center justify-center gap-1.5 overflow-visible rounded-xl border border-slate-200 bg-white px-1.5 text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98]";
     const precisionButtonClass = "grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]";
 
     return (
       <div data-crop-image-panel-controls="true" className="mt-3 flex min-h-0 flex-1 flex-col">
-        <section className="border-t border-slate-200 pt-3">
+        <section data-crop-image-panel-quick-section="true" className="border-t border-slate-200 pt-3">
           <h2 className="mb-3 text-[0.68rem] font-semibold tracking-tight text-slate-700">Quick Actions</h2>
           <div data-crop-image-panel-quick-grid="true" className="grid grid-cols-2 gap-3">
             <button
@@ -2242,28 +2616,59 @@ export function CropImageTool() {
               className={`${quickActionClass} ${activeImage.cropModeEnabled ? "border-red-200 bg-red-50 text-[#FF2D2D]" : ""}`}
               aria-pressed={activeImage.cropModeEnabled}
               aria-label="Crop area"
-              title="Crop area"
+              aria-describedby="crop-image-quick-tooltip-crop"
             >
               <Crop className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Crop
+              <span data-crop-image-quick-label="true">Crop</span>
+              <span id="crop-image-quick-tooltip-crop" role="tooltip" data-crop-image-quick-tooltip="true">Crop</span>
             </button>
-            <button type="button" onClick={() => rotateActiveImage(-90)} data-crop-image-panel-quick-action="true" className={quickActionClass} aria-label="Rotate left" title="Rotate left">
+            <button
+              type="button"
+              onClick={() => rotateActiveImage(-90)}
+              data-crop-image-panel-quick-action="true"
+              data-action="rotate-left"
+              className={quickActionClass}
+              aria-label="Rotate left"
+              aria-describedby="crop-image-quick-tooltip-rotate-left"
+            >
               <RotateCcw className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Rotate Left
+              <span data-crop-image-quick-label="true">Rotate Left</span>
+              <span id="crop-image-quick-tooltip-rotate-left" role="tooltip" data-crop-image-quick-tooltip="true">Rotate Left</span>
             </button>
-            <button type="button" onClick={() => rotateActiveImage(90)} data-crop-image-panel-quick-action="true" className={quickActionClass} aria-label="Rotate right" title="Rotate right">
+            <button
+              type="button"
+              onClick={() => rotateActiveImage(90)}
+              data-crop-image-panel-quick-action="true"
+              data-action="rotate-right"
+              className={quickActionClass}
+              aria-label="Rotate right"
+              aria-describedby="crop-image-quick-tooltip-rotate-right"
+            >
               <RotateCw className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Rotate Right
+              <span data-crop-image-quick-label="true">Rotate Right</span>
+              <span id="crop-image-quick-tooltip-rotate-right" role="tooltip" data-crop-image-quick-tooltip="true">Rotate Right</span>
             </button>
-            <button type="button" onClick={resetActiveImage} data-crop-image-panel-quick-action="true" className={quickActionClass} aria-label="Reset image edits" title="Reset">
+            <button
+              type="button"
+              onClick={resetActiveImage}
+              data-crop-image-panel-quick-action="true"
+              data-action="reset"
+              className={quickActionClass}
+              aria-label="Reset image edits"
+              aria-describedby="crop-image-quick-tooltip-reset"
+            >
               <RefreshCw className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Reset
+              <span data-crop-image-quick-label="true">Reset</span>
+              <span id="crop-image-quick-tooltip-reset" role="tooltip" data-crop-image-quick-tooltip="true">Reset</span>
             </button>
           </div>
         </section>
 
         <section data-crop-image-panel-adjustment-heading="true" className="mt-4 border-t border-slate-200 pt-3">
-          <h2 className="mb-2 text-[0.68rem] font-semibold tracking-tight text-slate-700">Adjustments</h2>
+          {renderImageAdjustmentControls("crop-image-panel-adjustment", false, true, true)}
+        </section>
+
+        <section data-crop-image-panel-straighten="true">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor={sliderId} className="text-xs font-medium text-slate-700">Flip &amp; Straighten</label>
             <span className="flex items-center gap-1">
@@ -2273,9 +2678,8 @@ export function CropImageTool() {
               </button>
             </span>
           </div>
-        </section>
 
-        <div data-crop-image-panel-slider-row="true" className="mt-2 flex items-center gap-3">
+          <div data-crop-image-panel-slider-row="true" className="mt-2 flex items-center gap-3">
             <button type="button" onClick={() => updateFineRotation(activeImage.fineRotation - 0.1)} data-crop-image-panel-precision="true" className={precisionButtonClass} aria-label="Decrease fine rotation by 0.1 degrees" title="Rotate -0.1°">
               <Minus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -2295,18 +2699,23 @@ export function CropImageTool() {
             <button type="button" onClick={() => updateFineRotation(activeImage.fineRotation + 0.1)} data-crop-image-panel-precision="true" className={precisionButtonClass} aria-label="Increase fine rotation by 0.1 degrees" title="Rotate +0.1°">
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-        </div>
-        <div data-crop-image-panel-flip-grid="true" className="mt-3 grid grid-cols-2 gap-3">
+          </div>
+        </section>
+        <div data-crop-image-panel-lower-actions="true">
+          <div data-crop-image-panel-flip-grid="true" className="mt-3 grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => toggleActiveFlip("horizontal")}
               data-crop-image-panel-flip="true"
               aria-pressed={activeImage.flipHorizontal}
               aria-label="Flip Horizontal"
+              aria-describedby="crop-image-panel-tooltip-flip-horizontal"
+              title="Flip Horizontal"
               className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border text-[13px] font-medium shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition ${activeImage.flipHorizontal ? "border-red-200 bg-red-50 font-semibold text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"}`}
             >
               <FlipHorizontal2 className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Horizontal
+              <span data-crop-image-secondary-action-label="true">Horizontal</span>
+              <span id="crop-image-panel-tooltip-flip-horizontal" role="tooltip" data-crop-image-secondary-action-tooltip="true">Flip Horizontal</span>
             </button>
             <button
               type="button"
@@ -2314,37 +2723,47 @@ export function CropImageTool() {
               data-crop-image-panel-flip="true"
               aria-pressed={activeImage.flipVertical}
               aria-label="Flip Vertical"
+              aria-describedby="crop-image-panel-tooltip-flip-vertical"
+              title="Flip Vertical"
               className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border text-[13px] font-medium shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition ${activeImage.flipVertical ? "border-red-200 bg-red-50 font-semibold text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]"}`}
             >
               <FlipVertical2 className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-              Vertical
+              <span data-crop-image-secondary-action-label="true">Vertical</span>
+              <span id="crop-image-panel-tooltip-flip-vertical" role="tooltip" data-crop-image-secondary-action-tooltip="true">Flip Vertical</span>
             </button>
-        </div>
+          </div>
 
-        <div data-crop-image-panel-file-actions="true" className="mt-3 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => void saveCompletedToDevice()}
-            disabled={completedCount === 0 || isSavingToDevice}
-            data-crop-image-panel-save-device="true"
-            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-[#FF2D2D] hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
-            aria-label={`Save ${completedCount} completed image${completedCount === 1 ? "" : "s"} to device`}
-            title="Save completed images to device"
-          >
-            <Save className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-            {isSavingToDevice ? "Saving..." : `Save ${completedCount} ${completedCount === 1 ? "Image" : "Images"}`}
-          </button>
-          <button
-            type="button"
-            onClick={() => removeImage(activeImage.id)}
-            data-crop-image-panel-delete="true"
-            className="inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white text-[13px] font-semibold text-[#FF2D2D] shadow-[0_2px_6px_rgba(255,45,45,0.06)] transition hover:border-[#FF2D2D] hover:bg-red-50 active:scale-[0.98]"
-            aria-label={`Delete ${activeImage.file.name}`}
-            title="Delete"
-          >
-            <Trash2 className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
-            Delete
-          </button>
+          <div data-crop-image-panel-file-actions="true" className="mt-3 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => void saveCompletedToDevice()}
+              disabled={completedCount === 0 || isSavingToDevice}
+              data-crop-image-panel-save-device="true"
+              className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-[#FF2D2D] hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
+              aria-label="Save Completed Images"
+              aria-describedby="crop-image-panel-tooltip-save"
+              title="Save Completed Images"
+            >
+              <Save className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
+              <span data-crop-image-secondary-action-label="true">
+                {isSavingToDevice ? "Saving..." : `Save ${completedCount} ${completedCount === 1 ? "Image" : "Images"}`}
+              </span>
+              <span id="crop-image-panel-tooltip-save" role="tooltip" data-crop-image-secondary-action-tooltip="true">Save Completed Images</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => removeImage(activeImage.id)}
+              data-crop-image-panel-delete="true"
+              className="inline-flex h-14 w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white text-[13px] font-semibold text-[#FF2D2D] shadow-[0_2px_6px_rgba(255,45,45,0.06)] transition hover:border-[#FF2D2D] hover:bg-red-50 active:scale-[0.98]"
+              aria-label="Delete Image"
+              aria-describedby="crop-image-panel-tooltip-delete"
+              title="Delete Image"
+            >
+              <Trash2 className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
+              <span data-crop-image-secondary-action-label="true">Delete</span>
+              <span id="crop-image-panel-tooltip-delete" role="tooltip" data-crop-image-secondary-action-tooltip="true">Delete Image</span>
+            </button>
+          </div>
         </div>
         {saveToDeviceMessage && (
           <p
@@ -2357,20 +2776,6 @@ export function CropImageTool() {
           </p>
         )}
 
-        <details data-crop-image-panel-tips="true" className="group mt-0 overflow-visible rounded-xl border border-red-100 bg-gradient-to-br from-slate-50 to-red-50/70 px-2.5 pb-3 pt-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.04)]">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-slate-900 marker:content-none">
-            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white text-[#FF2D2D] shadow-sm">
-              <Info className="h-4 w-4" strokeWidth={2.25} aria-hidden="true" />
-            </span>
-            <h2 className="text-xs font-semibold">Crop Tips</h2>
-            <ChevronDown data-crop-image-panel-tips-chevron="true" className="ml-auto h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden="true" />
-          </summary>
-          <ul className="mt-2 space-y-[5px] text-[13px] font-medium leading-[1.3] text-slate-500">
-            <li className="flex gap-1.5"><span className="mt-[0.4rem] h-1 w-1 shrink-0 rounded-full bg-[#FF2D2D]" aria-hidden="true" /><span>Drag on the preview to select the crop area</span></li>
-            <li className="flex gap-1.5"><span className="mt-[0.4rem] h-1 w-1 shrink-0 rounded-full bg-[#FF2D2D]" aria-hidden="true" /><span>Use zoom controls for precise cropping</span></li>
-            <li className="flex gap-1.5"><span className="mt-[0.4rem] h-1 w-1 shrink-0 rounded-full bg-[#FF2D2D]" aria-hidden="true" /><span>Rotate or flip the image before cropping</span></li>
-          </ul>
-        </details>
       </div>
     );
   }
@@ -2441,6 +2846,9 @@ export function CropImageTool() {
 
   function renderCropPreview() {
     if (!activeImage) return null;
+    const previewUrl = adjustedPreview?.imageId === activeImage.id
+      ? adjustedPreview.url
+      : activeImage.previewUrl;
     const rotatedCropBox = activeImage.cropBox
       ? originalCropBoxToRotated(activeImage.cropBox, activeImage.dimensions, activeImage.rotation)
       : null;
@@ -2478,8 +2886,9 @@ export function CropImageTool() {
         >
           <img
             key={activeImage.id}
-            src={activeImage.previewUrl}
+            src={previewUrl}
             alt="Uploaded image preview"
+            data-adjusted-preview={adjustedPreview?.imageId === activeImage.id ? "true" : "false"}
             className="absolute left-1/2 top-1/2 block"
             style={{
               width: `${activeImage.dimensions.width * metrics.scale}px`,
@@ -2629,7 +3038,7 @@ export function CropImageTool() {
                 <span>Uploaded</span>
                 {selectedImages.length > 1 && (
                   <span className="whitespace-nowrap font-medium normal-case tracking-normal text-slate-500">
-                    {results.length} of {selectedImages.length} completed
+                    {results.length} of {results.length + selectedImages.length} completed
                   </span>
                 )}
               </p>
@@ -2642,6 +3051,7 @@ export function CropImageTool() {
                     <div
                       key={image.id}
                       data-crop-image-upload-card="true"
+                      data-image-id={image.id}
                       data-active={isActive ? "true" : "false"}
                       data-completed={completed ? "true" : "false"}
                       onClick={() => selectUploadedImage(image.id)}
@@ -2798,6 +3208,7 @@ export function CropImageTool() {
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+            <div className="mb-3">{renderImageAdjustmentControls("crop-image-mobile-adjustment", true)}</div>
             <div className="mb-3">{renderFlipStraightenControls("crop-image-mobile-transform", true)}</div>
             {renderSettingsControls("crop-image-mobile", "items-stretch")}
           </div>
@@ -2944,7 +3355,7 @@ export function CropImageTool() {
   }
 
   return (
-    <section ref={toolSectionRef} data-v0-managed-flow="true" id="crop-image-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+    <section ref={toolSectionRef} data-v0-managed-flow="true" data-crop-image-upload-shell="true" id="crop-image-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
       {renderUploadBox()}
       {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
     </section>
