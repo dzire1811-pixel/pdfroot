@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   }
 
   const canonicalUrl = post.canonicalUrl ?? `https://www.pdfroot.com/blog/${post.slug}`;
-  const imageUrl = post.image ? `https://pdfroot.com${post.image.src}` : "https://www.pdfroot.com/branding/open-graph-image.png";
+  const imageUrl = post.image ? `https://www.pdfroot.com${post.image.src}` : "https://www.pdfroot.com/branding/open-graph-image.png";
   const socialTitle = post.seoTitle ?? `${post.title} | PDFRoot`;
 
   return {
@@ -63,8 +63,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   if (!post) notFound();
 
   if (post.slug === "resize-image-to-exact-kb") {
-    const canonicalUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb";
-    const imageUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb-online-pdfroot.webp";
+    const canonicalUrl = "https://www.pdfroot.com/blog/resize-image-to-exact-kb";
+    const imageUrl = "https://www.pdfroot.com/blog/resize-image-to-exact-kb-online-pdfroot.webp";
     const articleSchema = {
       "@context": "https://schema.org",
       "@type": "BlogPosting",
@@ -80,7 +80,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         name: "PDFRoot",
         logo: {
           "@type": "ImageObject",
-          url: "https://pdfroot.com/branding/logo.png",
+          url: "https://www.pdfroot.com/branding/logo.png",
         },
       },
       datePublished: "2026-07-19",
@@ -142,7 +142,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       name: "PDFRoot",
     },
     mainEntityOfPage: `https://www.pdfroot.com/blog/${post.slug}`,
-    image: post.image ? `https://pdfroot.com${post.image.src}` : undefined,
+    image: post.image ? `https://www.pdfroot.com${post.image.src}` : undefined,
   };
   const ArticlePageLayout = post.slug === "resize-image-exact-kb-government-forms" ? BlogListingLayout : InfoPageLayout;
 

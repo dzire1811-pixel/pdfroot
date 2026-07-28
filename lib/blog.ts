@@ -68,7 +68,7 @@ export const blogPosts: BlogPost[] = [
     category: "Image Tools",
     date: "July 2026",
     readTime: "9 min read",
-    canonicalUrl: "https://pdfroot.com/blog/resize-image-to-exact-kb",
+    canonicalUrl: "https://www.pdfroot.com/blog/resize-image-to-exact-kb",
     image: {
       src: "/blog/resize-image-to-exact-kb-online-pdfroot.webp",
       alt: "PDFRoot Resize Image to Exact KB tool for online application forms",

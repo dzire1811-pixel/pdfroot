@@ -7,7 +7,7 @@ test("exact KB article, metadata, listing, and sitemap are published", async ({ 
 
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.locator("h1")).toHaveText("Resize Image to Exact KB – A Useful Tool for Students and Job Applicants");
-  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://pdfroot.com/blog/resize-image-to-exact-kb");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://www.pdfroot.com/blog/resize-image-to-exact-kb");
   await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", "Resize JPG, JPEG or PNG images to 20 KB, 50 KB, 100 KB, 200 KB or a custom size for government, exam and job application forms.");
   await expect(page.getByAltText("PDFRoot Resize Image to Exact KB tool for online application forms")).toBeVisible();
   await expect(page.getByText("Written by Anand Joshi, Founder of PDFRoot.", { exact: true })).toBeVisible();
@@ -31,5 +31,5 @@ test("exact KB article, metadata, listing, and sitemap are published", async ({ 
 
   const sitemapResponse = await page.request.get("/sitemap.xml");
   expect(sitemapResponse.ok()).toBe(true);
-  expect(await sitemapResponse.text()).toContain("https://pdfroot.com/blog/resize-image-to-exact-kb");
+  expect(await sitemapResponse.text()).toContain("https://www.pdfroot.com/blog/resize-image-to-exact-kb");
 });

@@ -6,7 +6,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const siteUrl = "https://www.pdfroot.com";
   const now = new Date();
 
-  const staticRoutes = ["", "/about", "/faq", "/blog", "/contact", "/privacy-policy", "/terms-and-conditions", "/disclaimer", "/tools", "/login", "/signup", "/dashboard"];
+  const staticRoutes = ["", "/about", "/faq", "/blog", "/contact", "/privacy-policy", "/terms-and-conditions", "/disclaimer", "/tools"];
   const toolRoutes = tools.map((tool) => `/${tool.slug}`);
 
   const routeEntries: MetadataRoute.Sitemap = [...staticRoutes, ...toolRoutes].map((route) => ({

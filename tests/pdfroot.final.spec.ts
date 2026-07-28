@@ -13,8 +13,8 @@ const toolSlugs = [
 ] as const;
 
 const contentRoutes = [
-  '/', '/about', '/blog', '/contact', '/dashboard', '/disclaimer', '/faq', '/login',
-  '/privacy-policy', '/signup', '/terms-and-conditions', '/tools',
+  '/', '/about', '/blog', '/contact', '/disclaimer', '/faq',
+  '/privacy-policy', '/terms-and-conditions', '/tools',
   '/blog/resize-image-exact-kb-government-forms',
   '/blog/jpg-to-pdf-online-complete-guide',
   '/blog/compress-pdf-without-losing-quality',
@@ -232,6 +232,16 @@ test.describe('site-wide integrity', () => {
     const response = await request.get('/rrb-photo-resize', { maxRedirects: 0 });
     expect(response.status()).toBe(308);
     expect(response.headers().location).toBe('/rrb-signature-resize');
+  });
+
+  test('obsolete account routes permanently redirect to the tools directory', async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile-chromium', 'Redirect contract is viewport-independent.');
+
+    for (const route of ['/login', '/signup', '/dashboard']) {
+      const response = await request.get(route, { maxRedirects: 0 });
+      expect(response.status()).toBe(308);
+      expect(response.headers().location).toBe('/tools');
+    }
   });
 
   test('all same-origin links resolve without HTTP errors', async ({ request }, testInfo) => {
