@@ -13,6 +13,28 @@ async function image(name: string, color: string) {
   };
 }
 
+async function noisyImage(name: string, transparent = false) {
+  const width = 640;
+  const height = 480;
+  const pixels = Buffer.alloc(width * height * 4);
+  let seed = 0x12345678;
+  for (let index = 0; index < width * height; index += 1) {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    const offset = index * 4;
+    pixels[offset] = seed & 0xff;
+    pixels[offset + 1] = (seed >>> 8) & 0xff;
+    pixels[offset + 2] = (seed >>> 16) & 0xff;
+    pixels[offset + 3] = transparent && index % 7 === 0 ? 0 : 255;
+  }
+  return {
+    name,
+    mimeType: "image/png",
+    buffer: await sharp(pixels, { raw: { width, height, channels: 4 } }).png().toBuffer(),
+  };
+}
+
 async function openCropTool(page: Page, options: { directoryPickerSupported?: boolean } = {}) {
   const { directoryPickerSupported = true } = options;
   await page.addInitScript(({ directoryPickerSupported }) => {
@@ -30,20 +52,51 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
       directoryFiles: [] as string[],
       directoryWrites: [] as Array<{ fileName: string; mimeType: string; size: number }>,
       downloads: [] as Array<{ fileName: string; mimeType: string; size: number }>,
+      downloadBlobs: [] as Blob[],
+      canvasEncodes: [] as Array<{ width: number; height: number; mimeType: string; quality?: number }>,
     };
     Object.defineProperty(window, "__cropPickerCalls", { configurable: true, value: pickerCalls });
-    const blobMetadata = new Map<string, { mimeType: string; size: number }>();
+    const blobMetadata = new Map<string, { mimeType: string; size: number; blob: Blob }>();
     const createObjectUrl = URL.createObjectURL.bind(URL);
     URL.createObjectURL = (blob: Blob | MediaSource) => {
       const url = createObjectUrl(blob);
-      if (blob instanceof Blob) blobMetadata.set(url, { mimeType: blob.type, size: blob.size });
+      if (blob instanceof Blob) blobMetadata.set(url, { mimeType: blob.type, size: blob.size, blob });
       return url;
+    };
+    const canvasToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function trackedToBlob(
+      callback: BlobCallback,
+      type?: string,
+      quality?: number,
+    ) {
+      pickerCalls.canvasEncodes.push({
+        width: this.width,
+        height: this.height,
+        mimeType: type ?? "image/png",
+        quality,
+      });
+      const shouldDelay = (
+        window as typeof window & { __cropDelayEncoding?: boolean }
+      ).__cropDelayEncoding;
+      canvasToBlob.call(
+        this,
+        shouldDelay
+          ? (blob) => window.setTimeout(() => callback(blob), 40)
+          : callback,
+        type,
+        quality,
+      );
     };
     const anchorClick = HTMLAnchorElement.prototype.click;
     HTMLAnchorElement.prototype.click = function click() {
       const metadata = blobMetadata.get(this.href);
       if (this.download && metadata) {
-        pickerCalls.downloads.push({ fileName: this.download, ...metadata });
+        pickerCalls.downloads.push({
+          fileName: this.download,
+          mimeType: metadata.mimeType,
+          size: metadata.size,
+        });
+        pickerCalls.downloadBlobs.push(metadata.blob);
         return;
       }
       anchorClick.call(this);
@@ -163,6 +216,7 @@ async function pickerCalls(page: Page) {
         directoryFiles: string[];
         directoryWrites: Array<{ fileName: string; mimeType: string; size: number }>;
         downloads: Array<{ fileName: string; mimeType: string; size: number }>;
+        canvasEncodes: Array<{ width: number; height: number; mimeType: string; quality?: number }>;
       };
     }
   ).__cropPickerCalls);
@@ -186,7 +240,9 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const singleModal = page.locator('[data-crop-image-export-modal="true"]');
     await expect(singleModal.getByRole("heading", { name: "Save 1 new crop separately" })).toBeVisible();
     await expect(singleModal.getByRole("textbox", { name: "Base filename" })).toBeVisible();
-    await expect(singleModal.getByRole("combobox", { name: "Output format" })).toBeVisible();
+    const formatSelector = singleModal.getByRole("combobox", { name: "Output format" });
+    await expect(formatSelector).toHaveValue("jpg");
+    await expect(formatSelector.locator("option")).toHaveText(["JPG / JPEG", "PNG"]);
     await expect(singleModal.getByText("Save location (optional)", { exact: true })).toBeVisible();
     await expect(singleModal.getByText("Default Downloads", { exact: true })).toBeVisible();
     await expect(singleModal.getByRole("button", { name: "Save as..." })).toBeVisible();
@@ -197,10 +253,10 @@ test.describe("Crop Image isolated Save and crop history", () => {
 
     expect(await pickerCalls(page)).toMatchObject({
       save: [{
-        suggestedName: "save-once-crop-01.png",
-        description: "PNG Image",
-        accept: { "image/png": [".png"] },
-        writtenType: "image/png",
+        suggestedName: "save-once-crop-01.jpg",
+        description: "JPEG Image",
+        accept: { "image/jpeg": [".jpg", ".jpeg"] },
+        writtenType: "image/jpeg",
       }],
       directory: 0,
       downloads: [],
@@ -236,8 +292,12 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await modal.getByRole("button", { name: "Download 1 file" }).click();
     await expect(modal).toHaveCount(0);
     expect((await pickerCalls(page)).downloads).toEqual([
-      expect.objectContaining({ fileName: "pending-crop-01.png", mimeType: "image/png" }),
+      expect.objectContaining({ fileName: "pending-crop-01.jpg", mimeType: "image/jpeg" }),
     ]);
+    await expect(page.getByText(
+      "1 crop image downloaded successfully. Check your browser downloads.",
+      { exact: true },
+    )).toBeVisible();
   });
 
   test("cancelling single-crop Save As keeps it eligible and JPG options match the encoded file", async ({ page }) => {
@@ -250,7 +310,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await page.getByRole("button", { name: "Save As" }).click();
     const modal = page.locator('[data-crop-image-export-modal="true"]');
     await modal.getByRole("textbox", { name: "Base filename" }).fill("portrait.png");
-    await modal.getByRole("combobox", { name: "Output format" }).selectOption("jpg");
+    await expect(modal.getByRole("combobox", { name: "Output format" })).toHaveValue("jpg");
     await page.evaluate(() => {
       (window as typeof window & { __cropCancelSavePicker?: boolean }).__cropCancelSavePicker = true;
     });
@@ -271,8 +331,8 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await modal.getByRole("button", { name: "Cancel" }).click();
     await page.getByRole("button", { name: "Save As" }).click();
     await expect(modal).toBeVisible();
+    await expect(modal.getByRole("combobox", { name: "Output format" })).toHaveValue("jpg");
     await modal.getByRole("textbox", { name: "Base filename" }).fill("portrait.png");
-    await modal.getByRole("combobox", { name: "Output format" }).selectOption("jpg");
     await modal.getByRole("button", { name: "Save as..." }).click();
     await expect(modal).toHaveCount(0);
 
@@ -289,7 +349,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     expect(calls.downloads).toEqual([]);
   });
 
-  test("multiple new crops use direct ordered downloads, sanitize names, and skip pending crops", async ({ page }) => {
+  test("multiple new crops support explicit PNG downloads, sanitize names, and skip pending crops", async ({ page }) => {
     await openCropTool(page);
     await page.locator("#crop-image-upload").setInputFiles([
       await image("separate-one.png", "#ef4444"),
@@ -314,6 +374,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await expect(modal.getByRole("button", { name: "Download 2 files" })).toBeVisible();
     await expect(modal.getByText("Filename preview", { exact: true })).toHaveCount(0);
     await expect(modal.locator('[data-crop-image-filename-preview="true"]')).toHaveCount(0);
+    await modal.getByRole("combobox", { name: "Output format" }).selectOption("png");
     await baseName.fill("document-crop");
     await baseName.fill("document-crop.png");
     await modal.getByRole("button", { name: "Download 2 files" }).click();
@@ -350,7 +411,13 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await expect(modal.getByRole("button", { name: "Change folder" })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Use Downloads instead" })).toBeVisible();
     await modal.getByRole("button", { name: "Save 2 files" }).click();
-    await expect(modal).toHaveCount(0);
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("status")).toHaveText(
+      "2 crop images saved to: Customer Images",
+    );
+    await expect(modal.getByText("Selected folder: Customer Images", { exact: true })).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Saved 2 files" })).toBeDisabled();
+    await expect(modal.getByRole("button", { name: "Open saved folder" })).toHaveCount(0);
 
     const calls = await pickerCalls(page);
     expect(calls.directory).toBe(1);
@@ -497,7 +564,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
 
     await modal.getByRole("button", { name: "Download 2 files" }).click();
     await expect(modal.getByRole("status")).toHaveText(
-      "1 crop downloaded successfully. 1 crop remains ready to retry.",
+      "1 image downloaded. 1 crop remains ready to retry.",
     );
     expect((await pickerCalls(page)).downloads).toHaveLength(1);
     await expect(modal.getByRole("button", { name: "Download 1 file" })).toBeEnabled();
@@ -508,6 +575,157 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await modal.getByRole("button", { name: "Download 1 file" }).click();
     await expect(modal).toHaveCount(0);
     expect((await pickerCalls(page)).downloads).toHaveLength(2);
+  });
+
+  test("a 50 KB JPG direct download uses measured iterative encoding within tolerance", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await noisyImage("target-50.png"),
+    ]);
+    await page.locator('input[aria-label="Exact KB"]:visible').fill("50");
+    await completeCurrentImage(page);
+
+    await page.getByRole("button", { name: "Save As" }).click();
+    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    await expect(modal.getByRole("combobox", { name: "Output format" })).toHaveValue("jpg");
+    await page.evaluate(() => {
+      (window as typeof window & { __cropDelayEncoding?: boolean }).__cropDelayEncoding = true;
+    });
+    const download = modal.getByRole("button", { name: "Download 1 file" });
+    await download.click();
+    await expect(modal.getByRole("button", { name: "Optimizing…" }).last()).toBeDisabled();
+    await expect(modal).toHaveCount(0);
+
+    const calls = await pickerCalls(page);
+    expect(calls.downloads).toHaveLength(1);
+    expect(calls.downloads[0]).toMatchObject({
+      fileName: "target-50-crop-01.jpg",
+      mimeType: "image/jpeg",
+    });
+    expect(calls.downloads[0].size).toBeLessThanOrEqual(50 * 1024);
+    expect(calls.downloads[0].size).toBeGreaterThanOrEqual(49 * 1024);
+    const jpegQualities = calls.canvasEncodes
+      .filter((encode) => encode.mimeType === "image/jpeg" && encode.quality !== undefined)
+      .map((encode) => encode.quality as number);
+    expect(jpegQualities.some((quality) => quality <= 0.06)).toBe(true);
+    expect(jpegQualities.some((quality) => quality >= 0.97)).toBe(true);
+  });
+
+  test("JPG target encoding reduces dimensions proportionally when minimum quality is too large", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await noisyImage("dimension-target.png"),
+    ]);
+    await page.locator('input[aria-label="Exact KB"]:visible').fill("5");
+    await completeCurrentImage(page);
+    const encodesBeforeExport = (await pickerCalls(page)).canvasEncodes.length;
+
+    await page.getByRole("button", { name: "Save As" }).click();
+    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    await modal.getByRole("button", { name: "Download 1 file" }).click();
+    await expect(modal).toHaveCount(0);
+
+    const calls = await pickerCalls(page);
+    expect(calls.downloads[0].size).toBeLessThanOrEqual(5 * 1024);
+    const exportJpegEncodes = calls.canvasEncodes
+      .slice(encodesBeforeExport)
+      .filter((encode) => encode.mimeType === "image/jpeg");
+    const largestWidth = Math.max(...exportJpegEncodes.map((encode) => encode.width));
+    const smallestWidth = Math.min(...exportJpegEncodes.map((encode) => encode.width));
+    expect(smallestWidth).toBeLessThan(largestWidth);
+    for (const encode of exportJpegEncodes) {
+      expect(encode.width / encode.height).toBeCloseTo(largestWidth / exportJpegEncodes[0].height, 1);
+    }
+  });
+
+  test("an impossible target reports a local error and leaves the completed crop retryable", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await noisyImage("impossible-target.png"),
+    ]);
+    await page.locator('input[aria-label="Exact KB"]:visible').fill("0.2");
+    await completeCurrentImage(page);
+
+    await page.getByRole("button", { name: "Save As" }).click();
+    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    await modal.getByRole("button", { name: "Download 1 file" }).click();
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole("status")).toContainText(
+      "Unable to produce this image within 0.2 KB while maintaining usable dimensions.",
+    );
+    expect((await pickerCalls(page)).downloads).toEqual([]);
+
+    await modal.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "Save As" }).click();
+    await expect(page.locator('[data-crop-image-export-modal="true"]')).toBeVisible();
+  });
+
+  test("PNG target encoding applies independently to every selected-folder write", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await noisyImage("png-target-one.png"),
+      await noisyImage("png-target-two.png", true),
+    ]);
+    await page.locator('input[aria-label="Exact KB"]:visible').fill("50");
+    await completeCurrentImage(page);
+    await page.locator('input[aria-label="Exact KB"]:visible').fill("50");
+    await completeCurrentImage(page);
+
+    await page.getByRole("button", { name: "Save 2 Images" }).click();
+    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    await modal.getByRole("button", { name: "Save separately" }).click();
+    await modal.getByRole("combobox", { name: "Output format" }).selectOption("png");
+    await modal.getByRole("button", { name: "Choose output folder" }).click();
+    await modal.getByRole("button", { name: "Save 2 files" }).click();
+
+    await expect(modal.getByRole("status")).toHaveText(
+      "2 crop images saved to: Customer Images",
+    );
+    const calls = await pickerCalls(page);
+    expect(calls.downloads).toEqual([]);
+    expect(calls.directoryWrites).toHaveLength(2);
+    expect(calls.directoryWrites.map((write) => write.fileName)).toEqual([
+      "png-target-one-crop-01.png",
+      "png-target-one-crop-02.png",
+    ]);
+    for (const write of calls.directoryWrites) {
+      expect(write.mimeType).toBe("image/png");
+      expect(write.size).toBeLessThanOrEqual(50 * 1024);
+    }
+  });
+
+  test("transparent pixels are composited onto white for the default JPG export", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await noisyImage("transparent.png", true),
+    ]);
+    await completeCurrentImage(page);
+    await page.getByRole("button", { name: "Save As" }).click();
+    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    await modal.getByRole("button", { name: "Download 1 file" }).click();
+    await expect(modal).toHaveCount(0);
+
+    const whitePixelCount = await page.evaluate(async () => {
+      const blob = (
+        window as typeof window & { __cropPickerCalls: { downloadBlobs: Blob[] } }
+      ).__cropPickerCalls.downloadBlobs[0];
+      const bitmap = await createImageBitmap(blob);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (!context) return 0;
+      context.drawImage(bitmap, 0, 0);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let whitePixels = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index] > 245 && pixels[index + 1] > 245 && pixels[index + 2] > 245) {
+          whitePixels += 1;
+        }
+      }
+      return whitePixels;
+    });
+    expect(whitePixelCount).toBeGreaterThan(0);
   });
 
   test("combining multiple new crops uses Save As for one PDF", async ({ page }) => {
@@ -563,6 +781,41 @@ test("file and directory picker support remains local to Crop Image rather than 
 
   expect(pickerOwners).toEqual(["components/CropImageTool.tsx"]);
   expect(directoryPickerOwners).toEqual(["components/CropImageTool.tsx"]);
+});
+
+test("browser-only Crop Image does not add fake local-folder reveal behavior", () => {
+  const component = fs.readFileSync(
+    path.join(process.cwd(), "components", "CropImageTool.tsx"),
+    "utf8",
+  );
+  const packageJson = fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8");
+
+  expect(packageJson).not.toMatch(/electron|@tauri-apps/i);
+  expect(component).not.toContain("window.open(");
+  expect(component).not.toContain("file://");
+  expect(component).not.toContain("showItemInFolder");
+  expect(component).not.toContain("shell.openPath");
+  expect(component).not.toContain("Open saved folder");
+});
+
+test("Crop Image format changes do not alter other tools' existing defaults", () => {
+  const frontBack = fs.readFileSync(
+    path.join(process.cwd(), "components", "FrontBackCardMergeTool.tsx"),
+    "utf8",
+  );
+  const passport = fs.readFileSync(
+    path.join(process.cwd(), "components", "PassportPhotoMakerTool.tsx"),
+    "utf8",
+  );
+  const pngToJpg = fs.readFileSync(
+    path.join(process.cwd(), "components", "PngToJpgTool.tsx"),
+    "utf8",
+  );
+
+  expect(frontBack).toContain('useState<OutputFormat>("jpg")');
+  expect(passport).toContain('useState<OutputFormat>("jpg")');
+  expect(pngToJpg).toContain("Output format");
+  expect(pngToJpg).toContain("JPG image");
 });
 
 test("Crop Image removes its keyboard history listener when the tool unmounts", async ({ page }) => {
