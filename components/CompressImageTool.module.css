@@ -1,0 +1,150 @@
+@media (min-width: 768px) {
+  .workspaceSection {
+    display: flex;
+    height: var(--compress-image-workspace-height);
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .workspaceShell {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  :global(#compress-image-tool).workspaceSection:not(.governmentFormsWorkspace)[data-compress-image-workspace="true"]
+    .workspaceShell
+    .previewWorkspace[data-compress-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    min-height: 0 !important;
+    flex: 1;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-bottom: var(--compress-image-preview-padding) !important;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  :global(#compress-image-tool).workspaceSection[data-compress-image-workspace="true"] .workspaceShell .singleImageWorkspace {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(#compress-image-tool).workspaceSection[data-compress-image-workspace="true"]
+    .workspaceShell
+    .previewWorkspace
+    .singleImageGrid {
+    min-height: 0 !important;
+    flex: none;
+    align-content: center !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+.responsiveWorkspaceSection {
+  display: flex;
+  box-sizing: border-box;
+  height: var(--compress-image-workspace-height, 100dvh);
+  min-height: 0;
+  margin-top: clamp(0.75rem, 1.5dvh, 1.25rem);
+  flex-direction: column;
+}
+
+.responsiveWorkspaceSection .workspaceShell {
+  display: flex;
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.constrainedWorkspaceSection {
+  height: auto;
+}
+
+.flowActionBar {
+  position: relative !important;
+  inset: auto !important;
+  flex-shrink: 0;
+}
+
+:global(#compress-image-tool).governmentFormsWorkspace[data-government-compress-image-workspace="true"] {
+  position: relative;
+  box-sizing: border-box;
+  left: calc((100% - var(--government-compressor-inline-size, 100%)) / 2);
+  width: var(--government-compressor-inline-size, 100%);
+  max-width: none;
+  min-width: 0;
+  margin-top: 1.5rem !important;
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:global(#compress-image-tool).governmentFormsWorkspace[data-government-compress-image-workspace="true"]
+  .workspaceShell {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible !important;
+}
+
+.governmentFormsFlowActionBar {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:global(#compress-image-tool).responsiveWorkspaceSection:is(
+    [data-compress-image-workspace="true"],
+    [data-government-compress-image-workspace="true"]
+  )
+  .workspaceShell
+  .previewWorkspace[data-compress-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  box-sizing: border-box;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  overflow: visible !important;
+  padding-bottom: var(--compress-image-preview-padding) !important;
+  scrollbar-gutter: auto;
+}
+
+:global(#compress-image-tool).constrainedWorkspaceSection:is(
+    [data-compress-image-workspace="true"],
+    [data-government-compress-image-workspace="true"]
+  )
+  .workspaceShell
+  .previewWorkspace[data-compress-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+  min-height: min-content !important;
+  flex: 1 0 auto;
+}
+
+:global(#compress-image-tool).responsiveWorkspaceSection:is(
+    [data-compress-image-workspace="true"],
+    [data-government-compress-image-workspace="true"]
+  )
+  .workspaceShell
+  .singleImageWorkspace {
+  display: grid;
+  place-items: center;
+}
+
+:global(#compress-image-tool).responsiveWorkspaceSection:is(
+    [data-compress-image-workspace="true"],
+    [data-government-compress-image-workspace="true"]
+  )
+  .workspaceShell
+  .previewWorkspace
+  .singleImageGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  padding-bottom: 0 !important;
+}

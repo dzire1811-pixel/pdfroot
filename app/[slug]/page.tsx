@@ -107,6 +107,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   }
 
   const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
+  const displayHeading = tool.slug === "image-compressor-for-government-forms" ? "Govt. Form Image Compressor" : pageTitle;
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-signature-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
@@ -445,8 +446,8 @@ export default async function ToolPage({ params }: ToolPageProps) {
               <ToolDirectoryIcon tool={tool} />
               {tool.category}
             </div>
-            <h1 className="mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-              {pageTitle}
+            <h1 className={`mx-auto mt-5 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl ${tool.slug === "image-compressor-for-government-forms" ? "lg:max-w-5xl lg:whitespace-nowrap" : ""}`}>
+              {displayHeading}
             </h1>
             <ToolRenderer slug={tool.slug} name={tool.name} description={tool.description} />
             <p data-tool-page-extra="intro" className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">

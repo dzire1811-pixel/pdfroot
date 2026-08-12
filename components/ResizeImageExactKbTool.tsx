@@ -180,6 +180,7 @@ export function ResizeImageExactKbTool() {
   const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
   const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
   const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -706,43 +707,49 @@ export function ResizeImageExactKbTool() {
   }, [selectedImages.length, stage]);
 
   useLayoutEffect(() => {
-    if (stage !== "workspace" || !selectedImages.length || !isActionBarVisible || window.innerWidth < 1024) {
-      return;
-    }
+    if (!selectedImages.length || stage !== "workspace" || !isActionBarVisible) return;
 
-    const workspace = toolSectionRef.current;
-    const preview = workAreaRef.current;
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
     const actionBar = actionBarRef.current;
-    const page = workspace?.closest<HTMLElement>(".v0-tool-page");
-    const header = page?.querySelector<HTMLElement>("header") ?? document.querySelector<HTMLElement>("header");
-    const hero = workspace?.closest<HTMLElement>("[data-tool-workspace-hero]");
-    if (!workspace || !preview || !actionBar) return;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
 
-    let animationFrame = 0;
+    let frame = 0;
+
     const updateWorkspaceHeight = () => {
-      const previewTop = Math.max(header?.getBoundingClientRect().bottom ?? 0, preview.getBoundingClientRect().top);
-      const actionBarHeight = actionBar.getBoundingClientRect().height;
-      workspace.style.setProperty("--exact-kb-workspace-top", `${previewTop}px`);
-      workspace.style.setProperty("--exact-kb-action-bar-height", `${actionBarHeight}px`);
-    };
-    const scheduleUpdate = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(updateWorkspaceHeight);
+      const previewPaddingTop = Number.parseFloat(window.getComputedStyle(previewWorkspace).paddingTop) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-exact-kb-preview-grid='true']");
+      const requiredPreviewHeight = previewGrid?.scrollHeight ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+
+      previewWorkspace.style.setProperty("--exact-kb-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--exact-kb-workspace-height", `${availableHeight}px`);
+      setIsConstrainedWorkspace(requiredPreviewHeight > availableHeight + 1);
     };
 
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(scheduleUpdate);
-    if (header) resizeObserver?.observe(header);
-    if (hero) resizeObserver?.observe(hero);
-    resizeObserver?.observe(actionBar);
-    updateWorkspaceHeight();
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-exact-kb-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
     window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
-      resizeObserver?.disconnect();
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleUpdate);
-      workspace.style.removeProperty("--exact-kb-workspace-top");
-      workspace.style.removeProperty("--exact-kb-action-bar-height");
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--exact-kb-workspace-height");
+      previewWorkspace.style.removeProperty("--exact-kb-preview-padding");
     };
   }, [isActionBarVisible, selectedImages.length, stage]);
 
@@ -1123,7 +1130,7 @@ export function ResizeImageExactKbTool() {
 
   function renderActionButtons(className = "") {
     return (
-      <div className={`grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[27rem] ${className}`}>
+      <div className={`grid w-full min-w-0 max-w-full grid-cols-[3rem_minmax(0,1fr)_auto] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[27rem] ${className}`}>
         {renderAddMoreButton()}
         <button type="button" onClick={() => void processImages()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
           Resize Image Now
@@ -1174,13 +1181,13 @@ export function ResizeImageExactKbTool() {
         ref={workAreaRef}
         data-exact-kb-preview-area="true"
         data-exact-kb-image-count={selectedImages.length}
-        className={`${resultStyles.workspacePreview} relative min-w-0 max-w-full overflow-x-clip bg-slate-100 p-4 text-left sm:p-6`}
+        className={`${resultStyles.workspacePreview} ${isSingleImageWorkspace ? resultStyles.singleImageWorkspace : ""} relative min-w-0 max-w-full overflow-visible bg-slate-100 p-4 text-left sm:p-6`}
       >
         <input id="exact-kb-add-more-images" name="exact-kb-add-more-images" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddMoreInputChange} />
         <div
           data-exact-kb-preview-grid="true"
           data-exact-kb-single-image={isSingleImageWorkspace ? "true" : "false"}
-          className={`${resultStyles.workspaceGrid} ${isSingleImageWorkspace ? resultStyles.singleImageGrid : resultStyles.multipleImageGrid} grid min-w-0 w-full max-w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28`}
+          className={`${resultStyles.workspaceGrid} ${isSingleImageWorkspace ? resultStyles.singleImageGrid : ""} grid min-w-0 w-full max-w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28`}
         >
           {selectedImages.map((image, index) => {
             const displayName = splitFileName(image.file.name);
@@ -1414,12 +1421,12 @@ export function ResizeImageExactKbTool() {
 
   if (stage === "workspace" && selectedImages.length) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-exact-kb-workspace="true" data-exact-kb-editor-stage="true" id="resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`${resultStyles.workspaceStage} mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-x-clip border-0 bg-transparent p-0 text-left shadow-none`}>
-        <div ref={workspaceRef} className={`${resultStyles.workspaceShell} relative min-w-0 max-w-full overflow-x-clip bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-exact-kb-workspace="true" data-exact-kb-editor-stage="true" id="resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`${resultStyles.workspaceStage} ${isConstrainedWorkspace ? resultStyles.constrainedWorkspaceStage : ""} mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none`}>
+        <div ref={workspaceRef} className={`${resultStyles.workspaceShell} relative min-w-0 max-w-full overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
-          {isActionBarVisible && <div ref={actionBarRef} data-exact-kb-action-bar="true" className="fixed bottom-0 left-0 right-0 z-50 w-auto max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-            <div className="mx-auto flex min-w-0 max-w-[1600px] flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+          {isActionBarVisible && <div ref={actionBarRef} data-exact-kb-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? resultStyles.flowActionBar : ""}`}>
+            <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <p className="truncate text-sm font-black text-slate-950">
@@ -1439,7 +1446,7 @@ export function ResizeImageExactKbTool() {
                 </div>
                 {renderSettingsControls("exact-kb", "hidden sm:flex lg:flex-nowrap lg:gap-1.5")}
               </div>
-              <div className="min-w-0 2xl:ml-auto">
+              <div className="w-full min-w-0 max-w-full 2xl:ml-auto 2xl:w-auto">
                 {renderActionButtons()}
               </div>
             </div>
