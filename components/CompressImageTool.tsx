@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
-import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Maximize2, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 import styles from "./CompressImageTool.module.css";
 
@@ -173,6 +173,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
   const settingsDrawerClosingRef = useRef(false);
+  const isAppendingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resultsRef = useRef<CompressResult[]>([]);
@@ -212,6 +213,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
     settingsDrawerClosingRef.current = false;
+    isAppendingRef.current = false;
     drawerDragOffsetRef.current = 0;
     setLevel("medium");
     setQuality(65);
@@ -232,6 +234,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
 
     clearProcessedOutput();
     if (!options.append) revokeSelectedImages();
+    isAppendingRef.current = Boolean(options.append && selectedImages.length);
     setStage("processing");
     clearNativeFileInput();
 
@@ -250,10 +253,12 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
 
       setSelectedImages((current) => (options.append ? [...current, ...loaded] : loaded));
       setStage("workspace");
+      isAppendingRef.current = false;
       if (!options.append) {
         window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
       }
     } catch (err) {
+      isAppendingRef.current = false;
       setStage(options.append && selectedImages.length ? "workspace" : "upload");
       setError(err instanceof Error ? err.message : "Could not read one of these images. Please try again.");
     }
@@ -387,7 +392,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
     if (!page) return;
 
-    if (stage === "workspace") {
+    if (stage === "workspace" || stage === "processing") {
       page.dataset.compressImageActiveWorkspace = "true";
     } else {
       delete page.dataset.compressImageActiveWorkspace;
@@ -407,6 +412,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
 
   useEffect(() => {
     if (stage !== "processing") return;
+    if (isAppendingRef.current && window.matchMedia("(min-width: 768px)").matches) return;
     window.requestAnimationFrame(() => {
       const processingSection = processingSectionRef.current;
       if (!processingSection) return;
@@ -1073,18 +1079,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
         id={governmentForms ? "government-image-compressor-tool" : "compress-image-tool"}
         className={governmentForms ? "mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left" : "mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-3"}
       >
-        {!governmentForms && <div data-compress-image-success-title="true" className="relative mx-auto max-w-4xl scroll-mt-24 pt-6 text-center sm:pt-8">
-          <div className="mx-auto flex max-w-3xl justify-center">
-            <div className="relative -top-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium leading-none text-muted-foreground">
-              <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
-              Image Tools
-            </div>
-          </div>
-          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Compress Image Online
-          </h1>
-        </div>}
-        <div className={governmentForms ? "relative min-w-0 overflow-visible bg-slate-100" : "relative mt-4 min-w-0 overflow-visible bg-slate-100"}>
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
           <div data-compress-image-preview-area={governmentForms ? undefined : "true"} data-crop-image-preview-area={governmentForms ? "true" : undefined} data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div data-v0-flow-extra="true" data-v0-result-screen="true" className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
@@ -1147,6 +1142,7 @@ export function CompressImageTool({ governmentForms = false }: { governmentForms
           processingSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
+        data-compress-image-processing="true"
         id="compress-image-tool"
         className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
       >

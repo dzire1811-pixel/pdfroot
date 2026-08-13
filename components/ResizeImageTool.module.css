@@ -1,0 +1,42 @@
+@media (min-width: 768px) {
+  .workspaceSection {
+    display: flex;
+    min-height: var(--resize-image-workspace-height);
+    flex-direction: column;
+  }
+
+  .workspaceShell {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  :global(#resize-image-tool).workspaceSection[data-resize-image-workspace="true"]
+    .workspaceShell
+    .previewWorkspace[data-resize-image-preview-area="true"]:not([data-v0-result-screen="true"]) {
+    min-height: 0 !important;
+    flex: 1;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding-bottom: var(--resize-image-preview-padding) !important;
+    scrollbar-gutter: stable both-edges;
+  }
+
+  :global(#resize-image-tool).workspaceSection[data-resize-image-workspace="true"] .workspaceShell .singleImageWorkspace {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  :global(#resize-image-tool).workspaceSection[data-resize-image-workspace="true"]
+    .workspaceShell
+    .previewWorkspace
+    .singleImageGrid {
+    min-height: 0 !important;
+    flex: none;
+    align-content: center !important;
+    padding-bottom: 0 !important;
+  }
+}

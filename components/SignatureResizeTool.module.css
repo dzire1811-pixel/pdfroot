@@ -1,0 +1,122 @@
+.toolScope {
+  min-width: 0;
+}
+
+.workspaceSection {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--signature-resize-workspace-height, 100dvh);
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspaceShell {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+:global(#signature-resize-tool).workspaceSection[data-signature-resize-workspace="true"] {
+  padding: 0 !important;
+}
+
+.constrainedWorkspaceSection {
+  height: auto;
+}
+
+.flowActionBar {
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+:global(#signature-resize-tool).workspaceSection[data-signature-resize-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-signature-resize-preview-area="true"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  overflow: visible !important;
+  padding-bottom: var(--signature-resize-preview-padding) !important;
+}
+
+:global(#signature-resize-tool).constrainedWorkspaceSection[data-signature-resize-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-signature-resize-preview-area="true"] {
+  min-height: min-content !important;
+  flex: 1 0 auto;
+}
+
+.singleImageWorkspace {
+  display: grid;
+  place-items: center;
+}
+
+.singleImageGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+:global(.v0-tool-page:has(#signature-resize-tool))
+  :global(#signature-resize-tool).workspaceSection[data-signature-resize-workspace="true"]
+  .previewWorkspace[data-signature-resize-preview-area="true"] {
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#signature-resize-tool))
+  :global(#signature-resize-tool).workspaceSection[data-signature-resize-workspace="true"]
+  .singleImageGrid[data-signature-resize-preview-grid="true"] {
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+:global(.v0-tool-page:has(#signature-resize-tool))
+  :global(#signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"] {
+  height: var(--signature-resize-workspace-height) !important;
+  min-height: 0 !important;
+}
+
+:global(.v0-tool-page:has(#signature-resize-tool))
+  :global(#signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  > .workspaceShell {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+:global(.v0-tool-page:has(#signature-resize-tool))
+  :global(#signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  .previewWorkspace[data-recruitment-preview-fit="true"] {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+@media (min-width: 1024px) {
+  :global(.v0-tool-page):has(:global(#signature-resize-tool).toolScope)
+    :global([data-tool-workspace-hero] > .relative) {
+    max-width: none;
+  }
+
+  :global(.v0-tool-page):has(:global(#signature-resize-tool).toolScope)
+    :global([data-tool-workspace-hero] > .relative > h1) {
+    width: max-content;
+    max-width: calc(100% - 3rem);
+    white-space: nowrap;
+  }
+}

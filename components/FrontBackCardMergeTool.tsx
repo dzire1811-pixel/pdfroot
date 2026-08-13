@@ -1,10 +1,11 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, Dispatch, DragEvent, MouseEvent, PointerEvent, RefObject, SetStateAction, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, Dispatch, DragEvent, MouseEvent, PointerEvent, RefObject, SetStateAction, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CheckCircle2, Download, FileImage, GripVertical, Plus, RefreshCw, RotateCw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { ImageProcessingScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+import styles from "./FrontBackCardMergeTool.module.css";
 
 type Side = "front" | "back";
 type LayoutMode = "horizontal" | "vertical" | "a4" | "card";
@@ -51,6 +52,13 @@ function splitFileName(fileName: string) {
   return { stem: match[1] || fileName, extension: match[2] };
 }
 
+function formatResultDisplayName(fileName: string) {
+  const { stem, extension } = splitFileName(fileName);
+  const extensionLabel = extension.replace(/^\./, "");
+  if (!extensionLabel || stem.length <= 15) return fileName;
+  return `${stem.slice(0, 15)}…${extensionLabel}`;
+}
+
 function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -83,7 +91,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: "image/jpeg" | "image/png
   });
 }
 
-function getTrimBox(canvas: HTMLCanvasElement) {
+function getTrimBoxOnMainThread(canvas: HTMLCanvasElement) {
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return { x: 0, y: 0, width: canvas.width, height: canvas.height };
 
@@ -129,7 +137,52 @@ function getTrimBox(canvas: HTMLCanvasElement) {
   return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
 }
 
-function prepareImage(image: HTMLImageElement, rotation: number, autoCrop: boolean) {
+async function getTrimBox(canvas: HTMLCanvasElement, signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Image processing was cancelled.", "AbortError");
+  if (typeof Worker === "undefined") return getTrimBoxOnMainThread(canvas);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return { x: 0, y: 0, width: canvas.width, height: canvas.height };
+
+  try {
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const worker = new Worker("/workers/image-trim.worker.js");
+    return await new Promise<{ x: number; y: number; width: number; height: number }>((resolve, reject) => {
+      const cleanUpWorker = () => {
+        signal?.removeEventListener("abort", abortWorker);
+        worker.terminate();
+      };
+      const abortWorker = () => {
+        cleanUpWorker();
+        reject(new DOMException("Image processing was cancelled.", "AbortError"));
+      };
+      signal?.addEventListener("abort", abortWorker, { once: true });
+      worker.onmessage = (event: MessageEvent<{ box?: { x: number; y: number; width: number; height: number }; error?: string }>) => {
+        if (!event.data.box || event.data.error) {
+          cleanUpWorker();
+          reject(new Error(event.data.error || "Image trim worker failed."));
+          return;
+        }
+        cleanUpWorker();
+        resolve(event.data.box);
+      };
+      worker.onerror = () => {
+        cleanUpWorker();
+        reject(new Error("Image trim worker failed."));
+      };
+      worker.postMessage({
+        buffer: imageData.data.buffer,
+        width: canvas.width,
+        height: canvas.height,
+      }, [imageData.data.buffer]);
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return getTrimBoxOnMainThread(canvas);
+  }
+}
+
+async function prepareImage(image: HTMLImageElement, rotation: number, autoCrop: boolean, signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Image processing was cancelled.", "AbortError");
   const base = document.createElement("canvas");
   base.width = image.naturalWidth;
   base.height = image.naturalHeight;
@@ -139,7 +192,7 @@ function prepareImage(image: HTMLImageElement, rotation: number, autoCrop: boole
   baseContext.fillRect(0, 0, base.width, base.height);
   baseContext.drawImage(image, 0, 0);
 
-  const crop = autoCrop ? getTrimBox(base) : { x: 0, y: 0, width: base.width, height: base.height };
+  const crop = autoCrop ? await getTrimBox(base, signal) : { x: 0, y: 0, width: base.width, height: base.height };
   const normalizedRotation = ((rotation % 360) + 360) % 360;
   const rotated = document.createElement("canvas");
   const swap = normalizedRotation === 90 || normalizedRotation === 270;
@@ -183,7 +236,12 @@ export function FrontBackCardMergeTool() {
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
+  const drawerDragFrameRef = useRef<number | null>(null);
+  const pendingDrawerYRef = useRef<number | null>(null);
   const settingsDrawerClosingRef = useRef(false);
+  const processingInProgressRef = useRef(false);
+  const processingAbortRef = useRef<AbortController | null>(null);
+  const downloadInProgressRef = useRef(false);
   const draggedSideRef = useRef<Side | null>(null);
   const pageFileDragDepthRef = useRef(0);
   const [front, setFront] = useState<SideState>({ file: null, url: null, rotation: 0, isDragging: false, dimensions: null });
@@ -200,11 +258,13 @@ export function FrontBackCardMergeTool() {
   const [, setStatus] = useState("Upload front and back side images to create a printable page.");
   const [, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
   const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
   const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
   const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
   const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const stage: ImageWorkflowStage = isProcessing ? "processing" : output ? "success" : front.file || back.file ? "workspace" : "upload";
 
   useImageToolStageEffects({
@@ -223,6 +283,14 @@ export function FrontBackCardMergeTool() {
       window.scrollTo({ top: 0, behavior: "auto" });
     });
   }, [output, stage]);
+
+  useEffect(() => () => {
+    processingAbortRef.current?.abort();
+    processingAbortRef.current = null;
+    if (drawerDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(drawerDragFrameRef.current);
+    }
+  }, []);
 
   const selectedCount = (front.file ? 1 : 0) + (back.file ? 1 : 0);
 
@@ -252,6 +320,9 @@ export function FrontBackCardMergeTool() {
     setStatus("Upload front and back side images to create a printable page.");
     setProgress(0);
     setIsProcessing(false);
+    processingInProgressRef.current = false;
+    downloadInProgressRef.current = false;
+    setIsDownloading(false);
     setIsActionBarVisible(false);
     setIsSettingsDrawerOpen(false);
     setIsSettingsDrawerClosing(false);
@@ -406,7 +477,10 @@ export function FrontBackCardMergeTool() {
     document.addEventListener("dragover", onPageDragOver);
     document.addEventListener("dragleave", onPageDragLeave);
     document.addEventListener("drop", onPageDrop);
+    const toolRoot = toolSectionRef.current;
+    toolRoot?.setAttribute("data-external-drop-ready", "true");
     return () => {
+      toolRoot?.removeAttribute("data-external-drop-ready");
       document.removeEventListener("dragenter", onPageDragEnter);
       document.removeEventListener("dragover", onPageDragOver);
       document.removeEventListener("dragleave", onPageDragLeave);
@@ -459,11 +533,8 @@ export function FrontBackCardMergeTool() {
       }
       const viewportHeight = window.innerHeight;
       const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
-      const barHeight = actionBarRef.current?.offsetHeight ?? 110;
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : true);
     };
 
     const scheduleUpdate = () => {
@@ -480,6 +551,82 @@ export function FrontBackCardMergeTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [stage, front.file, back.file]);
+
+  useLayoutEffect(() => {
+    if (stage !== "workspace" || !isActionBarVisible) return;
+
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
+
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      const previewStyles = window.getComputedStyle(previewWorkspace);
+      const previewPaddingTop = Number.parseFloat(previewStyles.paddingTop) || 0;
+      const previewPaddingBottom = Number.parseFloat(previewStyles.paddingBottom) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-card-merge-preview-grid='true']");
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+      const cards = Array.from(previewGrid?.querySelectorAll<HTMLElement>("[data-card-side]") ?? []);
+      const cardPreviews = cards
+        .map((card) => card.querySelector<HTMLElement>("[data-card-merge-card-preview='true']"))
+        .filter((preview): preview is HTMLElement => Boolean(preview));
+      const rowCount = Math.max(1, new Set(cards.map((card) => card.offsetTop)).size);
+      const rowGap = Number.parseFloat(previewGrid ? window.getComputedStyle(previewGrid).rowGap : "0") || 0;
+      const cardChromeHeight = cards.reduce((largest, card, index) => {
+        const cardPreview = cardPreviews[index];
+        if (!cardPreview) return largest;
+        return Math.max(largest, card.getBoundingClientRect().height - cardPreview.getBoundingClientRect().height);
+      }, 0);
+      const availableGridHeight = Math.max(0, availableHeight - previewPaddingTop - previewPaddingBottom);
+      const availablePreviewHeight = (availableGridHeight - rowGap * (rowCount - 1)) / rowCount - cardChromeHeight;
+      const naturalPreviewHeight = cardPreviews.reduce((largest, cardPreview) => {
+        const ratio = window.matchMedia("(min-width: 640px)").matches ? 3 / 4 : 1;
+        return Math.max(largest, cardPreview.getBoundingClientRect().width * ratio);
+      }, 0);
+      const minimumPreviewHeight = cardPreviews.reduce((largest, cardPreview) => {
+        return Math.max(largest, Number.parseFloat(window.getComputedStyle(cardPreview).minHeight) || 0);
+      }, 0);
+      const fittedPreviewHeight = Math.min(naturalPreviewHeight, availablePreviewHeight);
+
+      previewWorkspace.style.setProperty("--card-merge-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--card-merge-workspace-height", `${availableHeight}px`);
+      if (fittedPreviewHeight >= minimumPreviewHeight) {
+        workspaceSection.style.setProperty("--card-merge-card-preview-height", `${fittedPreviewHeight}px`);
+        setIsConstrainedWorkspace(false);
+      } else {
+        workspaceSection.style.removeProperty("--card-merge-card-preview-height");
+        setIsConstrainedWorkspace(true);
+      }
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-card-merge-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--card-merge-workspace-height");
+      workspaceSection.style.removeProperty("--card-merge-card-preview-height");
+      previewWorkspace.style.removeProperty("--card-merge-preview-padding");
+    };
+  }, [back.file, front.file, isActionBarVisible, stage]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -526,9 +673,17 @@ export function FrontBackCardMergeTool() {
   const updateSettingsDrawerDrag = useCallback(
     (clientY: number) => {
       if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
-      const nextOffset = Math.max(0, clientY - drawerDragStartYRef.current);
-      drawerDragOffsetRef.current = nextOffset;
-      setSettingsDrawerDragOffset(nextOffset);
+      pendingDrawerYRef.current = clientY;
+      if (drawerDragFrameRef.current !== null) return;
+      drawerDragFrameRef.current = window.requestAnimationFrame(() => {
+        drawerDragFrameRef.current = null;
+        const nextClientY = pendingDrawerYRef.current;
+        pendingDrawerYRef.current = null;
+        if (nextClientY === null || drawerDragStartYRef.current === null) return;
+        const nextOffset = Math.max(0, nextClientY - drawerDragStartYRef.current);
+        drawerDragOffsetRef.current = nextOffset;
+        setSettingsDrawerDragOffset(nextOffset);
+      });
     },
     [isSettingsDrawerOpen],
   );
@@ -536,6 +691,11 @@ export function FrontBackCardMergeTool() {
   const finishSettingsDrawerDrag = useCallback(
     (clientY?: number) => {
       if (!isSettingsDrawerOpen || drawerDragStartYRef.current === null) return;
+      if (drawerDragFrameRef.current !== null) {
+        window.cancelAnimationFrame(drawerDragFrameRef.current);
+        drawerDragFrameRef.current = null;
+        pendingDrawerYRef.current = null;
+      }
       const offset = typeof clientY === "number" ? Math.max(0, clientY - drawerDragStartYRef.current) : drawerDragOffsetRef.current;
       drawerDragStartYRef.current = null;
       drawerDragOffsetRef.current = 0;
@@ -597,14 +757,16 @@ export function FrontBackCardMergeTool() {
     };
   }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
-  async function buildCanvas() {
+  async function buildCanvas(signal?: AbortSignal) {
     if (!front.file || !back.file) {
       throw new Error("Please upload both front and back side images.");
     }
 
     const [frontImage, backImage] = await Promise.all([loadImage(front.file), loadImage(back.file)]);
-    const frontCanvas = prepareImage(frontImage, front.rotation, autoCrop);
-    const backCanvas = prepareImage(backImage, back.rotation, autoCrop);
+    const [frontCanvas, backCanvas] = await Promise.all([
+      prepareImage(frontImage, front.rotation, autoCrop, signal),
+      prepareImage(backImage, back.rotation, autoCrop, signal),
+    ]);
     const titleHeight = title.trim() ? 86 : 0;
     const borderOffset = addBorder ? 18 : 0;
 
@@ -678,6 +840,10 @@ export function FrontBackCardMergeTool() {
   }
 
   async function createOutput() {
+    if (processingInProgressRef.current) return;
+    const abortController = new AbortController();
+    processingAbortRef.current = abortController;
+    processingInProgressRef.current = true;
     setError(null);
     clearOutput();
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -686,7 +852,7 @@ export function FrontBackCardMergeTool() {
     setStatus("Reading and aligning images...");
 
     try {
-      const canvas = await buildCanvas();
+      const canvas = await buildCanvas(abortController.signal);
       setProgress(72);
       setStatus("Creating print-ready output...");
 
@@ -712,12 +878,28 @@ export function FrontBackCardMergeTool() {
       setProgress(100);
       setStatus("Merged file ready. Download your output.");
     } catch (err) {
+      if (abortController.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Could not merge the images.");
       setStatus("Merge failed.");
       setProgress(0);
     } finally {
-      setIsProcessing(false);
+      if (processingAbortRef.current === abortController) processingAbortRef.current = null;
+      processingInProgressRef.current = false;
+      if (!abortController.signal.aborted) setIsProcessing(false);
     }
+  }
+
+  function guardOutputDownload(event: MouseEvent<HTMLAnchorElement>) {
+    if (downloadInProgressRef.current) {
+      event.preventDefault();
+      return;
+    }
+    downloadInProgressRef.current = true;
+    setIsDownloading(true);
+    window.setTimeout(() => {
+      downloadInProgressRef.current = false;
+      setIsDownloading(false);
+    }, 700);
   }
 
   function renderUploadDrop() {
@@ -818,7 +1000,7 @@ export function FrontBackCardMergeTool() {
         }}
         className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:p-4 ${state.isDragging ? "border-[#FF2D2D] ring-2 ring-red-100" : "border-slate-200"}`}
       >
-        <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white sm:aspect-[4/3]">
+        <div data-card-merge-card-preview="true" className={`relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white sm:aspect-[4/3] ${styles.cardPreview}`}>
           <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">{side === "front" ? "F" : "B"}</span>
           {state.file && (
             <button type="button" onClick={() => removeSide(side)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${state.file.name}`}>
@@ -832,6 +1014,11 @@ export function FrontBackCardMergeTool() {
             <img
               src={state.url}
               alt={`${label} card preview`}
+              width={state.dimensions?.width ?? 1}
+              height={state.dimensions?.height ?? 1}
+              sizes="(max-width: 640px) 14rem, 28rem"
+              loading="eager"
+              decoding="async"
               style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }}
               className="block h-full w-full object-contain p-3 transition duration-200 group-hover:scale-[1.035]"
             />
@@ -1065,6 +1252,7 @@ export function FrontBackCardMergeTool() {
     const outputTypeLabel = outputFormat.toUpperCase();
     const outputLayoutLabel = outputLayout === "side-by-side" ? "Side by Side" : "Top & Bottom";
     const resultDetails = `${formatKb(output.blob.size)} KB • ${outputTypeLabel} • ${outputLayoutLabel} • High quality • ${output.width} × ${output.height} px`;
+    const displayFileName = formatResultDisplayName(output.fileName);
 
     return (
       <section
@@ -1073,24 +1261,31 @@ export function FrontBackCardMergeTool() {
           successSectionRef.current = node;
         }}
         data-v0-managed-flow="true"
+        data-v0-result-screen="true"
         data-crop-image-workspace="true"
         id="front-back-card-merge-tool"
-        className="mx-auto mt-0 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+        className="relative left-1/2 mx-auto mt-3 w-screen max-w-none -translate-x-1/2 overflow-visible bg-transparent p-0 text-left"
       >
-        <div className="relative mt-0 min-w-0 overflow-visible bg-slate-100">
+        <div className="relative min-w-0 overflow-visible bg-slate-100">
           <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
               <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
                 <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
                   <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </div>
-                <div data-card-merge-result-details="true" className="mx-auto flex w-full flex-col items-center justify-center text-center">
-                  <h3 className="mx-auto mt-5 w-full text-center text-2xl font-black tracking-tight text-slate-950">Card Merge Ready</h3>
-                  <p className="mx-auto mt-2 w-full truncate text-center text-sm font-black text-slate-950" title={output.fileName}>{output.fileName}</p>
-                  <p className="mx-auto mt-2 flex w-full flex-wrap items-center justify-center text-center text-sm font-semibold leading-relaxed text-slate-500">{resultDetails}</p>
+                <div data-card-merge-result-details="true" className="mx-auto flex w-full min-w-0 max-w-full flex-col items-center justify-center text-center">
+                  <h3 className="mx-auto mt-5 w-full min-w-0 max-w-full text-center text-2xl font-black tracking-tight text-slate-950">Card Merge Ready</h3>
+                  <p data-card-merge-result-filename="true" className="mx-auto mt-2 block w-full min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-center text-sm font-black text-slate-950" title={output.fileName}>{displayFileName}</p>
+                  <p data-card-merge-result-information="true" className="mx-auto mt-2 flex w-full min-w-0 max-w-full flex-wrap items-center justify-center break-words text-center text-sm font-semibold leading-relaxed text-slate-500">{resultDetails}</p>
                 </div>
-                <a href={output.url} download={output.fileName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
-                  Download Merged Card
+                <a
+                  href={output.url}
+                  download={output.fileName}
+                  onClick={guardOutputDownload}
+                  aria-disabled={isDownloading}
+                  className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
+                >
+                  {isDownloading ? "Downloading..." : "Download Merged Card"}
                   <Download className="h-5 w-5" aria-hidden="true" />
                 </a>
                 <button type="button" onClick={resetTool} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]">
@@ -1107,12 +1302,12 @@ export function FrontBackCardMergeTool() {
 
   if (stage === "workspace") {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-card-merge-workspace="true" id="front-back-card-merge-tool" className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
-        <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-card-merge-workspace="true" id="front-back-card-merge-tool" className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:scroll-mt-40 ${styles.workspaceSection} ${isConstrainedWorkspace ? styles.constrainedWorkspaceSection : ""}`}>
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 ${styles.workspaceShell}`}>
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className={`relative min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8 ${styles.previewWorkspace}`}>
             <input id="front-card-upload" name="front-card-upload" ref={frontInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("front", event)} />
             <input id="back-card-upload" name="back-card-upload" ref={backInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={(event) => onInputChange("back", event)} />
-            <div data-card-merge-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:grid-cols-2 sm:pb-72 lg:mx-auto lg:max-w-6xl lg:pb-56">
+            <div data-card-merge-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:grid-cols-2 sm:pb-72 lg:mx-auto lg:max-w-6xl lg:pb-56 ${styles.cardGrid}`}>
                 {renderPreviewCard("front", "Front Side")}
                 {renderPreviewCard("back", "Back Side")}
               {error && <p className="mx-auto w-full max-w-6xl rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
@@ -1120,8 +1315,8 @@ export function FrontBackCardMergeTool() {
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? styles.flowActionBar : ""}`}>
+              <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
                   <div className="hidden shrink-0 sm:block">{renderOutputLayoutControls()}</div>
                   <div className="min-w-0">
@@ -1142,7 +1337,7 @@ export function FrontBackCardMergeTool() {
                     <p className="truncate text-xs font-bold text-slate-500">{[front.file ? "Front ready" : "Front needed", back.file ? "Back ready" : "Back needed"].join(" - ")}</p>
                   </div>
                 </div>
-                <div className="min-w-0 lg:ml-auto">{renderActionButtons()}</div>
+                <div className="w-full min-w-0 max-w-full lg:ml-auto lg:w-auto">{renderActionButtons()}</div>
               </div>
             </div>
           )}
@@ -1206,7 +1401,17 @@ function UploadSideCard({
       {state.url && (
         <>
           <div className="mt-4 flex min-h-64 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
-            <img src={state.url} alt={`${side} side preview`} style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }} className="h-auto max-h-72 w-auto max-w-full object-contain transition" />
+            <img
+              src={state.url}
+              alt={`${side} side preview`}
+              width={state.dimensions?.width ?? 1}
+              height={state.dimensions?.height ?? 1}
+              sizes="(max-width: 640px) calc(100vw - 4rem), 36rem"
+              loading="lazy"
+              decoding="async"
+              style={{ transform: `rotate(${state.rotation}deg)`, objectFit: "contain" }}
+              className="h-auto max-h-72 w-auto max-w-full object-contain transition"
+            />
           </div>
           <button type="button" onClick={() => onRotate(side)} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-900 transition hover:border-red-200 hover:text-[#FF2D2D]">
             Rotate Image

@@ -1,0 +1,74 @@
+.workspaceSection {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--jpg-to-png-workspace-height, 100dvh);
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspaceShell {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+:global(#jpg-to-png-tool).workspaceSection[data-jpg-to-png-workspace="true"] {
+  padding: 0 !important;
+}
+
+.constrainedWorkspaceSection {
+  height: auto;
+}
+
+.flowActionBar {
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+:global(#jpg-to-png-tool).workspaceSection[data-jpg-to-png-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-jpg-to-png-preview-area="true"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  overflow: visible !important;
+  padding-bottom: var(--jpg-to-png-preview-padding) !important;
+}
+
+:global(#jpg-to-png-tool).constrainedWorkspaceSection[data-jpg-to-png-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-jpg-to-png-preview-area="true"] {
+  min-height: min-content !important;
+  flex: 1 0 auto;
+}
+
+:global(#jpg-to-png-tool).workspaceSection[data-jpg-to-png-workspace="true"]
+  .workspaceShell
+  .singleImageWorkspace {
+  display: grid;
+  place-items: center;
+}
+
+:global(#jpg-to-png-tool).workspaceSection[data-jpg-to-png-workspace="true"]
+  .workspaceShell
+  .previewWorkspace
+  .singleImageGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  padding-bottom: 0 !important;
+}

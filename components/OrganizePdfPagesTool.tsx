@@ -67,6 +67,8 @@ export function OrganizePdfPagesTool() {
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const pageItemsRef = useRef<PageItem[]>([]);
   const resultRef = useRef<OrganizeResult | null>(null);
+  const draggedPageIdRef = useRef<number | null>(null);
+  const uploadDragDepthRef = useRef(0);
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
   const settingsDrawerClosingRef = useRef(false);
@@ -102,6 +104,7 @@ export function OrganizePdfPagesTool() {
     clearResult();
     setFiles([]);
     setSelectedPages([]);
+    draggedPageIdRef.current = null;
     setDraggedPageId(null);
     setError(null);
     setIsProcessing(false);
@@ -163,6 +166,7 @@ export function OrganizePdfPagesTool() {
   async function loadPdfFiles(nextFiles: File[]) {
     clearResult();
     setSelectedPages([]);
+    draggedPageIdRef.current = null;
     setDraggedPageId(null);
     setError(null);
     setProgress(0);
@@ -225,8 +229,33 @@ export function OrganizePdfPagesTool() {
     event.target.value = "";
   }
 
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
+  function isExternalFileDrag(event: DragEvent<HTMLElement>) {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function onToolDragEnter(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
     event.preventDefault();
+    uploadDragDepthRef.current += 1;
+    setIsDraggingUpload(true);
+  }
+
+  function onToolDragOver(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function onToolDragLeave(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    uploadDragDepthRef.current = Math.max(0, uploadDragDepthRef.current - 1);
+    if (uploadDragDepthRef.current === 0) setIsDraggingUpload(false);
+  }
+
+  function onToolDrop(event: DragEvent<HTMLElement>) {
+    if (!isExternalFileDrag(event)) return;
+    event.preventDefault();
+    uploadDragDepthRef.current = 0;
     setIsDraggingUpload(false);
     void loadPdfFiles(Array.from(event.dataTransfer.files));
   }
@@ -293,17 +322,33 @@ export function OrganizePdfPagesTool() {
     setStatus("Page order updated.");
   }
 
-  function onPageDragStart(pageId: number) {
+  function onPageDragStart(event: DragEvent<HTMLElement>, pageId: number) {
+    const origin = event.target as HTMLElement;
+    if (origin.closest("button, a, input, label, select, textarea")) {
+      event.preventDefault();
+      return;
+    }
+
+    draggedPageIdRef.current = pageId;
     setDraggedPageId(pageId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("application/x-organize-pdf-page", String(pageId));
   }
 
   function onPageDrop(targetPageId: number) {
-    if (!draggedPageId) return;
+    const sourcePageId = draggedPageIdRef.current;
+    if (sourcePageId === null) return;
     clearResult();
     setError(null);
-    setPageItems((current) => moveItem(current, draggedPageId, targetPageId));
+    setPageItems((current) => moveItem(current, sourcePageId, targetPageId));
+    draggedPageIdRef.current = null;
     setDraggedPageId(null);
     setStatus("Page order updated.");
+  }
+
+  function onPageDragEnd() {
+    draggedPageIdRef.current = null;
+    setDraggedPageId(null);
   }
 
   async function downloadOrganizedPdf() {
@@ -460,12 +505,6 @@ export function OrganizePdfPagesTool() {
       <label
         data-primary-upload="true"
         htmlFor="organize-pdf-pages-upload"
-        onDragOver={(event) => {
-          event.preventDefault();
-          setIsDraggingUpload(true);
-        }}
-        onDragLeave={() => setIsDraggingUpload(false)}
-        onDrop={onDrop}
         className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
           isDraggingUpload ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
         }`}
@@ -490,18 +529,14 @@ export function OrganizePdfPagesTool() {
     return (
       <article
         draggable
-        onDragStart={() => onPageDragStart(page.id)}
-        onDragOver={(event) => event.preventDefault()}
-        onDragEnter={() => {
-          if (!draggedPageId || draggedPageId === page.id) return;
-          clearResult();
-          setError(null);
-          setPageItems((current) => moveItem(current, draggedPageId, page.id));
-          setDraggedPageId(page.id);
-          setStatus("Page order updated.");
+        onDragStart={(event) => onPageDragStart(event, page.id)}
+        onDragOver={(event) => {
+          if (draggedPageIdRef.current === null) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
         }}
         onDrop={() => onPageDrop(page.id)}
-        onDragEnd={() => setDraggedPageId(null)}
+        onDragEnd={onPageDragEnd}
         className={`group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:shadow-md active:cursor-grabbing ${
           selected ? "border-[#FF2D2D] ring-4 ring-red-100" : draggedPageId === page.id ? "border-red-300 opacity-70" : "border-slate-200 hover:border-red-200"
         }`}
@@ -512,7 +547,7 @@ export function OrganizePdfPagesTool() {
             <button type="button" onClick={(event) => { event.stopPropagation(); deletePage(page.id); }} className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-lg bg-white/95 text-slate-700 shadow-sm hover:bg-red-50 hover:text-[#FF2D2D]" aria-label={`Delete page ${index + 1}`}><Trash2 className="h-4 w-4" /></button>
             <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm"><GripVertical className="h-4 w-4" /></span>
             {page.url ? (
-              <img src={page.url} alt={`Page ${index + 1} preview`} className="h-full w-full object-contain transition duration-200" style={{ transform: `rotate(${page.rotation}deg) scale(${page.rotation % 180 === 0 ? 1 : 0.72})` }} />
+              <img draggable={false} src={page.url} alt={`Page ${index + 1} preview`} className="h-full w-full object-contain transition duration-200" style={{ transform: `rotate(${page.rotation}deg) scale(${page.rotation % 180 === 0 ? 1 : 0.72})` }} />
             ) : (
               <div className="grid h-full w-full place-items-center bg-red-50 text-[#FF2D2D]">
                 <ImageIcon className="h-12 w-12" aria-hidden="true" />
@@ -649,6 +684,10 @@ export function OrganizePdfPagesTool() {
       data-v0-managed-flow="true"
       data-merge-pdf-workspace={files.length ? "true" : undefined}
       id="organize-pdf-pages-tool"
+      onDragEnter={onToolDragEnter}
+      onDragOver={onToolDragOver}
+      onDragLeave={onToolDragLeave}
+      onDrop={onToolDrop}
       className={`mx-auto mt-6 max-w-full text-left ${
         files.length ? "w-full scroll-mt-32 border-0 bg-transparent p-0 shadow-none" : "w-[min(calc(100vw-2rem),64rem)] scroll-mt-32 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6"
       }`}

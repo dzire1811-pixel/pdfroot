@@ -1,10 +1,11 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, FileImage, Fingerprint, GripVertical, ImageUp, PenLine, Plus, RefreshCw, RotateCcw, ScrollText, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CheckCircle2, Download, FileImage, Fingerprint, GripVertical, ImageUp, PenLine, Plus, RefreshCw, RotateCcw, ScrollText, Trash2, UploadCloud } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+import styles from "./IbpsPhotoSignatureHelperTool.module.css";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
 type DocumentType = "photo" | "signature" | "thumb" | "declaration";
@@ -109,6 +110,9 @@ const IBPS_CONFIGS: Record<DocumentType, IbpsConfig> = {
 };
 
 const DOCUMENT_ORDER: DocumentType[] = ["photo", "signature", "thumb", "declaration"];
+const IBPS_ORIGINAL_PAGE_HEADING = "IBPS Photo, Signature, Thumb & Declaration Resize Online";
+const IBPS_PAGE_HEADING = "IBPS Photo & Signature Resizer";
+const IBPS_SUPPORTING_TEXT = "Resize IBPS photo, signature, thumb impression and handwritten declaration to the required size online.";
 
 function formatKb(bytes: number) {
   return (bytes / 1024).toFixed(1);
@@ -237,11 +241,7 @@ export function IbpsPhotoSignatureHelperTool() {
   const [output, setOutput] = useState<OutputDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
-  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
-  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
-  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
-  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -249,10 +249,6 @@ export function IbpsPhotoSignatureHelperTool() {
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
-  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
-  const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerDragOffsetRef = useRef(0);
-  const settingsDrawerClosingRef = useRef(false);
   const shouldScrollToUploadRef = useRef(false);
   const documentRef = useRef<SelectedDocument | null>(null);
   const outputRef = useRef<OutputDocument | null>(null);
@@ -285,21 +281,14 @@ export function IbpsPhotoSignatureHelperTool() {
     setOutput(null);
     setError(null);
     setIsDragging(false);
-    setIsActionBarVisible(false);
-    setIsSettingsDrawerOpen(false);
-    setIsSettingsDrawerClosing(false);
-    setIsSettingsDrawerDragging(false);
-    setSettingsDrawerDragOffset(0);
-    drawerDragStartYRef.current = null;
-    drawerDragOffsetRef.current = 0;
-    settingsDrawerClosingRef.current = false;
     clearNativeInputs();
     shouldScrollToUploadRef.current = true;
   }
 
   function selectType(type: DocumentType) {
     if (type === selectedType) return;
-    resetTool();
+
+    if (stage !== "workspace") resetTool();
     setSelectedType(type);
   }
 
@@ -313,7 +302,8 @@ export function IbpsPhotoSignatureHelperTool() {
       return;
     }
 
-    setStage("processing");
+    const isWorkspaceReplacement = Boolean(document);
+    if (!isWorkspaceReplacement) setStage("processing");
     clearNativeInputs();
 
     try {
@@ -327,7 +317,9 @@ export function IbpsPhotoSignatureHelperTool() {
         height: image.naturalHeight,
       });
       setStage("workspace");
-      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      if (!isWorkspaceReplacement) {
+        window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      }
     } catch (err) {
       setStage(document ? "workspace" : "upload");
       setError(err instanceof Error ? err.message : "Could not read this document. Please try another image.");
@@ -416,6 +408,28 @@ export function IbpsPhotoSignatureHelperTool() {
   }, [output]);
 
   useEffect(() => {
+    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
+    const heading = page?.querySelector<HTMLHeadingElement>("h1");
+    const hero = page?.querySelector<HTMLElement>("[data-tool-workspace-hero]");
+    if (!heading || !hero || heading.textContent?.trim() !== IBPS_ORIGINAL_PAGE_HEADING) return;
+
+    heading.textContent = IBPS_PAGE_HEADING;
+    heading.classList.add("ibps-page-heading");
+    hero.classList.add("ibps-page-hero");
+    const supportingText = globalThis.document.createElement("p");
+    supportingText.className = styles.supportingText;
+    supportingText.textContent = IBPS_SUPPORTING_TEXT;
+    heading.insertAdjacentElement("afterend", supportingText);
+
+    return () => {
+      heading.textContent = IBPS_ORIGINAL_PAGE_HEADING;
+      heading.classList.remove("ibps-page-heading");
+      hero.classList.remove("ibps-page-hero");
+      supportingText.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     if (stage !== "processing") return;
     window.requestAnimationFrame(() => {
       const processingSection = processingSectionRef.current;
@@ -424,6 +438,53 @@ export function IbpsPhotoSignatureHelperTool() {
       processingSection.scrollIntoView({ behavior: "auto", block: "center" });
     });
   }, [stage]);
+
+  useLayoutEffect(() => {
+    if (!document || stage !== "workspace") return;
+
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
+
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      const previewPaddingTop = Number.parseFloat(window.getComputedStyle(previewWorkspace).paddingTop) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-ibps-document-preview-grid='true']");
+      const requiredPreviewHeight = previewGrid?.scrollHeight ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+
+      previewWorkspace.style.setProperty("--ibps-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--ibps-workspace-height", `${availableHeight}px`);
+      setIsConstrainedWorkspace(requiredPreviewHeight > availableHeight + 1);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-ibps-document-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--ibps-workspace-height");
+      previewWorkspace.style.removeProperty("--ibps-preview-padding");
+    };
+  }, [document, selectedType, stage]);
 
   useEffect(() => {
     if (stage !== "upload" || !shouldScrollToUploadRef.current) return;
@@ -437,51 +498,6 @@ export function IbpsPhotoSignatureHelperTool() {
       window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
     });
   }, [stage]);
-
-  useEffect(() => {
-    if (!document || stage !== "workspace") {
-      setIsActionBarVisible(false);
-      setIsSettingsDrawerOpen(false);
-      setIsSettingsDrawerClosing(false);
-      setIsSettingsDrawerDragging(false);
-      setSettingsDrawerDragOffset(0);
-      drawerDragStartYRef.current = null;
-      drawerDragOffsetRef.current = 0;
-      settingsDrawerClosingRef.current = false;
-      return;
-    }
-
-    let frame = 0;
-    const updateActionBarVisibility = () => {
-      const workspace = workspaceRef.current;
-      const workArea = workAreaRef.current;
-      if (!workspace || !workArea) {
-        setIsActionBarVisible(false);
-        return;
-      }
-      const viewportHeight = window.innerHeight;
-      const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
-      const barHeight = actionBarRef.current?.offsetHeight ?? 110;
-      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
-    };
-
-    const scheduleUpdate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(updateActionBarVisibility);
-    };
-
-    scheduleUpdate();
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [document, stage]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -516,127 +532,6 @@ export function IbpsPhotoSignatureHelperTool() {
       heroSection.style.paddingBottom = heroPaddingBottom;
     };
   }, [output, stage]);
-
-  const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
-    const closeDistance = Math.max(window.innerHeight, 420);
-    settingsDrawerClosingRef.current = true;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerDragging(false);
-    setIsSettingsDrawerClosing(true);
-    setSettingsDrawerDragOffset(closeDistance);
-    drawerDragOffsetRef.current = closeDistance;
-    window.setTimeout(() => {
-      setIsSettingsDrawerOpen(false);
-      setIsSettingsDrawerClosing(false);
-      setIsSettingsDrawerDragging(false);
-      setSettingsDrawerDragOffset(0);
-      settingsDrawerClosingRef.current = false;
-      drawerDragOffsetRef.current = 0;
-      window.requestAnimationFrame(() => {
-        mobileSettingsButtonRef.current?.focus();
-      });
-    }, 240);
-  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
-
-  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
-    if (drawerDragStartYRef.current === null) return;
-    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
-    drawerDragOffsetRef.current = dragDistance;
-    setSettingsDrawerDragOffset(dragDistance);
-  }, []);
-
-  const finishSettingsDrawerDrag = useCallback(
-    (clientY?: number) => {
-      if (drawerDragStartYRef.current === null) return;
-      if (typeof clientY === "number") {
-        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
-        drawerDragOffsetRef.current = dragDistance;
-        setSettingsDrawerDragOffset(dragDistance);
-      }
-
-      drawerDragStartYRef.current = null;
-      setIsSettingsDrawerDragging(false);
-
-      if (drawerDragOffsetRef.current >= 84) {
-        closeSettingsDrawer();
-        return;
-      }
-
-      drawerDragOffsetRef.current = 0;
-      setSettingsDrawerDragOffset(0);
-    },
-    [closeSettingsDrawer],
-  );
-
-  useEffect(() => {
-    if (!isSettingsDrawerOpen) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeSettingsDrawer();
-    };
-
-    const onResize = () => {
-      if (window.innerWidth >= 640) closeSettingsDrawer();
-    };
-
-    const onPointerMove = (event: globalThis.PointerEvent) => {
-      updateSettingsDrawerDrag(event.clientY);
-    };
-
-    const onMouseMove = (event: globalThis.MouseEvent) => {
-      updateSettingsDrawerDrag(event.clientY);
-    };
-
-    const onTouchMove = (event: globalThis.TouchEvent) => {
-      const touch = event.touches[0];
-      if (touch) updateSettingsDrawerDrag(touch.clientY);
-    };
-
-    const clearDrawerDrag = () => {
-      if (settingsDrawerClosingRef.current) return;
-      drawerDragStartYRef.current = null;
-      setIsSettingsDrawerDragging(false);
-      drawerDragOffsetRef.current = 0;
-      setSettingsDrawerDragOffset(0);
-    };
-
-    const onPointerEnd = (event: globalThis.PointerEvent) => {
-      finishSettingsDrawerDrag(event.clientY);
-    };
-
-    const onMouseEnd = (event: globalThis.MouseEvent) => {
-      finishSettingsDrawerDrag(event.clientY);
-    };
-
-    const onTouchEnd = (event: globalThis.TouchEvent) => {
-      const touch = event.changedTouches[0];
-      finishSettingsDrawerDrag(touch?.clientY);
-    };
-
-    globalThis.document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onResize);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", clearDrawerDrag);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseEnd);
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd);
-    window.addEventListener("touchcancel", clearDrawerDrag);
-    return () => {
-      globalThis.document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", clearDrawerDrag);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseEnd);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", clearDrawerDrag);
-    };
-  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
 
   useEffect(() => {
     const toolSection = toolSectionRef.current;
@@ -677,27 +572,81 @@ export function IbpsPhotoSignatureHelperTool() {
     };
   }, []);
 
-  function renderTypeSelector() {
+  function renderLocalPageStyles() {
     return (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <style>{`
+        .ibps-page-hero .ibps-page-heading {
+          position: relative;
+          left: 50%;
+          width: min(92vw, 68rem) !important;
+          max-width: 68rem !important;
+          margin-inline: 0 !important;
+          font-size: clamp(2rem, 4vw, 4rem) !important;
+          line-height: 1.02 !important;
+          text-wrap: wrap !important;
+          transform: translateX(-50%);
+        }
+
+        @media (min-width: 1024px) {
+          .ibps-page-hero .ibps-page-heading {
+            white-space: nowrap;
+          }
+        }
+
+        .ibps-page-hero {
+          padding-top: clamp(1.5rem, 4svh, 3rem) !important;
+          padding-bottom: clamp(1rem, 2.5svh, 2rem) !important;
+        }
+
+        @media (max-width: 767px) {
+          .ibps-page-hero .ibps-page-heading {
+            line-height: 1 !important;
+          }
+        }
+
+      `}</style>
+    );
+  }
+
+  function renderTypeSelector(placement: "top" | "sticky" = "top") {
+    const isSticky = placement === "sticky";
+    return (
+      <div
+        data-ibps-option-list={placement}
+        role={isSticky ? "toolbar" : "tablist"}
+        aria-label="IBPS document type"
+        className={
+          isSticky
+            ? "flex min-w-0 gap-2 overflow-x-auto overscroll-x-contain p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        }
+      >
         {DOCUMENT_ORDER.map((type) => {
           const item = IBPS_CONFIGS[type];
           const isSelected = selectedType === type;
           return (
             <button
               key={type}
+              id={`ibps-${placement}-option-${type}`}
+              data-ibps-sticky-option={isSticky ? type : undefined}
               type="button"
+              role={isSticky ? undefined : "tab"}
+              aria-selected={isSticky ? undefined : isSelected}
+              aria-pressed={isSticky ? isSelected : undefined}
+              aria-controls={isSticky ? undefined : "ibps-selected-option-panel"}
               onClick={() => selectType(type)}
-              className={`flex min-h-20 items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+              className={`flex shrink-0 items-center text-left transition ${
+                isSticky ? "min-h-14 min-w-[9.5rem] gap-2 rounded-xl border px-3 py-2" : "min-h-20 gap-3 rounded-2xl border px-4 py-3"
+              } ${
                 isSelected ? "border-[#FF2D2D] bg-red-50 text-slate-950 ring-4 ring-red-100" : "border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50"
               }`}
             >
-              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${isSelected ? "bg-[#FF2D2D] text-white" : "bg-slate-100 text-slate-600"}`}>
+              <span className={`grid shrink-0 place-items-center rounded-xl ${isSticky ? "h-10 w-10" : "h-11 w-11"} ${isSelected ? "bg-[#FF2D2D] text-white" : "bg-slate-100 text-slate-600"}`}>
                 <DocumentIcon type={type} />
               </span>
-              <span>
-                <span className="block text-sm font-black">{item.shortLabel}</span>
-                <span className="mt-1 block text-xs font-bold text-slate-500">{item.width} × {item.height}px</span>
+              <span className="min-w-0">
+                <span className="block whitespace-nowrap text-sm font-black">{item.shortLabel}</span>
+                <span className="mt-0.5 block whitespace-nowrap text-[0.7rem] font-bold text-slate-500">{item.width} × {item.height}px</span>
               </span>
             </button>
           );
@@ -709,6 +658,9 @@ export function IbpsPhotoSignatureHelperTool() {
   function renderUploadBox() {
     return (
       <label
+        id="ibps-selected-option-panel"
+        role="tabpanel"
+        aria-labelledby={`ibps-top-option-${selectedType}`}
         data-primary-upload="true"
         htmlFor="ibps-document-upload"
         onDragOver={onFileDragOver}
@@ -731,174 +683,28 @@ export function IbpsPhotoSignatureHelperTool() {
     );
   }
 
-  function renderRequirementStatus() {
-    return (
-      <div className="grid gap-2 text-sm font-black text-slate-800 sm:grid-cols-2 lg:grid-cols-5">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">Format: JPG/JPEG</div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">Dimension: {config.width} × {config.height}px</div>
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">Size: {config.minKb}–{config.maxKb} KB</div>
-        {config.dpi ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">DPI: {config.dpi} DPI</div> : null}
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">Requirement: Ready</div>
-      </div>
-    );
-  }
-
   function renderAddButton() {
     return (
-      <button type="button" aria-label={`Add ${config.label}`} title={`Add ${config.label}`} onClick={() => addMoreInputRef.current?.click()} className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14">
-        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">1</span>
+      <button type="button" aria-label={`Add ${config.label}`} title={`Add ${config.label}`} onClick={() => addMoreInputRef.current?.click()} className="relative order-3 inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:order-none sm:h-14 sm:w-14">
+        <span className="absolute left-0 top-0 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white sm:-left-1 sm:-top-1">1</span>
         <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
       </button>
     );
   }
 
-  function openSettingsDrawer() {
-    if (window.innerWidth < 640) {
-      const workArea = workAreaRef.current;
-      if (workArea) {
-        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
-      }
-    }
-    setIsSettingsDrawerClosing(false);
-    setIsSettingsDrawerDragging(false);
-    setSettingsDrawerDragOffset(0);
-    settingsDrawerClosingRef.current = false;
-    drawerDragOffsetRef.current = 0;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerOpen(true);
-  }
-
-  function beginDrawerHandleDrag(clientY: number) {
-    if (settingsDrawerClosingRef.current) return;
-    drawerDragStartYRef.current = clientY;
-    drawerDragOffsetRef.current = 0;
-    setSettingsDrawerDragOffset(0);
-    setIsSettingsDrawerDragging(true);
-  }
-
-  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
-    beginDrawerHandleDrag(event.clientY);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
-    updateSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
-    beginDrawerHandleDrag(event.clientY);
-  }
-
-  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.touches[0];
-    if (touch) beginDrawerHandleDrag(touch.clientY);
-  }
-
-  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.touches[0];
-    if (touch) updateSettingsDrawerDrag(touch.clientY);
-  }
-
-  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
-    finishSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
-    finishSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.changedTouches[0];
-    finishSettingsDrawerDrag(touch?.clientY);
-  }
-
-  function clearDrawerHandleDrag() {
-    if (settingsDrawerClosingRef.current) return;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerDragging(false);
-    drawerDragOffsetRef.current = 0;
-    setSettingsDrawerDragOffset(0);
-  }
-
   function renderActionButtons() {
     return (
-      <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+      <div className="grid grid-cols-[minmax(6.5rem,1fr)_minmax(4.75rem,0.75fr)_3rem] gap-2 pl-10 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] sm:pl-0 lg:w-auto lg:min-w-[30rem]">
         {renderAddButton()}
-        <button type="button" onClick={() => void processDocument()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-          Resize Now
+        <button type="button" onClick={() => void processDocument()} className="order-1 inline-flex min-h-12 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-2 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:order-none sm:min-h-14 sm:gap-2 sm:px-5 sm:text-base">
+          <span className="sm:hidden">Resize Now</span>
+          <span className="hidden sm:inline">{config.actionLabel}</span>
           <RefreshCw className="h-5 w-5" aria-hidden="true" />
         </button>
-        <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
+        <button type="button" onClick={resetTool} className="order-2 inline-flex min-h-12 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-1.5 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:order-none sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
           Clear all
           <RotateCcw className="h-5 w-5" aria-hidden="true" />
         </button>
-      </div>
-    );
-  }
-
-  function renderMobileSettingsDrawer() {
-    if (!isSettingsDrawerOpen) return null;
-
-    return (
-      <div className="fixed inset-0 z-[60] sm:hidden">
-        <style>{`
-          @keyframes ibpsDocumentDrawerIn {
-            from {
-              transform: translateY(100%);
-            }
-            to {
-              transform: translateY(0);
-            }
-          }
-        `}</style>
-        <button type="button" className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`} aria-label="Close settings backdrop" onClick={closeSettingsDrawer} />
-        <div
-          id="ibps-document-mobile-settings-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-label="IBPS document settings"
-          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
-          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
-            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
-          } ${isSettingsDrawerClosing ? "" : "animate-[ibpsDocumentDrawerIn_220ms_ease-out]"} ${
-            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
-          }`}
-        >
-          <button
-            type="button"
-            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
-            aria-label="Drag down to close settings"
-            onPointerDown={onDrawerHandlePointerDown}
-            onPointerMove={onDrawerHandlePointerMove}
-            onPointerUp={onDrawerHandlePointerEnd}
-            onPointerCancel={clearDrawerHandleDrag}
-            onLostPointerCapture={clearDrawerHandleDrag}
-            onMouseDown={onDrawerHandleMouseDown}
-            onMouseUp={onDrawerHandleMouseUp}
-            onTouchStart={onDrawerHandleTouchStart}
-            onTouchMove={onDrawerHandleTouchMove}
-            onTouchEnd={onDrawerHandleTouchEnd}
-            onTouchCancel={clearDrawerHandleDrag}
-          >
-            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
-          </button>
-          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
-            <p className="text-sm font-black text-slate-950">Settings</p>
-            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-            <div className="grid gap-4">
-              {renderTypeSelector()}
-              {renderRequirementStatus()}
-            </div>
-          </div>
-          <div className="shrink-0 rounded-b-2xl border-t border-slate-200 bg-white px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
-            {renderActionButtons()}
-          </div>
-        </div>
       </div>
     );
   }
@@ -914,6 +720,7 @@ export function IbpsPhotoSignatureHelperTool() {
         id="ibps-document-resize-tool"
         className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
       >
+        {renderLocalPageStyles()}
         <div>
           <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
           <p className="mt-4 text-base font-black text-slate-950">Resizing IBPS {config.shortLabel.toLowerCase()}...</p>
@@ -926,6 +733,7 @@ export function IbpsPhotoSignatureHelperTool() {
   if (stage === "success" && output) {
     return (
       <section ref={toolSectionRef} data-v0-managed-flow="true" data-crop-image-workspace="true" id="ibps-document-resize-tool" className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left">
+        {renderLocalPageStyles()}
         <div className="relative min-w-0 overflow-visible bg-slate-100">
           <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
@@ -955,13 +763,13 @@ export function IbpsPhotoSignatureHelperTool() {
     const displayName = splitFileName(document.file.name);
 
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-ibps-helper-workspace="true" id="ibps-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-ibps-helper-workspace="true" id="ibps-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none ${styles.workspaceSection} ${isConstrainedWorkspace ? styles.constrainedWorkspaceSection : ""}`}>
+        {renderLocalPageStyles()}
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${styles.workspaceShell} ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className={`relative min-h-0 min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 ${styles.previewWorkspace}`}>
             <input id="ibps-add-document-upload" name="ibps-add-document-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-            <div data-ibps-document-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:block sm:pb-72 lg:pb-56">
-              <div className="hidden sm:mb-5 sm:block">{renderTypeSelector()}</div>
-              <article className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:hidden">
+            <div data-ibps-document-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 md:block ${styles.documentGrid}`}>
+              <article data-recruitment-compact-card="true" className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:hidden">
                 <div className="relative grid aspect-[3/4] max-sm:aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
                   <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">1</span>
                   <button type="button" onClick={removeDocument} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${document.file.name}`}>
@@ -984,7 +792,7 @@ export function IbpsPhotoSignatureHelperTool() {
                   </p>
                 </div>
               </article>
-              <div className="mx-auto hidden w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-5">
+              <div data-recruitment-desktop-preview="true" className="mx-auto hidden w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <p className="text-sm font-black text-slate-950">IBPS {config.label} preview</p>
                   <p className="text-xs font-bold text-slate-500">{config.hint}</p>
@@ -995,56 +803,17 @@ export function IbpsPhotoSignatureHelperTool() {
                   </button>
                   <img src={document.previewUrl} alt={`Uploaded IBPS ${config.label} preview`} className="block h-auto max-h-[clamp(16rem,58vh,42rem)] w-auto max-w-full object-contain" />
                 </div>
-                <div className="mt-4">{renderRequirementStatus()}</div>
               </div>
               {error && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
           </div>
 
-          {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
-                  <div className="flex min-w-0 items-center justify-between gap-3">
-                    <p className="truncate text-sm font-black text-slate-950">1 {config.shortLabel.toLowerCase()} ready</p>
-                    <button
-                      ref={mobileSettingsButtonRef}
-                      type="button"
-                      onClick={openSettingsDrawer}
-                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95 sm:hidden"
-                      aria-expanded={isSettingsDrawerOpen}
-                      aria-controls="ibps-document-mobile-settings-drawer"
-                    >
-                      <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
-                      Settings
-                    </button>
-                  </div>
-                  <div className="hidden sm:block">
-                    {renderRequirementStatus()}
-                  </div>
-                </div>
-                <div className="min-w-0 lg:ml-auto">
-                  <div className="hidden sm:block">
-                    <div className="grid grid-cols-[3.5rem_minmax(15rem,1fr)_auto] gap-2 lg:min-w-[38rem]">
-                      {renderAddButton()}
-                      <button type="button" onClick={() => void processDocument()} className="inline-flex min-h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600">
-                        {config.actionLabel}
-                        <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                      <button type="button" onClick={resetTool} className="inline-flex min-h-14 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
-                        Clear all
-                        <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="sm:hidden">
-                    {renderActionButtons()}
-                  </div>
-                </div>
-              </div>
+          <div ref={actionBarRef} data-ibps-document-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? styles.flowActionBar : ""}`}>
+            <div className="mx-auto grid w-full min-w-0 max-w-[1600px] gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+              <div className="min-w-0 xl:pl-10">{renderTypeSelector("sticky")}</div>
+              <div className="w-full min-w-0 max-w-full xl:ml-auto xl:w-auto">{renderActionButtons()}</div>
             </div>
-          )}
-          {renderMobileSettingsDrawer()}
+          </div>
         </div>
       </section>
     );
@@ -1052,6 +821,7 @@ export function IbpsPhotoSignatureHelperTool() {
 
   return (
     <section ref={toolSectionRef} data-v0-managed-flow="true" id="ibps-document-resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+      {renderLocalPageStyles()}
       {renderTypeSelector()}
       {renderUploadBox()}
       {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}

@@ -2,6 +2,16 @@
   overflow: visible !important;
 }
 
+:global(.v0-tool-page):has(:global(#resize-tool).resultStage)
+  :global([data-tool-workspace-hero] > .relative > div:first-child) {
+  display: inline-flex !important;
+}
+
+:global(.v0-tool-page):has(:global(#resize-tool).resultStage)
+  :global([data-tool-workspace-hero] > .relative > h1) {
+  display: block !important;
+}
+
 .workspaceStage {
   display: flex;
   box-sizing: border-box;

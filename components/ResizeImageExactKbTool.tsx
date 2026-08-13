@@ -6,13 +6,9 @@ import JSZip from "jszip";
 import { CheckCircle2, Download, FileArchive, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
-import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
-import { imageTools } from "@/lib/tools";
 import resultStyles from "./ResizeImageExactKbTool.module.css";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
-
-const exactKbDirectoryTool = imageTools.find((tool) => tool.slug === "resize-image-to-exact-kb")!;
 
 type ImageDimensions = {
   width: number;
@@ -184,8 +180,6 @@ export function ResizeImageExactKbTool() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
-  const processingSectionRef = useRef<HTMLElement | null>(null);
-  const successSectionRef = useRef<HTMLElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const workAreaRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
@@ -198,6 +192,8 @@ export function ResizeImageExactKbTool() {
   const resizedFilesRef = useRef<OutputState[]>([]);
   const zipUrlRef = useRef<string | null>(null);
   const draggedIdRef = useRef<string | null>(null);
+  const resizeOperationRef = useRef(0);
+  const revealedResultOperationRef = useRef(0);
 
   const firstImage = selectedImages[0];
 
@@ -260,6 +256,8 @@ export function ResizeImageExactKbTool() {
       return;
     }
 
+    const isDesktopAppend = Boolean(options.append && window.innerWidth >= 1024);
+
     const unsupported = files.filter((file) => !isSupportedImage(file));
     if (unsupported.length) {
       if (!options.append) {
@@ -277,7 +275,9 @@ export function ResizeImageExactKbTool() {
       revokeSelectedImages();
     }
 
-    setStage("processing");
+    if (!isDesktopAppend) {
+      setStage("processing");
+    }
     setResizedFiles([]);
     setZipUrl(null);
     clearNativeFileInput();
@@ -499,7 +499,7 @@ export function ResizeImageExactKbTool() {
       URL.revokeObjectURL(zipUrl);
     }
 
-    window.scrollTo({ top: 0, behavior: "auto" });
+    resizeOperationRef.current += 1;
     setStage("processing");
     setError(null);
     setResizedFiles([]);
@@ -596,53 +596,39 @@ export function ResizeImageExactKbTool() {
       return;
     }
 
-    const successSection = successSectionRef.current;
-    const successTitle = successSection?.querySelector<HTMLElement>('[data-exact-kb-success-title="true"]');
-    const page = successSection?.closest<HTMLElement>(".v0-tool-page");
+    const operationId = resizeOperationRef.current;
+    if (!operationId || revealedResultOperationRef.current === operationId) return;
+
+    const successSection = toolSectionRef.current;
+    if (!successSection) return;
+
+    const page = successSection.closest<HTMLElement>(".v0-tool-page");
     const header = page?.querySelector<HTMLElement>("header") ?? document.querySelector<HTMLElement>("header");
-    const hero = successSection?.closest<HTMLElement>("[data-tool-workspace-hero]");
-    if (!successTitle) return;
+    const hero = successSection.closest<HTMLElement>("[data-tool-workspace-hero]");
+    const sharedHeadingContainer = hero?.querySelector<HTMLElement>(":scope > .relative");
+    if (!sharedHeadingContainer) return;
+    revealedResultOperationRef.current = operationId;
 
-    let animationFrame = 0;
-    const alignResultHeading = () => {
-      if (header) {
-        successTitle.style.setProperty("--exact-kb-result-header-height", `${header.getBoundingClientRect().height}px`);
-      }
-      successTitle.scrollIntoView({ behavior: "auto", block: "start" });
-    };
-    const queueAlignment = () => {
-      window.cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(() => {
-        animationFrame = window.requestAnimationFrame(alignResultHeading);
-      });
-    };
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (!successSection.isConnected || !sharedHeadingContainer.isConnected) return;
 
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(queueAlignment);
-    resizeObserver?.observe(successTitle);
-    if (header) resizeObserver?.observe(header);
-    if (hero) resizeObserver?.observe(hero);
-    alignResultHeading();
-    queueAlignment();
+      const headerBox = header?.getBoundingClientRect();
+      const headingBox = sharedHeadingContainer.getBoundingClientRect();
+      const resultBox = successSection.querySelector<HTMLElement>('[data-workflow-step="download"]')?.getBoundingClientRect();
+      const headerBottom = headerBox?.bottom ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const isResultVisible = headingBox.top >= headerBottom && Boolean(resultBox && resultBox.bottom <= viewportHeight);
+      if (isResultVisible) return;
+
+      const safeGap = 18;
+      const destination = headingBox.top + window.scrollY - (headerBox?.height ?? 0) - safeGap;
+      window.scrollTo({ top: Math.max(0, destination), behavior: "auto" });
+    });
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
-      resizeObserver?.disconnect();
-      successTitle.style.removeProperty("--exact-kb-result-header-height");
     };
   }, [stage, resizedFiles.length]);
-
-  useEffect(() => {
-    if (stage !== "processing") {
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      const processingSection = processingSectionRef.current;
-      if (!processingSection) return;
-      window.scrollTo({ top: 0, behavior: "auto" });
-      processingSection.scrollIntoView({ behavior: "auto", block: "center" });
-    });
-  }, [stage]);
 
   useEffect(() => {
     if (stage !== "upload" || !shouldScrollToUploadRef.current) {
@@ -1316,27 +1302,13 @@ export function ResizeImageExactKbTool() {
 
     return (
       <section
-        ref={(node) => {
-          toolSectionRef.current = node;
-          successSectionRef.current = node;
-        }}
+        ref={toolSectionRef}
         data-v0-managed-flow="true"
         data-exact-kb-workspace="true"
         data-exact-kb-result-stage="true"
         id="resize-tool"
         className={`${resultStyles.resultStage} mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-3`}
       >
-        <div data-exact-kb-success-title="true" className={`${resultStyles.resultHeading} relative mx-auto max-w-4xl text-center`}>
-          <div data-exact-kb-success-badge-row="true" className={`${resultStyles.resultBadgeRow} mx-auto flex max-w-3xl justify-center`}>
-            <div data-exact-kb-success-badge="true" className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-              <ToolDirectoryIcon tool={exactKbDirectoryTool} />
-              Image Tools
-            </div>
-          </div>
-          <h1 className="mx-auto mt-3 max-w-3xl text-balance text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
-            Resize Image to Exact KB Online
-          </h1>
-        </div>
         <div className="relative mt-4 min-w-0 overflow-visible bg-slate-100 sm:mt-1">
           <div data-exact-kb-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
             <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
@@ -1402,10 +1374,7 @@ export function ResizeImageExactKbTool() {
   if (stage === "processing") {
     return (
       <section
-        ref={(node) => {
-          toolSectionRef.current = node;
-          processingSectionRef.current = node;
-        }}
+        ref={toolSectionRef}
         data-v0-managed-flow="true"
         id="resize-tool"
         className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
@@ -1426,7 +1395,7 @@ export function ResizeImageExactKbTool() {
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
           {isActionBarVisible && <div ref={actionBarRef} data-exact-kb-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? resultStyles.flowActionBar : ""}`}>
-            <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+            <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <p className="truncate text-sm font-black text-slate-950">
@@ -1446,7 +1415,7 @@ export function ResizeImageExactKbTool() {
                 </div>
                 {renderSettingsControls("exact-kb", "hidden sm:flex lg:flex-nowrap lg:gap-1.5")}
               </div>
-              <div className="w-full min-w-0 max-w-full 2xl:ml-auto 2xl:w-auto">
+              <div className="w-full min-w-0 max-w-full lg:ml-auto lg:w-auto">
                 {renderActionButtons()}
               </div>
             </div>
