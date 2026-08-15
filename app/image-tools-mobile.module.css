@@ -215,19 +215,22 @@
 }
 
 @media (max-width: 767px) {
-  .imageToolPage :is(
-      :global([data-exact-kb-action-bar="true"]),
-      :global([data-compress-image-action-bar="true"]),
-      :global([data-crop-image-action-bar="true"]),
-      :global([data-resize-image-action-bar="true"]),
-      :global([data-jpg-to-png-action-bar="true"]),
-      :global([data-png-to-jpg-action-bar="true"]),
-      :global([data-signature-resize-action-bar="true"]),
-      :global([data-ssc-signature-action-bar="true"]),
-      :global([data-rrb-signature-action-bar="true"]),
-      :global([data-ibps-document-action-bar="true"])
-    ) {
-    box-shadow: none !important;
+  .imageToolPage:has(
+      :is(
+        :global([data-exact-kb-action-bar="true"]),
+        :global([data-compress-image-action-bar="true"]),
+        :global([data-crop-image-action-bar="true"]),
+        :global([data-resize-image-action-bar="true"]),
+        :global([data-jpg-to-png-action-bar="true"]),
+        :global([data-png-to-jpg-action-bar="true"]),
+        :global([data-signature-resize-action-bar="true"]),
+        :global([data-ssc-signature-action-bar="true"]),
+        :global([data-rrb-signature-action-bar="true"]),
+        :global([data-ibps-document-action-bar="true"])
+      )
+    )
+    :global([data-tool-workspace-hero]) {
+    border-bottom-width: 0 !important;
   }
 }
 
