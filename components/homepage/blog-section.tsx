@@ -12,7 +12,7 @@ export function BlogSection() {
             <h2 className="max-w-2xl text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               Helpful guides for PDFs, images, and online forms
             </h2>
-            <Link href="/blog" className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary sm:ml-auto sm:self-center">
+            <Link prefetch={false} href="/blog" className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-primary sm:ml-auto sm:self-center">
               View all posts
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
@@ -31,7 +31,7 @@ export function BlogSection() {
               </div>
               <h3 className="blog-card-title mt-4 h-12 line-clamp-2 overflow-hidden text-xl font-bold tracking-tight text-foreground">{post.title}</h3>
               <p className="blog-card-description mt-3 h-12 line-clamp-2 overflow-hidden text-sm leading-6 text-muted-foreground">{post.description}</p>
-              <Link href={`/blog/${post.slug}`} className="mt-auto inline-flex items-center gap-1.5 pt-[14px] text-sm font-medium text-primary">
+              <Link prefetch={false} href={`/blog/${post.slug}`} className="mt-auto inline-flex items-center gap-1.5 pt-[14px] text-sm font-medium text-primary">
                 Read more
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
               </Link>

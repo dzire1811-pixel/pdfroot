@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import type { Tool } from "@/lib/tools";
 
 const desktopToolOrder: Record<string, string> = {
@@ -25,7 +26,7 @@ export function PopularTools({ tools }: { tools: Tool[] }) {
             <h2 className="max-w-2xl text-balance text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
               The tools people open every single day
             </h2>
-            <Link href="/tools" className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium leading-5 text-foreground transition-colors duration-200 hover:text-primary sm:ml-auto">
+            <Link prefetch={false} href="/tools" className="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium leading-5 text-foreground transition-colors duration-200 hover:text-primary sm:ml-auto">
               View all tools
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
@@ -35,18 +36,19 @@ export function PopularTools({ tools }: { tools: Tool[] }) {
         <div className="mt-10 grid min-w-0 gap-8 lg:grid-cols-[minmax(0,14fr)_minmax(0,11fr)]">
           <div className="min-w-0 lg:self-center">
             <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2">
-              {tools.map((tool) => (
+              {filterVisibleTools(tools).map((tool) => (
                 <Link
+                  prefetch={false}
                   key={tool.slug}
                   href={`/${tool.slug}`}
                   style={getToolRowTintStyle(tool.slug)}
                   className={`group flex h-[38px] min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-4 py-2 text-left transition-[background-color,border-color,box-shadow] duration-200 hover:border-primary/50 hover:bg-[var(--tool-row-tint)] hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)] ${desktopToolOrder[tool.slug] ?? ""}`}
                 >
-                  <span className="h-4 w-4 shrink-0 [&>span]:!h-4 [&>span]:!w-4">
-                    <ToolDirectoryIcon tool={tool} />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-normal leading-5 text-foreground">{tool.name}</span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
+                    <span className="h-4 w-4 shrink-0 [&>span]:!h-4 [&>span]:!w-4">
+                      <ToolDirectoryIcon tool={tool} />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-normal leading-5 text-foreground">{tool.name}</span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1" aria-hidden="true" />
                 </Link>
               ))}
             </div>

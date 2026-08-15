@@ -6,7 +6,10 @@ import { ChangeEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from
 import { Search } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { tools } from "@/lib/tools";
+
+const visibleTools = filterVisibleTools(tools);
 
 const aliases: Record<string, string[]> = {
   "front-back-card-merge": ["aadhaar", "aadhar", "pan", "voter", "driving licence", "driving license", "rc book", "atm", "id card", "card merge", "front back"],
@@ -49,7 +52,7 @@ export function ToolSearch() {
     const normalizedQuery = normalize(query);
     if (!normalizedQuery) return [];
 
-    return tools
+    return visibleTools
       .map((tool) => ({ tool, score: scoreTool(tool, normalizedQuery) }))
       .filter((item) => item.score > 0)
       .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))

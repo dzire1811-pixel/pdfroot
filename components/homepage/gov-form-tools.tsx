@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import type { Tool } from "@/lib/tools";
 
 const exams = ["SSC", "RRB", "UPSC", "GPSC", "IBPS", "OJAS", "Railway"];
@@ -31,9 +32,10 @@ export function GovFormTools({ tools }: { tools: Tool[] }) {
           <ApplicationFileValidator />
 
           <div className="order-1 grid gap-3 md:order-none md:grid-cols-2 lg:self-center lg:gap-[14px]">
-            {tools.slice(0, 6).map((tool) => {
+            {filterVisibleTools(tools).slice(0, 6).map((tool) => {
               return (
                 <Link
+                  prefetch={false}
                   key={tool.slug}
                   href={`/${tool.slug}`}
                   style={getToolRowTintStyle(tool.slug)}

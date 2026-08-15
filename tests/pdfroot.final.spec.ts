@@ -13,8 +13,8 @@ const toolSlugs = [
 ] as const;
 
 const contentRoutes = [
-  '/', '/about', '/blog', '/contact', '/dashboard', '/disclaimer', '/faq', '/login',
-  '/privacy-policy', '/signup', '/terms-and-conditions', '/tools',
+  '/', '/about', '/blog', '/contact', '/disclaimer', '/faq',
+  '/privacy-policy', '/terms-and-conditions', '/tools',
   '/blog/resize-image-exact-kb-government-forms',
   '/blog/jpg-to-pdf-online-complete-guide',
   '/blog/compress-pdf-without-losing-quality',
@@ -186,6 +186,8 @@ test.describe('all public HTML routes', () => {
       const consoleErrors: string[] = [];
       const pageErrors: string[] = [];
       const failedImages: string[] = [];
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.addInitScript(() => localStorage.setItem('pdfroot-theme', 'dark'));
       page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
       page.on('pageerror', (error) => pageErrors.push(error.message));
       page.on('response', (response) => {
@@ -198,6 +200,10 @@ test.describe('all public HTML routes', () => {
       expect(response?.status(), 'public route response').toBeLessThan(400);
       await settle(page);
 
+      await expect(page.locator('html')).not.toHaveClass(/dark/);
+      expect(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe('light');
+      expect(await page.evaluate(() => localStorage.getItem('pdfroot-theme'))).toBe('dark');
+      await expect(page.locator('button[aria-label="Switch to Light Mode"], button[aria-label="Switch to Dark Mode"]')).toHaveCount(0);
       await expect(page.locator('head title')).toHaveCount(1);
       await expect(page).not.toHaveTitle(/^\s*$/);
       await expect(page.locator('h1')).toHaveCount(1);
@@ -232,6 +238,16 @@ test.describe('site-wide integrity', () => {
     const response = await request.get('/rrb-photo-resize', { maxRedirects: 0 });
     expect(response.status()).toBe(308);
     expect(response.headers().location).toBe('/rrb-signature-resize');
+  });
+
+  test('obsolete account routes permanently redirect to the tools directory', async ({ request }, testInfo) => {
+    test.skip(testInfo.project.name === 'mobile-chromium', 'Redirect contract is viewport-independent.');
+
+    for (const route of ['/login', '/signup', '/dashboard']) {
+      const response = await request.get(route, { maxRedirects: 0 });
+      expect(response.status()).toBe(308);
+      expect(response.headers().location).toBe('/tools');
+    }
   });
 
   test('all same-origin links resolve without HTTP errors', async ({ request }, testInfo) => {

@@ -2,9 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import { CSSProperties, ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import JSZip from "jszip";
-import { CheckCircle2, ChevronDown, Copy, Crop, Download, FileArchive, FlipHorizontal2, FlipVertical2, ImageUp, Minus, Pencil, Plus, RefreshCw, RotateCcw, RotateCw, Save, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
-import { compressCanvasToExactKb } from "@/lib/exactKbImage";
+import { CheckCircle2, ChevronDown, Copy, Crop, Download, FileArchive, FlipHorizontal2, FlipVertical2, ImageUp, Minus, Pencil, Plus, Redo2, RefreshCw, RotateCcw, RotateCw, Save, SlidersHorizontal, Trash2, Undo2, UploadCloud, X } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { imageTools } from "@/lib/tools";
 import styles from "./CropImageTool.module.css";
@@ -13,6 +11,9 @@ type Stage = "upload" | "workspace" | "processing" | "success";
 type DragMode = "draw" | "move" | "resize-se" | "resize-sw" | "resize-ne" | "resize-nw" | "resize-n" | "resize-e" | "resize-s" | "resize-w";
 type OutputSizeMode = "free" | "fixed";
 type OutputUnit = "pixel" | "cm";
+type SeparateExportFormat = "png" | "jpg";
+type ExportModalView = "choice" | "separate";
+type SeparateExportLocationMode = "file" | "directory";
 
 const cropImageDirectoryTool = imageTools.find((tool) => tool.slug === "crop-image")!;
 
@@ -92,13 +93,28 @@ type SelectedImage = {
 
 type CropResult = {
   id: string;
+  revision: number;
+  status: "completed" | "saved";
+  savedRevision: number | null;
+  savedAt: number | null;
+  targetKb: number | null;
   url: string;
   blob: Blob;
+  exportSourceBlob: Blob;
   fileName: string;
   sourceName: string;
   sizeKb: number;
   width: number;
   height: number;
+};
+
+type CropResultSnapshot = Omit<CropResult, "url">;
+
+type CropHistoryEntry = {
+  image: SelectedImage;
+  queueIndex: number;
+  result: CropResultSnapshot;
+  previousResult: CropResultSnapshot | null;
 };
 
 let imageIdSequence = 0;
@@ -111,6 +127,40 @@ function createImageId(kind: "upload" | "copy") {
   return `${kind}-${Date.now()}-${imageIdSequence}-${randomPart}`;
 }
 
+function cropResultKey(result: Pick<CropResult, "id" | "revision">) {
+  return `${result.id}:${result.revision}`;
+}
+
+function snapshotCropResult(result: CropResult): CropResultSnapshot {
+  return {
+    id: result.id,
+    revision: result.revision,
+    status: result.status,
+    savedRevision: result.savedRevision,
+    savedAt: result.savedAt,
+    targetKb: result.targetKb,
+    blob: result.blob,
+    exportSourceBlob: result.exportSourceBlob,
+    fileName: result.fileName,
+    sourceName: result.sourceName,
+    sizeKb: result.sizeKb,
+    width: result.width,
+    height: result.height,
+  };
+}
+
+function restoreCropResult(snapshot: CropResultSnapshot): CropResult {
+  return { ...snapshot, url: URL.createObjectURL(snapshot.blob) };
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  const element = target instanceof HTMLElement ? target : null;
+  return Boolean(
+    element
+    && (element.isContentEditable || element.closest("input, textarea, select, [contenteditable='true']")),
+  );
+}
+
 type SaveFileHandle = {
   createWritable: () => Promise<{
     write: (data: Blob) => Promise<void>;
@@ -120,7 +170,8 @@ type SaveFileHandle = {
 };
 
 type SaveDirectoryHandle = {
-  getFileHandle: (name: string, options?: { create?: boolean }) => Promise<SaveFileHandle>;
+  name: string;
+  getFileHandle: (name: string, options: { create: true }) => Promise<SaveFileHandle>;
 };
 
 const standardDpi = 300;
@@ -147,7 +198,7 @@ function hasImageAdjustments(adjustments: ImageAdjustments) {
   return imageAdjustmentFields.some(({ key }) => adjustments[key] !== 0);
 }
 
-function applyImageAdjustments(canvas: HTMLCanvasElement, adjustments: ImageAdjustments) {
+function applyImageAdjustmentsOnMainThread(canvas: HTMLCanvasElement, adjustments: ImageAdjustments) {
   if (!hasImageAdjustments(adjustments)) return canvas;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) {
@@ -186,6 +237,45 @@ function applyImageAdjustments(canvas: HTMLCanvasElement, adjustments: ImageAdju
   return canvas;
 }
 
+async function applyImageAdjustments(canvas: HTMLCanvasElement, adjustments: ImageAdjustments) {
+  if (!hasImageAdjustments(adjustments) || typeof Worker === "undefined") {
+    return applyImageAdjustmentsOnMainThread(canvas, adjustments);
+  }
+
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) {
+    throw new Error("Your browser does not support image adjustments.");
+  }
+
+  try {
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const worker = new Worker("/workers/image-adjustments.worker.js");
+    const adjustedBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
+      worker.onmessage = (event: MessageEvent<{ buffer?: ArrayBuffer; error?: string }>) => {
+        if (event.data.error || !event.data.buffer) {
+          reject(new Error(event.data.error || "Image adjustment worker failed."));
+          return;
+        }
+        resolve(event.data.buffer);
+      };
+      worker.onerror = () => reject(new Error("Image adjustment worker failed."));
+      worker.postMessage({
+        buffer: imageData.data.buffer,
+        adjustments,
+      }, [imageData.data.buffer]);
+    }).finally(() => worker.terminate());
+
+    context.putImageData(
+      new ImageData(new Uint8ClampedArray(adjustedBuffer), canvas.width, canvas.height),
+      0,
+      0,
+    );
+    return canvas;
+  } catch {
+    return applyImageAdjustmentsOnMainThread(canvas, adjustments);
+  }
+}
+
 function imageToPreviewCanvas(image: HTMLImageElement, maxDimension: number) {
   const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement("canvas");
@@ -203,7 +293,7 @@ function imageToPreviewCanvas(image: HTMLImageElement, maxDimension: number) {
 
 async function createAdjustedPreviewUrl(file: File, adjustments: ImageAdjustments) {
   const image = await loadImage(file);
-  const canvas = applyImageAdjustments(imageToPreviewCanvas(image, 900), adjustments);
+  const canvas = await applyImageAdjustments(imageToPreviewCanvas(image, 900), adjustments);
   const blob = await canvasToBlob(canvas, outputMimeType(file));
   return URL.createObjectURL(blob);
 }
@@ -275,8 +365,33 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string) {
   });
 }
 
+function pngCanvasToBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Could not create the PNG image."))),
+      "image/png",
+    );
+  });
+}
+
 function safeBaseName(name: string) {
   return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "PDFRoot-image";
+}
+
+function sanitizeBatchBaseName(value: string) {
+  let stem = value.trim().replace(/(?:\.(?:png|jpe?g|webp))+$/i, "");
+  stem = stem
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/[. ]+$/g, "")
+    .trim();
+  if (!stem) stem = "cropped-image";
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(stem)) stem = `_${stem}`;
+  return stem.slice(0, 220);
+}
+
+function separateExportFileName(baseName: string, index: number, total: number, format: SeparateExportFormat) {
+  const padding = Math.max(2, String(total).length);
+  return `${sanitizeBatchBaseName(baseName)}-${String(index + 1).padStart(padding, "0")}.${format}`;
 }
 
 function sourceOutputExtension(file: File) {
@@ -368,6 +483,65 @@ function copyCanvas(source: HTMLCanvasElement, width: number, height: number, fi
   return canvas;
 }
 
+async function encodePngWithinTarget(source: HTMLCanvasElement, targetKb: number) {
+  const targetBytes = targetKb * 1024;
+  const fullSizeBlob = await pngCanvasToBlob(source);
+  if (fullSizeBlob.size <= targetBytes) return fullSizeBlob;
+
+  const minDimension = 64;
+  let tooLargeScale = 1;
+  let fittingScale: number | null = null;
+  let fittingBlob: Blob | null = null;
+  let scale = 0.92;
+
+  while (
+    Math.round(source.width * scale) >= minDimension
+    && Math.round(source.height * scale) >= minDimension
+  ) {
+    const candidateCanvas = copyCanvas(
+      source,
+      source.width * scale,
+      source.height * scale,
+      false,
+    );
+    const candidateBlob = await pngCanvasToBlob(candidateCanvas);
+    if (candidateBlob.size <= targetBytes) {
+      fittingScale = scale;
+      fittingBlob = candidateBlob;
+      break;
+    }
+    tooLargeScale = scale;
+    scale *= 0.92;
+  }
+
+  if (fittingScale === null || !fittingBlob) {
+    throw new Error(
+      `Unable to produce this PNG image within ${targetKb} KB while maintaining usable dimensions. Please enter a larger target size.`,
+    );
+  }
+
+  let low = fittingScale;
+  let high = tooLargeScale;
+  for (let iteration = 0; iteration < 12; iteration += 1) {
+    const candidateScale = (low + high) / 2;
+    const candidateCanvas = copyCanvas(
+      source,
+      source.width * candidateScale,
+      source.height * candidateScale,
+      false,
+    );
+    const candidateBlob = await pngCanvasToBlob(candidateCanvas);
+    if (candidateBlob.size <= targetBytes) {
+      low = candidateScale;
+      fittingBlob = candidateBlob;
+    } else {
+      high = candidateScale;
+    }
+  }
+
+  return fittingBlob;
+}
+
 function normalizeRotation(rotation: number) {
   return ((rotation % 360) + 360) % 360;
 }
@@ -383,8 +557,10 @@ function transformedDimensions(dimensions: { width: number; height: number }, ro
   const cosine = Math.abs(Math.cos(radians));
   const sine = Math.abs(Math.sin(radians));
   return {
-    width: rotated.width * cosine + rotated.height * sine,
-    height: rotated.width * sine + rotated.height * cosine,
+    // Match the integer backing canvas used during export. Keeping preview and
+    // export in the same coordinate space avoids sub-pixel origin drift.
+    width: Math.ceil(rotated.width * cosine + rotated.height * sine),
+    height: Math.ceil(rotated.width * sine + rotated.height * cosine),
   };
 }
 
@@ -445,7 +621,7 @@ function inverseTransformPoint(
   };
 }
 
-function clampCropBoxToImage(cropBox: CropBox, dimensions: { width: number; height: number }) {
+function clampCropBoxToBounds(cropBox: CropBox, dimensions: { width: number; height: number }) {
   const x = clamp(cropBox.x, 0, dimensions.width);
   const y = clamp(cropBox.y, 0, dimensions.height);
   return {
@@ -456,44 +632,167 @@ function clampCropBoxToImage(cropBox: CropBox, dimensions: { width: number; heig
   };
 }
 
-function originalCropBoxToRotated(cropBox: CropBox, dimensions: { width: number; height: number }, rotation: number) {
-  const box = clampCropBoxToImage(cropBox, dimensions);
-  const normalized = normalizeRotation(rotation);
+function cropBoxIsInsideTransformedImage(
+  cropBox: CropBox,
+  dimensions: { width: number; height: number },
+  rotation: number,
+  fineRotation: number,
+) {
+  const rotated = rotatedDimensions(dimensions, rotation);
+  const transformed = transformedDimensions(dimensions, rotation, fineRotation);
+  const radians = (-fineRotation * Math.PI) / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  // Keep sampled pixels just inside the source. This small inset prevents
+  // antialiasing at a rotated edge from introducing transparent/dark corners.
+  const edgeInset = Math.abs(fineRotation) > 1e-6
+    ? Math.min(0.75, rotated.width / 4, rotated.height / 4)
+    : 0;
+  const corners = [
+    { x: cropBox.x, y: cropBox.y },
+    { x: cropBox.x + cropBox.width, y: cropBox.y },
+    { x: cropBox.x + cropBox.width, y: cropBox.y + cropBox.height },
+    { x: cropBox.x, y: cropBox.y + cropBox.height },
+  ];
 
-  if (normalized === 90) {
-    return { x: dimensions.height - box.y - box.height, y: box.x, width: box.height, height: box.width };
-  }
-  if (normalized === 180) {
-    return { x: dimensions.width - box.x - box.width, y: dimensions.height - box.y - box.height, width: box.width, height: box.height };
-  }
-  if (normalized === 270) {
-    return { x: box.y, y: dimensions.width - box.x - box.width, width: box.height, height: box.width };
-  }
-  return box;
+  return corners.every((corner) => {
+    const centeredX = corner.x - transformed.width / 2;
+    const centeredY = corner.y - transformed.height / 2;
+    const sourceX = rotated.width / 2 + centeredX * cosine - centeredY * sine;
+    const sourceY = rotated.height / 2 + centeredX * sine + centeredY * cosine;
+    return sourceX >= edgeInset - 1e-6
+      && sourceX <= rotated.width - edgeInset + 1e-6
+      && sourceY >= edgeInset - 1e-6
+      && sourceY <= rotated.height - edgeInset + 1e-6;
+  });
 }
 
-function rotatedCropBoxToOriginal(cropBox: CropBox, dimensions: { width: number; height: number }, rotation: number) {
-  const rotated = clampCropBoxToImage(cropBox, rotatedDimensions(dimensions, rotation));
-  const normalized = normalizeRotation(rotation);
-  let original: CropBox;
+function clampPointToTransformedImage(
+  point: { x: number; y: number },
+  dimensions: { width: number; height: number },
+  rotation: number,
+  fineRotation: number,
+) {
+  const rotated = rotatedDimensions(dimensions, rotation);
+  const transformed = transformedDimensions(dimensions, rotation, fineRotation);
+  const sourcePoint = inverseTransformPoint(point, rotated, transformed, fineRotation, false, false);
+  const edgeInset = Math.abs(fineRotation) > 1e-6
+    ? Math.min(0.75, rotated.width / 4, rotated.height / 4)
+    : 0;
+  return transformRotatedPoint(
+    {
+      x: clamp(sourcePoint.x, edgeInset, rotated.width - edgeInset),
+      y: clamp(sourcePoint.y, edgeInset, rotated.height - edgeInset),
+    },
+    rotated,
+    transformed,
+    fineRotation,
+    false,
+    false,
+  );
+}
 
-  if (normalized === 90) {
-    original = { x: rotated.y, y: dimensions.height - rotated.x - rotated.width, width: rotated.height, height: rotated.width };
-  } else if (normalized === 180) {
-    original = { x: dimensions.width - rotated.x - rotated.width, y: dimensions.height - rotated.y - rotated.height, width: rotated.width, height: rotated.height };
-  } else if (normalized === 270) {
-    original = { x: dimensions.width - rotated.y - rotated.height, y: rotated.x, width: rotated.height, height: rotated.width };
-  } else {
-    original = rotated;
+function fitCropBoxInsideTransformedImage(
+  cropBox: CropBox,
+  dimensions: { width: number; height: number },
+  rotation: number,
+  fineRotation: number,
+) {
+  const transformed = transformedDimensions(dimensions, rotation, fineRotation);
+  const bounded = clampCropBoxToBounds(cropBox, transformed);
+  if (cropBoxIsInsideTransformedImage(bounded, dimensions, rotation, fineRotation)) return bounded;
+
+  const center = clampPointToTransformedImage(
+    { x: bounded.x + bounded.width / 2, y: bounded.y + bounded.height / 2 },
+    dimensions,
+    rotation,
+    fineRotation,
+  );
+  let low = 0;
+  let high = 1;
+  let fitted: CropBox = { x: center.x, y: center.y, width: 0, height: 0 };
+
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const scale = (low + high) / 2;
+    const candidate = {
+      x: center.x - (bounded.width * scale) / 2,
+      y: center.y - (bounded.height * scale) / 2,
+      width: bounded.width * scale,
+      height: bounded.height * scale,
+    };
+    if (cropBoxIsInsideTransformedImage(candidate, dimensions, rotation, fineRotation)) {
+      low = scale;
+      fitted = candidate;
+    } else {
+      high = scale;
+    }
   }
+  return fitted;
+}
 
-  return clampCropBoxToImage(original, dimensions);
+function constrainCropBoxFromValidStart(
+  cropBox: CropBox,
+  startBox: CropBox,
+  dimensions: { width: number; height: number },
+  rotation: number,
+  fineRotation: number,
+) {
+  const transformed = transformedDimensions(dimensions, rotation, fineRotation);
+  const candidate = clampCropBoxToBounds(cropBox, transformed);
+  if (cropBoxIsInsideTransformedImage(candidate, dimensions, rotation, fineRotation)) return candidate;
+  const validStart = fitCropBoxInsideTransformedImage(startBox, dimensions, rotation, fineRotation);
+  let low = 0;
+  let high = 1;
+  let constrained = validStart;
+
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const amount = (low + high) / 2;
+    const interpolated = {
+      x: validStart.x + (candidate.x - validStart.x) * amount,
+      y: validStart.y + (candidate.y - validStart.y) * amount,
+      width: validStart.width + (candidate.width - validStart.width) * amount,
+      height: validStart.height + (candidate.height - validStart.height) * amount,
+    };
+    if (cropBoxIsInsideTransformedImage(interpolated, dimensions, rotation, fineRotation)) {
+      low = amount;
+      constrained = interpolated;
+    } else {
+      high = amount;
+    }
+  }
+  return constrained;
+}
+
+function remapCropBoxForImageTransform(
+  cropBox: CropBox | null,
+  dimensions: { width: number; height: number },
+  previousRotation: number,
+  previousFineRotation: number,
+  nextRotation: number,
+  nextFineRotation: number,
+) {
+  if (!cropBox) return null;
+  const previous = transformedDimensions(dimensions, previousRotation, previousFineRotation);
+  const next = transformedDimensions(dimensions, nextRotation, nextFineRotation);
+  // Rotation happens beneath the overlay. Preserve the selection's screen-axis
+  // size and its offset from the image center, then only shrink it if a rotated
+  // source edge would otherwise enter the crop.
+  return fitCropBoxInsideTransformedImage(
+    {
+      x: cropBox.x + (next.width - previous.width) / 2,
+      y: cropBox.y + (next.height - previous.height) / 2,
+      width: cropBox.width,
+      height: cropBox.height,
+    },
+    dimensions,
+    nextRotation,
+    nextFineRotation,
+  );
 }
 
 function isCropBoxLargeEnough(image: SelectedImage) {
   if (!image.cropBox) return false;
-  const cropBox = originalCropBoxToRotated(image.cropBox, image.dimensions, image.rotation);
-  return Math.round(cropBox.width) >= 1 && Math.round(cropBox.height) >= 1;
+  return Math.round(image.cropBox.width) >= 1 && Math.round(image.cropBox.height) >= 1;
 }
 
 function imageToRotatedCanvas(source: HTMLImageElement, rotation: number, mimeType: string) {
@@ -564,15 +863,25 @@ async function cropOneImage(
     throw new Error("Please select a crop area first.");
   }
   const mimeType = outputMimeType(image.file);
-  const rotatedSource = applyImageAdjustments(
+  const rotatedSource = await applyImageAdjustments(
     imageToRotatedCanvas(loadedImage, image.rotation, mimeType),
     image.adjustments,
   );
-  const rotatedCropBox = originalCropBoxToRotated(cropBox, image.dimensions, image.rotation);
-  const sx = clamp(Math.round(rotatedCropBox.x), 0, rotatedSource.width - 1);
-  const sy = clamp(Math.round(rotatedCropBox.y), 0, rotatedSource.height - 1);
-  const sw = clamp(Math.round(rotatedCropBox.width), 1, rotatedSource.width - sx);
-  const sh = clamp(Math.round(rotatedCropBox.height), 1, rotatedSource.height - sy);
+  const transformedSource = transformCroppedCanvas(
+    rotatedSource,
+    image.fineRotation,
+    image.flipHorizontal,
+    image.flipVertical,
+    mimeType,
+  );
+  const safeCropBox = fitCropBoxInsideTransformedImage(cropBox, image.dimensions, image.rotation, image.fineRotation);
+  // Snap only at the final backing-canvas boundary. The overlay remains
+  // sub-pixel smooth, while export avoids a second resampling pass that can
+  // blur transparency and make the saved pixels differ from the source.
+  const sx = clamp(Math.round(safeCropBox.x), 0, transformedSource.width - 1);
+  const sy = clamp(Math.round(safeCropBox.y), 0, transformedSource.height - 1);
+  const sw = clamp(Math.round(safeCropBox.width), 1, transformedSource.width - sx);
+  const sh = clamp(Math.round(safeCropBox.height), 1, transformedSource.height - sy);
 
   if (sw < 1 || sh < 1) {
     throw new Error("Crop box is invalid. Please choose a larger crop area.");
@@ -594,8 +903,18 @@ async function cropOneImage(
 
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.drawImage(rotatedSource, sx, sy, sw, sh, 0, 0, sw, sh);
-  let canvas = transformCroppedCanvas(croppedCanvas, image.fineRotation, image.flipHorizontal, image.flipVertical, mimeType);
+  context.drawImage(
+    transformedSource,
+    sx,
+    sy,
+    sw,
+    sh,
+    0,
+    0,
+    sw,
+    sh,
+  );
+  let canvas = croppedCanvas;
 
   if (settings.outputSizeMode === "fixed") {
     const requestedWidth = parsePositiveNumber(settings.outputWidth);
@@ -614,22 +933,29 @@ async function cropOneImage(
   if (targetKb) {
     canvas = copyCanvas(canvas, canvas.width, canvas.height, true);
   }
+  const exportSourceBlob = await canvasToBlob(canvas, mimeType);
   const exactResult = targetKb
-    ? await compressCanvasToExactKb(canvas, targetKb, {
+    ? await import("@/lib/exactKbImage").then(({ compressCanvasToExactKb }) => compressCanvasToExactKb(canvas, targetKb, {
         mimeType: "image/jpeg",
         allowDimensionGrowth: false,
         allowDimensionShrink: false,
         marker: "\nPDFRoot_CROP_EXACT_KB_PADDING\n",
-      })
+      }))
     : null;
-  const blob = exactResult ? exactResult.blob : await canvasToBlob(canvas, mimeType);
+  const blob = exactResult ? exactResult.blob : exportSourceBlob;
   const url = URL.createObjectURL(blob);
   const finalMimeType = exactResult ? "image/jpeg" : mimeType;
 
   return {
     id: image.id,
+    revision: 0,
+    status: "completed",
+    savedRevision: null,
+    savedAt: null,
+    targetKb,
     url,
     blob,
+    exportSourceBlob,
     fileName: outputFileNameForMime(image, finalMimeType),
     sourceName: image.file.name,
     sizeKb: blob.size / 1024,
@@ -651,6 +977,10 @@ export function CropImageTool() {
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
   const drawerDragStartYRef = useRef<number | null>(null);
   const drawerDragOffsetRef = useRef(0);
+  const drawerDragFrameRef = useRef<number | null>(null);
+  const pendingDrawerYRef = useRef<number | null>(null);
+  const previewPointerFrameRef = useRef<number | null>(null);
+  const pendingPreviewPointerRef = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
   const settingsDrawerClosingRef = useRef(false);
   const processingSectionRef = useRef<HTMLElement | null>(null);
   const successSectionRef = useRef<HTMLElement | null>(null);
@@ -660,6 +990,10 @@ export function CropImageTool() {
   const selectedImagesRef = useRef<SelectedImage[]>([]);
   const resultsRef = useRef<CropResult[]>([]);
   const cropInProgressRef = useRef(false);
+  const exportInProgressRef = useRef(false);
+  const downloadInProgressRef = useRef(false);
+  const cropRevisionRef = useRef(0);
+  const savedCropKeysRef = useRef<Set<string>>(new Set());
   const adjustedPreviewUrlRef = useRef<string | null>(null);
   const zipUrlRef = useRef<string | null>(null);
   const deviceSaveNoticeTimeoutRef = useRef<number | null>(null);
@@ -669,6 +1003,19 @@ export function CropImageTool() {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [panState, setPanState] = useState<PanState | null>(null);
   const [results, setResults] = useState<CropResult[]>([]);
+  const [savedCropKeys, setSavedCropKeys] = useState<Set<string>>(() => new Set());
+  const [undoHistory, setUndoHistory] = useState<CropHistoryEntry[]>([]);
+  const [redoHistory, setRedoHistory] = useState<CropHistoryEntry[]>([]);
+  const [exportQueue, setExportQueue] = useState<CropResult[]>([]);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportModalView, setExportModalView] = useState<ExportModalView>("choice");
+  const [separateExportBaseName, setSeparateExportBaseName] = useState("cropped-image");
+  const [separateExportFormat, setSeparateExportFormat] = useState<SeparateExportFormat>("jpg");
+  const [separateExportDirectory, setSeparateExportDirectory] = useState<SaveDirectoryHandle | null>(null);
+  const [separateExportLocationMode, setSeparateExportLocationMode] = useState<SeparateExportLocationMode>("directory");
+  const [isSeparateExportComplete, setIsSeparateExportComplete] = useState(false);
+  const [isSaveFilePickerSupported, setIsSaveFilePickerSupported] = useState(false);
+  const [isDirectoryPickerSupported, setIsDirectoryPickerSupported] = useState(false);
   const [zipUrl, setZipUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -686,6 +1033,7 @@ export function CropImageTool() {
   const [editingOutputId, setEditingOutputId] = useState<string | null>(null);
   const [outputNameDraft, setOutputNameDraft] = useState("");
   const [isSavingToDevice, setIsSavingToDevice] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [deviceSaveNotice, setDeviceSaveNotice] = useState<string | null>(null);
   const [adjustedPreview, setAdjustedPreview] = useState<{ imageId: string; url: string } | null>(null);
   const [autoAdjustingId, setAutoAdjustingId] = useState<string | null>(null);
@@ -761,7 +1109,20 @@ export function CropImageTool() {
     revokeResults();
     if (zipUrl) URL.revokeObjectURL(zipUrl);
     setResults([]);
+    resultsRef.current = [];
     setZipUrl(null);
+    savedCropKeysRef.current = new Set();
+    setSavedCropKeys(new Set());
+    setUndoHistory([]);
+    setRedoHistory([]);
+    setExportQueue([]);
+    setIsExportModalOpen(false);
+    setExportModalView("choice");
+    setSeparateExportBaseName("cropped-image");
+    setSeparateExportFormat("jpg");
+    setSeparateExportDirectory(null);
+    setSeparateExportLocationMode("directory");
+    setIsSeparateExportComplete(false);
     setDeviceSaveNotice(null);
     if (deviceSaveNoticeTimeoutRef.current !== null) {
       window.clearTimeout(deviceSaveNoticeTimeoutRef.current);
@@ -794,6 +1155,8 @@ export function CropImageTool() {
     setOutputHeight("");
     setExactKb("");
     setIsSavingToDevice(false);
+    downloadInProgressRef.current = false;
+    setIsDownloading(false);
     setDeviceSaveNotice(null);
     if (deviceSaveNoticeTimeoutRef.current !== null) {
       window.clearTimeout(deviceSaveNoticeTimeoutRef.current);
@@ -803,115 +1166,434 @@ export function CropImageTool() {
     shouldScrollToUploadRef.current = true;
   }
 
-  function showDeviceSaveNotice(message: string) {
+  function showDeviceSaveNotice(message: string, autoClear = true) {
     if (deviceSaveNoticeTimeoutRef.current !== null) {
       window.clearTimeout(deviceSaveNoticeTimeoutRef.current);
+      deviceSaveNoticeTimeoutRef.current = null;
     }
     setDeviceSaveNotice(message);
+    if (!autoClear) return;
     deviceSaveNoticeTimeoutRef.current = window.setTimeout(() => {
       setDeviceSaveNotice(null);
       deviceSaveNoticeTimeoutRef.current = null;
     }, 6000);
   }
 
-  function fileNameWithNumericSuffix(fileName: string, suffix: number) {
-    const extensionMatch = fileName.match(/(\.[^.]+)$/);
-    const extension = extensionMatch?.[1] ?? "";
-    const stem = extension ? fileName.slice(0, -extension.length) : fileName;
-    return `${stem}-${suffix}${extension}`;
+  function markResultsSaved(savedResults: CropResult[]) {
+    const savedAt = Date.now();
+    const savedKeys = new Set(savedResults.map(cropResultKey));
+    const markSaved = <T extends CropResult | CropResultSnapshot>(result: T): T => (
+      savedKeys.has(cropResultKey(result))
+        ? { ...result, status: "saved", savedRevision: result.revision, savedAt }
+        : result
+    );
+    const next = new Set(savedCropKeysRef.current);
+    savedResults.forEach((result) => next.add(cropResultKey(result)));
+    savedCropKeysRef.current = next;
+    setSavedCropKeys(next);
+    const nextResults = resultsRef.current.map(markSaved);
+    resultsRef.current = nextResults;
+    setResults(nextResults);
+    setExportQueue((current) => current.map(markSaved));
+    setUndoHistory((current) => current.map((entry) => ({
+      ...entry,
+      result: markSaved(entry.result),
+      previousResult: entry.previousResult ? markSaved(entry.previousResult) : null,
+    })));
   }
 
-  async function directoryContainsFile(directory: SaveDirectoryHandle, fileName: string) {
+  function triggerBlobDownload(blob: Blob, fileName: string) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function guardExistingDownload(event: MouseEvent<HTMLAnchorElement>) {
+    if (downloadInProgressRef.current) {
+      event.preventDefault();
+      return;
+    }
+    downloadInProgressRef.current = true;
+    setIsDownloading(true);
+    window.setTimeout(() => {
+      downloadInProgressRef.current = false;
+      setIsDownloading(false);
+    }, 700);
+  }
+
+  async function writeBlobWithSaveAs(
+    blob: Blob,
+    suggestedName: string,
+    description: string,
+    extensions: string[],
+  ) {
+    const pickerWindow = window as typeof window & {
+      showSaveFilePicker?: (options: {
+        suggestedName: string;
+        types: Array<{ description: string; accept: Record<string, string[]> }>;
+      }) => Promise<SaveFileHandle>;
+    };
+
+    if (!pickerWindow.showSaveFilePicker) {
+      triggerBlobDownload(blob, suggestedName);
+      return true;
+    }
+
     try {
-      await directory.getFileHandle(fileName);
+      const fileHandle = await pickerWindow.showSaveFilePicker({
+        suggestedName,
+        types: [{
+          description,
+          accept: { [blob.type || "application/octet-stream"]: extensions },
+        }],
+      });
+      const writable = await fileHandle.createWritable();
+      try {
+        await writable.write(blob);
+        await writable.close();
+      } catch (error) {
+        await writable.abort?.();
+        throw error;
+      }
       return true;
     } catch (error) {
-      if ((error as { name?: string } | null)?.name === "NotFoundError") return false;
+      if ((error as { name?: string } | null)?.name === "AbortError") return false;
       throw error;
     }
   }
 
-  async function availableDirectoryFileName(directory: SaveDirectoryHandle, requestedName: string, reservedNames: Set<string>) {
-    let fileName = requestedName;
-    let suffix = 2;
-    while (reservedNames.has(fileName.toLocaleLowerCase()) || await directoryContainsFile(directory, fileName)) {
-      fileName = fileNameWithNumericSuffix(requestedName, suffix);
-      suffix += 1;
+  async function encodeSeparateCrop(result: CropResult, format: SeparateExportFormat) {
+    const image = await loadImage(new File(
+      [result.exportSourceBlob],
+      result.fileName,
+      { type: result.exportSourceBlob.type },
+    ));
+    const canvas = document.createElement("canvas");
+    canvas.width = result.width;
+    canvas.height = result.height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Could not prepare this crop for download.");
+    if (format === "jpg") {
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
     }
-    reservedNames.add(fileName.toLocaleLowerCase());
-    return fileName;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (!result.targetKb) {
+      return format === "jpg"
+        ? canvasToBlob(canvas, "image/jpeg")
+        : pngCanvasToBlob(canvas);
+    }
+
+    if (format === "png") {
+      return encodePngWithinTarget(canvas, result.targetKb);
+    }
+
+    const targetBytes = result.targetKb * 1024;
+    const encoded = await import("@/lib/exactKbImage").then(({ compressCanvasToExactKb }) => compressCanvasToExactKb(canvas, result.targetKb!, {
+      mimeType: "image/jpeg",
+      allowDimensionGrowth: false,
+      allowDimensionShrink: true,
+      minDimension: 64,
+      marker: "\nPDFRoot_CROP_EXPORT_EXACT_KB_PADDING\n",
+    }));
+    if (encoded.blob.size > targetBytes) {
+      throw new Error(
+        `Unable to produce this image within ${result.targetKb} KB while maintaining usable dimensions. Please enter a larger target size.`,
+      );
+    }
+    return encoded.blob;
   }
 
-  function completedSaveMessage(completedCount: number, skippedCount: number, destination: "folder" | "zip") {
-    const savedText = destination === "folder" ? "saved to the selected folder" : "downloaded as a ZIP";
-    const completedLabel = `${completedCount} completed image${completedCount === 1 ? "" : "s"} ${savedText}.`;
-    const skippedLabel = skippedCount > 0
-      ? ` ${skippedCount} pending image${skippedCount === 1 ? "" : "s"} skipped.`
-      : "";
-    return `${completedLabel}${skippedLabel}`;
+  function openSeparateExportSettings(queuedResults = exportQueue) {
+    const firstResult = queuedResults[0];
+    setSeparateExportBaseName(firstResult ? `${safeBaseName(firstResult.sourceName)}-crop` : "cropped-image");
+    setSeparateExportFormat("jpg");
+    setSeparateExportDirectory(null);
+    setSeparateExportLocationMode(queuedResults.length === 1 ? "file" : "directory");
+    setIsSeparateExportComplete(false);
+    setExportModalView("separate");
+    setDeviceSaveNotice(null);
   }
 
-  async function downloadCompletedAsZip(completedResults: CropResult[], skippedCount: number) {
-    const archive = new JSZip();
-    ensureUniqueResultFileNames(completedResults).forEach((result) => {
-      archive.file(result.fileName, result.blob);
+  async function chooseSeparateExportDirectory() {
+    if (isSavingToDevice) return;
+    const directoryPicker = (
+      window as typeof window & {
+        showDirectoryPicker?: (options: { mode: "readwrite" }) => Promise<SaveDirectoryHandle>;
+      }
+    ).showDirectoryPicker;
+    if (!directoryPicker) return;
+
+    try {
+      const directory = await directoryPicker({ mode: "readwrite" });
+      setSeparateExportDirectory(directory);
+      setIsSeparateExportComplete(false);
+      setDeviceSaveNotice(null);
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name === "AbortError") return;
+      showDeviceSaveNotice("The selected folder could not be opened. You can keep using Downloads.");
+    }
+  }
+
+  async function writeBlobToDirectory(directory: SaveDirectoryHandle, blob: Blob, fileName: string) {
+    const fileHandle = await directory.getFileHandle(fileName, { create: true });
+    const writable = await fileHandle.createWritable();
+    try {
+      await writable.write(blob);
+      await writable.close();
+    } catch (error) {
+      try {
+        await writable.abort?.();
+      } catch {
+        // Preserve the original write or close error.
+      }
+      throw error;
+    }
+  }
+
+  async function saveSingleSeparateCropAs() {
+    if (exportQueue.length !== 1 || exportInProgressRef.current) return;
+    const picker = (
+      window as typeof window & {
+        showSaveFilePicker?: (options: {
+          suggestedName: string;
+          types: Array<{ description: string; accept: Record<string, string[]> }>;
+        }) => Promise<SaveFileHandle>;
+      }
+    ).showSaveFilePicker;
+    if (!picker) return;
+
+    const result = exportQueue[0];
+    const fileName = separateExportFileName(
+      separateExportBaseName,
+      0,
+      1,
+      separateExportFormat,
+    );
+    const isPng = separateExportFormat === "png";
+    exportInProgressRef.current = true;
+    setIsSavingToDevice(true);
+    setDeviceSaveNotice(null);
+
+    try {
+      const fileHandle = await picker({
+        suggestedName: fileName,
+        types: [{
+          description: isPng ? "PNG Image" : "JPEG Image",
+          accept: isPng
+            ? { "image/png": [".png"] }
+            : { "image/jpeg": [".jpg", ".jpeg"] },
+        }],
+      });
+      const blob = await encodeSeparateCrop(result, separateExportFormat);
+      const writable = await fileHandle.createWritable();
+      try {
+        await writable.write(blob);
+        await writable.close();
+      } catch (error) {
+        try {
+          await writable.abort?.();
+        } catch {
+          // Preserve the original write or close error.
+        }
+        throw error;
+      }
+
+      markResultsSaved([result]);
+      showDeviceSaveNotice("1 crop image saved successfully.");
+      setIsExportModalOpen(false);
+      setExportQueue([]);
+      setExportModalView("choice");
+      setSeparateExportLocationMode("directory");
+    } catch (error) {
+      if ((error as { name?: string } | null)?.name !== "AbortError") {
+        showDeviceSaveNotice(
+          error instanceof Error
+            ? `${error.message} The crop remains ready to retry.`
+            : "The crop could not be saved. It remains ready to retry.",
+        );
+      }
+    } finally {
+      exportInProgressRef.current = false;
+      setIsSavingToDevice(false);
+    }
+  }
+
+  async function downloadSeparateCrops(queuedResults = exportQueue) {
+    if (!queuedResults.length || exportInProgressRef.current) return;
+    exportInProgressRef.current = true;
+    setIsSavingToDevice(true);
+    setDeviceSaveNotice(null);
+    const failedResults: CropResult[] = [];
+    const failureMessages: string[] = [];
+    const directory = separateExportDirectory;
+    let completedCount = 0;
+
+    try {
+      for (let index = 0; index < queuedResults.length; index += 1) {
+        const result = queuedResults[index];
+        try {
+          const blob = await encodeSeparateCrop(result, separateExportFormat);
+          const fileName = separateExportFileName(
+            separateExportBaseName,
+            index,
+            queuedResults.length,
+            separateExportFormat,
+          );
+          if (directory) {
+            await writeBlobToDirectory(directory, blob, fileName);
+          } else {
+            triggerBlobDownload(blob, fileName);
+          }
+          markResultsSaved([result]);
+          completedCount += 1;
+        } catch (error) {
+          failedResults.push(result);
+          failureMessages.push(error instanceof Error ? error.message : "The image could not be exported.");
+        }
+      }
+
+      if (!failedResults.length) {
+        if (directory) {
+          showDeviceSaveNotice(
+            `${completedCount} crop image${completedCount === 1 ? "" : "s"} saved to: ${directory.name}`,
+            false,
+          );
+          setIsSeparateExportComplete(true);
+        } else {
+          showDeviceSaveNotice(
+            `${completedCount} crop image${completedCount === 1 ? "" : "s"} downloaded successfully. Check your browser downloads.`,
+          );
+          setIsExportModalOpen(false);
+          setExportQueue([]);
+          setExportModalView("choice");
+          setSeparateExportDirectory(null);
+          setSeparateExportLocationMode("directory");
+          setIsSeparateExportComplete(false);
+        }
+      } else {
+        const successLabel = completedCount > 0
+          ? `${completedCount} image${completedCount === 1 ? "" : "s"} ${directory ? "saved" : "downloaded"}. `
+          : "";
+        const targetFailure = failureMessages.some((message) => message.includes("Unable to produce"));
+        const failureLabel = targetFailure
+          ? `${failedResults.length} image${failedResults.length === 1 ? "" : "s"} could not reach the requested KB and remain${failedResults.length === 1 ? "s" : ""} ready to retry.`
+          : `${failedResults.length} crop${failedResults.length === 1 ? "" : "s"} remain${failedResults.length === 1 ? "s" : ""} ready to retry.`;
+        showDeviceSaveNotice(
+          completedCount === 0 && failedResults.length === 1
+            ? `${failureMessages[0]} The crop remains ready to retry.`
+            : `${successLabel}${failureLabel}`,
+        );
+        setExportQueue(failedResults);
+      }
+    } finally {
+      exportInProgressRef.current = false;
+      setIsSavingToDevice(false);
+    }
+  }
+
+  async function createCombinedCropPdf(queuedResults: CropResult[]) {
+    const { jsPDF } = await import("jspdf");
+    const first = queuedResults[0];
+    const firstSize: [number, number] = [Math.max(1, first.width * 0.75), Math.max(1, first.height * 0.75)];
+    const document = new jsPDF({
+      unit: "pt",
+      format: firstSize,
+      orientation: firstSize[0] > firstSize[1] ? "landscape" : "portrait",
+      compress: true,
     });
-    const archiveBlob = await archive.generateAsync({ type: "blob" });
-    const archiveUrl = URL.createObjectURL(archiveBlob);
-    const anchor = document.createElement("a");
-    anchor.href = archiveUrl;
-    anchor.download = "PDFRoot-completed-cropped-images.zip";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(archiveUrl), 1000);
-    showDeviceSaveNotice(completedSaveMessage(completedResults.length, skippedCount, "zip"));
+
+    for (let index = 0; index < queuedResults.length; index += 1) {
+      const result = queuedResults[index];
+      const pageSize: [number, number] = [Math.max(1, result.width * 0.75), Math.max(1, result.height * 0.75)];
+      if (index > 0) {
+        document.addPage(pageSize, pageSize[0] > pageSize[1] ? "landscape" : "portrait");
+      }
+      document.addImage(
+        new Uint8Array(await result.blob.arrayBuffer()),
+        result.blob.type === "image/png" ? "PNG" : result.blob.type === "image/webp" ? "WEBP" : "JPEG",
+        0,
+        0,
+        pageSize[0],
+        pageSize[1],
+        undefined,
+        "FAST",
+      );
+    }
+
+    return document.output("blob");
   }
 
-  async function saveCompletedToDevice() {
-    const completedResults = results.filter((result) => result.blob.size > 0);
-    if (!completedResults.length || isSavingToDevice) return;
-
-    const skippedCount = selectedImages.length;
-    const pickerWindow = window as typeof window & {
-      showDirectoryPicker?: () => Promise<SaveDirectoryHandle>;
-    };
-
+  async function saveMultipleAsPdf(queuedResults = exportQueue) {
+    if (!queuedResults.length || isSavingToDevice) return;
     setIsSavingToDevice(true);
     setDeviceSaveNotice(null);
     try {
-      if (!pickerWindow.showDirectoryPicker) {
-        await downloadCompletedAsZip(completedResults, skippedCount);
-        return;
-      }
-
-      const directory = await pickerWindow.showDirectoryPicker();
-      const reservedNames = new Set<string>();
-      for (const result of completedResults) {
-        const fileName = await availableDirectoryFileName(directory, result.fileName, reservedNames);
-        const fileHandle = await directory.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        try {
-          await writable.write(result.blob);
-          await writable.close();
-        } catch (error) {
-          await writable.abort?.();
-          throw error;
-        }
-      }
-      showDeviceSaveNotice(completedSaveMessage(completedResults.length, skippedCount, "folder"));
-    } catch (error) {
-      if ((error as { name?: string } | null)?.name === "AbortError") return;
-      showDeviceSaveNotice("Completed images could not be saved. Please try again.");
+      const pdf = await createCombinedCropPdf(queuedResults);
+      const saved = await writeBlobWithSaveAs(
+        pdf,
+        "PDFRoot-cropped-images.pdf",
+        "PDF document",
+        [".pdf"],
+      );
+      if (!saved) return;
+      markResultsSaved(queuedResults);
+      showDeviceSaveNotice(`${queuedResults.length} completed images saved as one PDF.`);
+      setIsExportModalOpen(false);
+      setExportQueue([]);
+    } catch {
+      showDeviceSaveNotice("Completed images could not be saved as a PDF. Please try again.");
     } finally {
       setIsSavingToDevice(false);
     }
+  }
+
+  async function saveCompletedToDevice() {
+    if (isSavingToDevice) return;
+    const unsavedResults = results.filter(
+      (result) => (
+        result.blob.size > 0
+        && result.status === "completed"
+        && (result.savedRevision === null || result.revision > result.savedRevision)
+        && !savedCropKeysRef.current.has(cropResultKey(result))
+      ),
+    );
+
+    if (!unsavedResults.length) {
+      showDeviceSaveNotice("No new completed crops to save.");
+      return;
+    }
+
+    if (unsavedResults.length > 1 || results.length > 1) {
+      setExportQueue(unsavedResults);
+      if (unsavedResults.length === 1) {
+        openSeparateExportSettings(unsavedResults);
+      } else {
+        setExportModalView("choice");
+      }
+      setIsExportModalOpen(true);
+      return;
+    }
+
+    setExportQueue(unsavedResults);
+    openSeparateExportSettings(unsavedResults);
+    setIsExportModalOpen(true);
   }
 
   function startEditingOutputName(image: SelectedImage) {
     setActiveId(image.id);
     setEditingOutputId(image.id);
     setOutputNameDraft(image.outputFileName);
+  }
+
+  function invalidateRedoHistory() {
+    if (redoHistory.length) setRedoHistory([]);
   }
 
   function selectUploadedImage(id: string) {
@@ -956,6 +1638,7 @@ export function CropImageTool() {
   }
 
   function duplicateOriginalImage(sourceImage: SelectedImage) {
+    invalidateRedoHistory();
     setError(null);
     setEditingOutputId(null);
     setOutputNameDraft("");
@@ -1019,6 +1702,7 @@ export function CropImageTool() {
   }
 
   function commitOutputName(image: SelectedImage) {
+    invalidateRedoHistory();
     const sanitized = sanitizeOutputFileName(
       outputNameDraft,
       sourceOutputExtension(image.file),
@@ -1036,6 +1720,7 @@ export function CropImageTool() {
   }
 
   function removeImage(id: string) {
+    invalidateRedoHistory();
     const existingResult = completedResultFor(id);
     if (existingResult) {
       URL.revokeObjectURL(existingResult.url);
@@ -1073,10 +1758,16 @@ export function CropImageTool() {
 
   function updateActiveCropBox(cropBox: CropBox | null) {
     if (!activeImage) return;
+    invalidateRedoHistory();
     setSelectedImages((current) =>
       current.map((image) =>
         image.id === activeImage.id
-          ? { ...image, cropBox: cropBox ? clampCropBoxToImage(cropBox, image.dimensions) : null }
+          ? {
+              ...image,
+              cropBox: cropBox
+                ? fitCropBoxInsideTransformedImage(cropBox, image.dimensions, image.rotation, image.fineRotation)
+                : null,
+            }
           : image,
       ),
     );
@@ -1133,27 +1824,61 @@ export function CropImageTool() {
 
   function rotateActiveImage(delta: -90 | 90) {
     if (!activeImage) return;
+    invalidateRedoHistory();
     setError(null);
     if (completedResultFor(activeImage.id)) {
       removeResult(activeImage.id);
     }
     setPanState(null);
-    setSelectedImages((current) => current.map((image) => (image.id === activeImage.id ? { ...image, rotation: normalizeRotation(image.rotation + delta), panX: 0, panY: 0 } : image)));
+    setSelectedImages((current) => current.map((image) => {
+      if (image.id !== activeImage.id) return image;
+      const rotation = normalizeRotation(image.rotation + delta);
+      return {
+        ...image,
+        rotation,
+        cropBox: remapCropBoxForImageTransform(
+          image.cropBox,
+          image.dimensions,
+          image.rotation,
+          image.fineRotation,
+          rotation,
+          image.fineRotation,
+        ),
+        panX: 0,
+        panY: 0,
+      };
+    }));
   }
 
   function updateFineRotation(value: number) {
     if (!activeImage) return;
+    invalidateRedoHistory();
     const fineRotation = Math.round(clamp(value, -45, 45) * 10) / 10;
     setError(null);
     if (completedResultFor(activeImage.id)) removeResult(activeImage.id);
     setPanState(null);
-    setSelectedImages((current) => current.map((image) => (
-      image.id === activeImage.id ? { ...image, fineRotation, panX: 0, panY: 0 } : image
-    )));
+    setSelectedImages((current) => current.map((image) => {
+      if (image.id !== activeImage.id) return image;
+      return {
+        ...image,
+        fineRotation,
+        cropBox: remapCropBoxForImageTransform(
+          image.cropBox,
+          image.dimensions,
+          image.rotation,
+          image.fineRotation,
+          image.rotation,
+          fineRotation,
+        ),
+        panX: 0,
+        panY: 0,
+      };
+    }));
   }
 
   function toggleActiveFlip(axis: "horizontal" | "vertical") {
     if (!activeImage) return;
+    invalidateRedoHistory();
     setError(null);
     if (completedResultFor(activeImage.id)) removeResult(activeImage.id);
     setPanState(null);
@@ -1167,6 +1892,7 @@ export function CropImageTool() {
 
   function resetActiveImage() {
     if (!activeImage) return;
+    invalidateRedoHistory();
     setError(null);
     setDragState(null);
     setPanState(null);
@@ -1184,6 +1910,7 @@ export function CropImageTool() {
 
   function updateActiveImageAdjustment(key: ImageAdjustmentKey, value: number) {
     if (!activeImage) return;
+    invalidateRedoHistory();
     const imageId = activeImage.id;
     const nextValue = clamp(Math.round(value), -100, 100);
     setError(null);
@@ -1205,6 +1932,7 @@ export function CropImageTool() {
 
   function resetActiveImageAdjustments() {
     if (!activeImage) return;
+    invalidateRedoHistory();
     const imageId = activeImage.id;
     setError(null);
     setSelectedImages((current) =>
@@ -1218,6 +1946,7 @@ export function CropImageTool() {
 
   async function autoAdjustActiveImage() {
     if (!activeImage || autoAdjustingId) return;
+    invalidateRedoHistory();
     const imageId = activeImage.id;
     const file = activeImage.file;
     setError(null);
@@ -1264,13 +1993,99 @@ export function CropImageTool() {
     setResults((current) => {
       const removed = current.find((result) => result.id === id);
       if (removed) URL.revokeObjectURL(removed.url);
-      return current.filter((result) => result.id !== id);
+      const next = current.filter((result) => result.id !== id);
+      resultsRef.current = next;
+      return next;
     });
     if (zipUrl) {
       URL.revokeObjectURL(zipUrl);
       setZipUrl(null);
     }
     setActiveId(id);
+  }
+
+  function clearGeneratedZip() {
+    if (!zipUrlRef.current) return;
+    URL.revokeObjectURL(zipUrlRef.current);
+    zipUrlRef.current = null;
+    setZipUrl(null);
+  }
+
+  function undoLastCrop() {
+    if (cropInProgressRef.current || isSavingToDevice) return;
+    const entry = undoHistory[undoHistory.length - 1];
+    if (!entry) return;
+
+    const currentResult = resultsRef.current.find(
+      (result) => result.id === entry.result.id && result.revision === entry.result.revision,
+    );
+    if (!currentResult) return;
+
+    URL.revokeObjectURL(currentResult.url);
+    const nextResults = resultsRef.current.filter((result) => result !== currentResult);
+    if (entry.previousResult) nextResults.push(restoreCropResult(entry.previousResult));
+    resultsRef.current = nextResults;
+    setResults(nextResults);
+
+    const restoredImage = { ...entry.image, previewUrl: URL.createObjectURL(entry.image.file) };
+    const currentQueue = selectedImagesRef.current.filter((image) => image.id !== restoredImage.id);
+    const insertionIndex = clamp(entry.queueIndex, 0, currentQueue.length);
+    const nextQueue = [...currentQueue];
+    nextQueue.splice(insertionIndex, 0, restoredImage);
+    selectedImagesRef.current = nextQueue;
+    setSelectedImages(nextQueue);
+    setActiveId(restoredImage.id);
+    setStage("workspace");
+    setError(null);
+    setDragState(null);
+    setPanState(null);
+    setUndoHistory((current) => current.slice(0, -1));
+    setRedoHistory((current) => [...current, entry]);
+    setIsExportModalOpen(false);
+    setExportQueue([]);
+    clearGeneratedZip();
+  }
+
+  async function redoLastCrop() {
+    if (cropInProgressRef.current || isSavingToDevice) return;
+    const entry = redoHistory[redoHistory.length - 1];
+    if (!entry) return;
+
+    const sourceImage = selectedImagesRef.current.find((image) => image.id === entry.image.id);
+    if (!sourceImage) return;
+
+    URL.revokeObjectURL(sourceImage.previewUrl);
+    const nextQueue = selectedImagesRef.current.filter((image) => image.id !== sourceImage.id);
+    const existingResult = resultsRef.current.find((result) => result.id === entry.result.id);
+    if (existingResult) URL.revokeObjectURL(existingResult.url);
+    const restoredResult = restoreCropResult(entry.result);
+    const nextResults = [
+      ...resultsRef.current.filter((result) => result.id !== restoredResult.id),
+      restoredResult,
+    ];
+
+    selectedImagesRef.current = nextQueue;
+    resultsRef.current = nextResults;
+    setSelectedImages(nextQueue);
+    setResults(nextResults);
+    setRedoHistory((current) => current.slice(0, -1));
+    setUndoHistory((current) => [...current, entry]);
+    setIsExportModalOpen(false);
+    setExportQueue([]);
+    setError(null);
+    setDragState(null);
+    setPanState(null);
+    clearGeneratedZip();
+
+    if (!nextQueue.length) {
+      setActiveId(null);
+      await moveToFinalDownload(nextResults);
+      return;
+    }
+
+    const nextIndex = Math.min(entry.queueIndex, nextQueue.length - 1);
+    setActiveId(nextQueue[nextIndex]?.id ?? nextQueue[0]?.id ?? null);
+    setStage("workspace");
   }
 
   async function moveToFinalDownload(nextResults: CropResult[]) {
@@ -1280,62 +2095,20 @@ export function CropImageTool() {
     setResults(finalResults);
 
     if (finalResults.length > 1) {
+      const { default: JSZip } = await import("jszip");
       const zip = new JSZip();
       finalResults.forEach((result) => zip.file(result.fileName, result.blob));
       const zipBlob = await zip.generateAsync({ type: "blob" });
-      setZipUrl(URL.createObjectURL(zipBlob));
+      const nextZipUrl = URL.createObjectURL(zipBlob);
+      zipUrlRef.current = nextZipUrl;
+      setZipUrl(nextZipUrl);
     } else {
+      zipUrlRef.current = null;
       setZipUrl(null);
     }
 
     window.scrollTo({ top: 0, behavior: "auto" });
     setStage("success");
-  }
-
-  function triggerResultDownload(result: CropResult) {
-    const anchor = document.createElement("a");
-    anchor.href = result.url;
-    anchor.download = result.fileName;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  }
-
-  async function saveResultAs(result: CropResult) {
-    const pickerWindow = window as Window & {
-      showSaveFilePicker?: (options: {
-        suggestedName: string;
-        types: Array<{ description: string; accept: Record<string, string[]> }>;
-      }) => Promise<SaveFileHandle>;
-    };
-
-    if (!pickerWindow.showSaveFilePicker) {
-      triggerResultDownload(result);
-      return;
-    }
-
-    try {
-      const extension = result.fileName.match(/\.[^.]+$/)?.[0] ?? `.${outputExtension(result.blob.type)}`;
-      const fileHandle = await pickerWindow.showSaveFilePicker({
-        suggestedName: result.fileName,
-        types: [{
-          description: "Cropped image",
-          accept: { [result.blob.type || "image/jpeg"]: [extension] },
-        }],
-      });
-      const writable = await fileHandle.createWritable();
-      try {
-        await writable.write(result.blob);
-        await writable.close();
-      } catch (error) {
-        await writable.abort?.();
-        throw error;
-      }
-    } catch (error) {
-      if ((error as { name?: string } | null)?.name === "AbortError") return;
-      triggerResultDownload(result);
-    }
   }
 
   async function handleFiles(fileList: FileList | File[] | undefined, options: { append?: boolean } = {}) {
@@ -1352,6 +2125,7 @@ export function CropImageTool() {
       return;
     }
 
+    invalidateRedoHistory();
     if (!options.append) {
       clearProcessedOutput();
       selectedImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
@@ -1444,7 +2218,7 @@ export function CropImageTool() {
     void handleFiles(event.dataTransfer.files, { append: selectedImages.length > 0 });
   }
 
-  function pointFromEvent(event: { clientX: number; clientY: number }) {
+  function pointFromEvent(event: { clientX: number; clientY: number }, keepInsideImage = false) {
     const frame = cropFrameRef.current;
     if (!frame || !activeImage) return { x: 0, y: 0 };
     const rect = frame.getBoundingClientRect();
@@ -1457,18 +2231,13 @@ export function CropImageTool() {
       x: (frameX - metrics.x) / metrics.scale,
       y: (frameY - metrics.y) / metrics.scale,
     };
-    const rotatedPoint = inverseTransformPoint(
-      transformedPoint,
-      metrics.rotated,
-      metrics.transformed,
-      activeImage.fineRotation,
-      activeImage.flipHorizontal,
-      activeImage.flipVertical,
-    );
-    return {
-      x: clamp(rotatedPoint.x, 0, metrics.rotated.width),
-      y: clamp(rotatedPoint.y, 0, metrics.rotated.height),
+    const boundedPoint = {
+      x: clamp(transformedPoint.x, 0, metrics.transformed.width),
+      y: clamp(transformedPoint.y, 0, metrics.transformed.height),
     };
+    return keepInsideImage
+      ? clampPointToTransformedImage(boundedPoint, activeImage.dimensions, activeImage.rotation, activeImage.fineRotation)
+      : boundedPoint;
   }
 
   function captureCropPointer(event: PointerEvent<HTMLDivElement>) {
@@ -1489,7 +2258,7 @@ export function CropImageTool() {
       mode,
       startX: point.x,
       startY: point.y,
-      startBox: originalCropBoxToRotated(activeImage.cropBox, activeImage.dimensions, activeImage.rotation),
+      startBox: activeImage.cropBox,
     });
     if (completedResultFor(activeImage.id)) {
       removeResult(activeImage.id);
@@ -1518,18 +2287,34 @@ export function CropImageTool() {
     if (!activeImage.cropModeEnabled) return;
     event.preventDefault();
     captureCropPointer(event);
-    const point = pointFromEvent(event);
-    const nextRotatedCropBox = { x: point.x, y: point.y, width: 0, height: 0 };
-    updateActiveCropBox(rotatedCropBoxToOriginal(nextRotatedCropBox, activeImage.dimensions, activeImage.rotation));
-    setDragState({ mode: "draw", startX: point.x, startY: point.y, startBox: nextRotatedCropBox });
+    const point = pointFromEvent(event, true);
+    const nextCropBox = { x: point.x, y: point.y, width: 0, height: 0 };
+    updateActiveCropBox(nextCropBox);
+    setDragState({ mode: "draw", startX: point.x, startY: point.y, startBox: nextCropBox });
     if (completedResultFor(activeImage.id)) {
       removeResult(activeImage.id);
     }
   }
 
   function onPreviewPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!dragState && !(panState && activeImage && event.pointerId === panState.pointerId)) return;
+    event.preventDefault();
+    pendingPreviewPointerRef.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
+    if (previewPointerFrameRef.current !== null) return;
+    previewPointerFrameRef.current = window.requestAnimationFrame(() => {
+      previewPointerFrameRef.current = null;
+      const pending = pendingPreviewPointerRef.current;
+      pendingPreviewPointerRef.current = null;
+      if (pending) applyPreviewPointerMove(pending);
+    });
+  }
+
+  function applyPreviewPointerMove(event: { pointerId: number; clientX: number; clientY: number }) {
     if (panState && activeImage && event.pointerId === panState.pointerId) {
-      event.preventDefault();
       const pan = clampPan(
         panState.startX + event.clientX - panState.startClientX,
         panState.startY + event.clientY - panState.startClientY,
@@ -1539,19 +2324,28 @@ export function CropImageTool() {
       return;
     }
     if (!dragState) return;
-    event.preventDefault();
     const point = pointFromEvent(event);
     const deltaX = point.x - dragState.startX;
     const deltaY = point.y - dragState.startY;
-    const dimensions = rotatedDimensions(activeImage.dimensions, activeImage.rotation);
+    const dimensions = transformedDimensions(activeImage.dimensions, activeImage.rotation, activeImage.fineRotation);
+
+    const updateDraggedCropBox = (cropBox: CropBox) => {
+      updateActiveCropBox(constrainCropBoxFromValidStart(
+        cropBox,
+        dragState.startBox,
+        activeImage.dimensions,
+        activeImage.rotation,
+        activeImage.fineRotation,
+      ));
+    };
 
     if (dragState.mode === "move") {
-      const nextRotatedCropBox = {
+      const nextCropBox = {
         ...dragState.startBox,
         x: clamp(dragState.startBox.x + deltaX, 0, dimensions.width - dragState.startBox.width),
         y: clamp(dragState.startBox.y + deltaY, 0, dimensions.height - dragState.startBox.height),
       };
-      updateActiveCropBox(rotatedCropBoxToOriginal(nextRotatedCropBox, activeImage.dimensions, activeImage.rotation));
+      updateDraggedCropBox(nextCropBox);
       return;
     }
 
@@ -1560,12 +2354,12 @@ export function CropImageTool() {
       const top = Math.min(dragState.startY, point.y);
       const right = Math.max(dragState.startX, point.x);
       const bottom = Math.max(dragState.startY, point.y);
-      updateActiveCropBox(rotatedCropBoxToOriginal({
+      updateDraggedCropBox({
         x: left,
         y: top,
         width: right - left,
         height: bottom - top,
-      }, activeImage.dimensions, activeImage.rotation));
+      });
       return;
     }
 
@@ -1615,12 +2409,12 @@ export function CropImageTool() {
       left = clamp(start.x + deltaX, 0, startRight - minWidth);
     }
 
-    updateActiveCropBox(rotatedCropBoxToOriginal({
+    updateDraggedCropBox({
       x: left,
       y: top,
       width: right - left,
       height: bottom - top,
-    }, activeImage.dimensions, activeImage.rotation));
+    });
   }
 
   function stopCropDrag() {
@@ -1632,6 +2426,11 @@ export function CropImageTool() {
   }
 
   function stopPreviewPointerInteraction(event?: PointerEvent<HTMLDivElement>) {
+    if (previewPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(previewPointerFrameRef.current);
+      previewPointerFrameRef.current = null;
+      pendingPreviewPointerRef.current = null;
+    }
     if (event && panState?.pointerId === event.pointerId && event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -1682,8 +2481,10 @@ export function CropImageTool() {
       });
       const currentResults = resultsRef.current;
       const replaced = currentResults.find((result) => result.id === cropped.id);
+      cropRevisionRef.current += 1;
+      const completedCrop = { ...cropped, revision: cropRevisionRef.current };
       if (replaced) URL.revokeObjectURL(replaced.url);
-      const nextResults = [...currentResults.filter((result) => result.id !== cropped.id), cropped];
+      const nextResults = [...currentResults.filter((result) => result.id !== completedCrop.id), completedCrop];
       const activeQueue = selectedImagesRef.current;
       const completedIndex = activeQueue.findIndex((image) => image.id === activeImage.id);
       if (completedIndex < 0) {
@@ -1692,6 +2493,13 @@ export function CropImageTool() {
       const remainingImages = activeQueue.filter((image) => image.id !== activeImage.id);
       const nextImage = remainingImages[completedIndex] ?? remainingImages[completedIndex - 1] ?? null;
 
+      setUndoHistory((current) => [...current, {
+        image: { ...activeImage },
+        queueIndex: completedIndex,
+        result: snapshotCropResult(completedCrop),
+        previousResult: replaced ? snapshotCropResult(replaced) : null,
+      }]);
+      setRedoHistory([]);
       resultsRef.current = nextResults;
       setResults(nextResults);
       selectedImagesRef.current = remainingImages;
@@ -1719,12 +2527,57 @@ export function CropImageTool() {
   }
 
   useEffect(() => {
+    setIsSaveFilePickerSupported(
+      typeof (
+        window as typeof window & {
+          showSaveFilePicker?: unknown;
+        }
+      ).showSaveFilePicker === "function",
+    );
+    setIsDirectoryPickerSupported(
+      typeof (
+        window as typeof window & {
+          showDirectoryPicker?: unknown;
+        }
+      ).showDirectoryPicker === "function",
+    );
+  }, []);
+
+  useEffect(() => () => {
+    if (previewPointerFrameRef.current !== null) {
+      window.cancelAnimationFrame(previewPointerFrameRef.current);
+    }
+    if (drawerDragFrameRef.current !== null) {
+      window.cancelAnimationFrame(drawerDragFrameRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
     selectedImagesRef.current = selectedImages;
   }, [selectedImages]);
 
   useEffect(() => {
     resultsRef.current = results;
   }, [results]);
+
+  useEffect(() => {
+    const handleCropHistoryShortcut = (event: KeyboardEvent) => {
+      if ((!event.ctrlKey && !event.metaKey) || event.altKey || isEditableKeyboardTarget(event.target)) return;
+      const key = event.key.toLowerCase();
+      const shouldUndo = key === "z" && !event.shiftKey;
+      const shouldRedo = (key === "z" && event.shiftKey) || key === "y";
+      if (shouldUndo && undoHistory.length) {
+        event.preventDefault();
+        undoLastCrop();
+      } else if (shouldRedo && redoHistory.length) {
+        event.preventDefault();
+        void redoLastCrop();
+      }
+    };
+
+    window.addEventListener("keydown", handleCropHistoryShortcut);
+    return () => window.removeEventListener("keydown", handleCropHistoryShortcut);
+  });
 
   useEffect(() => {
     const imageId = activeImage?.id;
@@ -1994,14 +2847,27 @@ export function CropImageTool() {
 
   const updateSettingsDrawerDrag = useCallback((clientY: number) => {
     if (drawerDragStartYRef.current === null) return;
-    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
-    drawerDragOffsetRef.current = dragDistance;
-    setSettingsDrawerDragOffset(dragDistance);
+    pendingDrawerYRef.current = clientY;
+    if (drawerDragFrameRef.current !== null) return;
+    drawerDragFrameRef.current = window.requestAnimationFrame(() => {
+      drawerDragFrameRef.current = null;
+      const nextClientY = pendingDrawerYRef.current;
+      pendingDrawerYRef.current = null;
+      if (nextClientY === null || drawerDragStartYRef.current === null) return;
+      const dragDistance = Math.max(0, nextClientY - drawerDragStartYRef.current);
+      drawerDragOffsetRef.current = dragDistance;
+      setSettingsDrawerDragOffset(dragDistance);
+    });
   }, []);
 
   const finishSettingsDrawerDrag = useCallback(
     (clientY?: number) => {
       if (drawerDragStartYRef.current === null) return;
+      if (drawerDragFrameRef.current !== null) {
+        window.cancelAnimationFrame(drawerDragFrameRef.current);
+        drawerDragFrameRef.current = null;
+        pendingDrawerYRef.current = null;
+      }
       if (typeof clientY === "number") {
         const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
         drawerDragOffsetRef.current = dragDistance;
@@ -2176,6 +3042,7 @@ export function CropImageTool() {
               key={mode}
               type="button"
               onClick={() => {
+                invalidateRedoHistory();
                 setOutputSizeMode(mode);
                 setError(null);
               }}
@@ -2191,6 +3058,7 @@ export function CropImageTool() {
               key={unit}
               type="button"
               onClick={() => {
+                invalidateRedoHistory();
                 setOutputUnit(unit);
                 setError(null);
               }}
@@ -2211,6 +3079,7 @@ export function CropImageTool() {
           value={outputWidth}
           disabled={outputSizeMode === "free"}
           onChange={(event) => {
+            invalidateRedoHistory();
             setOutputWidth(event.target.value);
             setError(null);
           }}
@@ -2227,6 +3096,7 @@ export function CropImageTool() {
           value={outputHeight}
           disabled={outputSizeMode === "free"}
           onChange={(event) => {
+            invalidateRedoHistory();
             setOutputHeight(event.target.value);
             setError(null);
           }}
@@ -2242,6 +3112,7 @@ export function CropImageTool() {
           placeholder="Exact KB"
           value={exactKb}
           onChange={(event) => {
+            invalidateRedoHistory();
             setExactKb(event.target.value);
             setError(null);
           }}
@@ -2389,6 +3260,26 @@ export function CropImageTool() {
           title="Crop area"
         >
           <Crop className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={undoLastCrop}
+          disabled={!undoHistory.length}
+          className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Undo last crop"
+          title="Undo last crop"
+        >
+          <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void redoLastCrop()}
+          disabled={!redoHistory.length}
+          className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Redo crop"
+          title="Redo crop"
+        >
+          <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -2598,8 +3489,9 @@ export function CropImageTool() {
     if (!activeImage) return null;
     const sliderId = "crop-image-panel-fine-rotation";
     const completedCount = results.length;
+    const unsavedCompletedCount = results.filter((result) => !savedCropKeys.has(cropResultKey(result))).length;
     const saveToDeviceMessage = deviceSaveNotice ?? (completedCount === 0 ? "Complete at least one image before saving." : null);
-    const saveToDeviceSucceeded = Boolean(deviceSaveNotice && (deviceSaveNotice.includes("saved to") || deviceSaveNotice.includes("downloaded as")));
+    const saveToDeviceSucceeded = Boolean(deviceSaveNotice && (deviceSaveNotice.includes("saved to") || deviceSaveNotice.includes("saved as") || deviceSaveNotice.includes("downloaded as")));
     const quickActionClass = "relative isolate flex h-20 min-w-0 flex-col items-center justify-center gap-1.5 overflow-visible rounded-xl border border-slate-200 bg-white px-1.5 text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98]";
     const precisionButtonClass = "grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]";
 
@@ -2746,7 +3638,11 @@ export function CropImageTool() {
             >
               <Save className="h-[1.125rem] w-[1.125rem]" strokeWidth={2.25} aria-hidden="true" />
               <span data-crop-image-secondary-action-label="true">
-                {isSavingToDevice ? "Saving..." : `Save ${completedCount} ${completedCount === 1 ? "Image" : "Images"}`}
+                {isSavingToDevice
+                  ? "Saving..."
+                  : unsavedCompletedCount
+                    ? `Save ${unsavedCompletedCount} ${unsavedCompletedCount === 1 ? "Image" : "Images"}`
+                    : "Save Images"}
               </span>
               <span id="crop-image-panel-tooltip-save" role="tooltip" data-crop-image-secondary-action-tooltip="true">Save Completed Images</span>
             </button>
@@ -2801,6 +3697,28 @@ export function CropImageTool() {
         </button>
         <button
           type="button"
+          onClick={undoLastCrop}
+          disabled={!undoHistory.length}
+          className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+          aria-label="Undo last crop"
+          title="Undo last crop"
+        >
+          <Undo2 className="h-4 w-4" aria-hidden="true" />
+          Undo
+        </button>
+        <button
+          type="button"
+          onClick={() => void redoLastCrop()}
+          disabled={!redoHistory.length}
+          className={`${buttonClass} disabled:cursor-not-allowed disabled:opacity-40`}
+          aria-label="Redo crop"
+          title="Redo crop"
+        >
+          <Redo2 className="h-4 w-4" aria-hidden="true" />
+          Redo
+        </button>
+        <button
+          type="button"
           onClick={() => rotateActiveImage(-90)}
           className={buttonClass}
           aria-label="Rotate left"
@@ -2849,29 +3767,17 @@ export function CropImageTool() {
     const previewUrl = adjustedPreview?.imageId === activeImage.id
       ? adjustedPreview.url
       : activeImage.previewUrl;
-    const rotatedCropBox = activeImage.cropBox
-      ? originalCropBoxToRotated(activeImage.cropBox, activeImage.dimensions, activeImage.rotation)
-      : null;
+    const cropBox = activeImage.cropBox;
     const metrics = previewImageMetrics(previewFrameSize.width, previewFrameSize.height, activeImage.dimensions, activeImage.rotation, activeImage.fineRotation);
-    const transformedCropCenter = rotatedCropBox
-      ? transformRotatedPoint(
-          { x: rotatedCropBox.x + rotatedCropBox.width / 2, y: rotatedCropBox.y + rotatedCropBox.height / 2 },
-          metrics.rotated,
-          metrics.transformed,
-          activeImage.fineRotation,
-          activeImage.flipHorizontal,
-          activeImage.flipVertical,
-        )
-      : { x: 0, y: 0 };
-    const baseCropCenterX = metrics.x + transformedCropCenter.x * metrics.scale;
-    const baseCropCenterY = metrics.y + transformedCropCenter.y * metrics.scale;
+    const baseCropCenterX = metrics.x + (cropBox ? cropBox.x + cropBox.width / 2 : 0) * metrics.scale;
+    const baseCropCenterY = metrics.y + (cropBox ? cropBox.y + cropBox.height / 2 : 0) * metrics.scale;
     const cropCenterX = previewFrameSize.width / 2 + activeImage.panX + (baseCropCenterX - previewFrameSize.width / 2) * activeImage.zoom;
     const cropCenterY = previewFrameSize.height / 2 + activeImage.panY + (baseCropCenterY - previewFrameSize.height / 2) * activeImage.zoom;
-    const cropWidth = rotatedCropBox && previewFrameSize.width
-      ? rotatedCropBox.width * metrics.scale * activeImage.zoom
+    const cropWidth = cropBox && previewFrameSize.width
+      ? cropBox.width * metrics.scale * activeImage.zoom
       : 0;
-    const cropHeight = rotatedCropBox && previewFrameSize.height
-      ? rotatedCropBox.height * metrics.scale * activeImage.zoom
+    const cropHeight = cropBox && previewFrameSize.height
+      ? cropBox.height * metrics.scale * activeImage.zoom
       : 0;
     const cropLeft = cropCenterX - cropWidth / 2;
     const cropTop = cropCenterY - cropHeight / 2;
@@ -2880,6 +3786,7 @@ export function CropImageTool() {
       <>
         <div
           data-crop-image-pan-surface="true"
+          data-crop-image-layer="true"
           data-pan-active={panState ? "true" : "false"}
           className={`absolute inset-0 select-none ${panState ? "" : "transition-transform duration-100 ease-out"}`}
           style={{ transform: `translate(${activeImage.panX}px, ${activeImage.panY}px) scale(${activeImage.zoom})`, transformOrigin: "center" }}
@@ -2888,6 +3795,11 @@ export function CropImageTool() {
             key={activeImage.id}
             src={previewUrl}
             alt="Uploaded image preview"
+            width={activeImage.dimensions.width}
+            height={activeImage.dimensions.height}
+            sizes="(max-width: 640px) calc(100vw - 3rem), (max-width: 1024px) 62vw, 48vw"
+            loading="eager"
+            decoding="async"
             data-adjusted-preview={adjustedPreview?.imageId === activeImage.id ? "true" : "false"}
             className="absolute left-1/2 top-1/2 block"
             style={{
@@ -2900,9 +3812,10 @@ export function CropImageTool() {
             draggable={false}
           />
         </div>
-        {rotatedCropBox && previewFrameSize.width > 0 && previewFrameSize.height > 0 && (
+        {cropBox && previewFrameSize.width > 0 && previewFrameSize.height > 0 && (
           <div
             data-crop-image-selection="true"
+            data-crop-image-overlay-layer="true"
             role="presentation"
             onPointerDown={(event) => onCropPointerDown(event, "move")}
             className="absolute z-10 touch-none cursor-move border border-[#FF2D2D] shadow-[0_0_0_9999px_rgba(15,23,42,0.14)]"
@@ -2911,8 +3824,6 @@ export function CropImageTool() {
               top: `${cropTop}px`,
               width: `${cropWidth}px`,
               height: `${cropHeight}px`,
-              transform: `rotate(${activeImage.fineRotation}deg) scaleX(${activeImage.flipHorizontal ? -1 : 1}) scaleY(${activeImage.flipVertical ? -1 : 1})`,
-              transformOrigin: "center",
             }}
           >
             {([
@@ -2928,6 +3839,7 @@ export function CropImageTool() {
               <div
                 key={mode}
                 data-crop-image-resize-handle="true"
+                data-crop-image-resize-mode={mode}
                 role="presentation"
                 onPointerDown={(event) => onCropPointerDown(event, mode)}
                 className={`absolute grid h-5 w-5 touch-none place-items-center bg-transparent ${positionClass}`}
@@ -3069,7 +3981,16 @@ export function CropImageTool() {
                       }`}
                     >
                       <span className="relative grid h-10 w-10 place-items-center overflow-hidden rounded-md border border-slate-100 bg-white">
-                        <img src={image.previewUrl} alt="" className="h-full w-full object-contain p-1" />
+                        <img
+                          src={image.previewUrl}
+                          alt=""
+                          width={image.dimensions.width}
+                          height={image.dimensions.height}
+                          sizes="40px"
+                          loading="lazy"
+                          decoding="async"
+                          className="h-full w-full object-contain p-1"
+                        />
                         <span className="absolute left-1 top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[#FF2D2D] px-1 text-[0.65rem] font-black text-white">{index + 1}</span>
                       </span>
                       <span className="min-w-0 self-center">
@@ -3220,8 +4141,214 @@ export function CropImageTool() {
     );
   }
 
+  function renderExportModal() {
+    if (!isExportModalOpen || !exportQueue.length) return null;
+    const usesSingleFilePicker = separateExportLocationMode === "file";
+    const isTargetSizeExport = exportQueue.some((result) => result.targetKb !== null);
+    const closeModal = () => {
+      setIsExportModalOpen(false);
+      setExportQueue([]);
+      setExportModalView("choice");
+      setSeparateExportDirectory(null);
+      setSeparateExportLocationMode("directory");
+      setIsSeparateExportComplete(false);
+      setDeviceSaveNotice(null);
+    };
+
+    return (
+      <div
+        className="fixed inset-0 z-[80] grid place-items-center bg-slate-950/55 p-4"
+        data-crop-image-export-modal-backdrop="true"
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="crop-image-export-modal-title"
+          className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-2xl sm:p-6"
+          data-crop-image-export-modal="true"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="crop-image-export-modal-title" className="text-xl font-black text-slate-950">
+                {exportModalView === "separate"
+                  ? `Save ${exportQueue.length} new crop${exportQueue.length === 1 ? "" : "s"} separately`
+                  : `Save ${exportQueue.length} new crop${exportQueue.length === 1 ? "" : "s"}`}
+              </h2>
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-600">
+                {exportModalView === "separate"
+                  ? (isSeparateExportComplete
+                      ? `${exportQueue.length} completed crop${exportQueue.length === 1 ? " was" : "s were"} saved successfully.`
+                      : `${exportQueue.length} new completed crop${exportQueue.length === 1 ? " is" : "s are"} ready to save.`)
+                  : "Choose separate image files or combine these completed crops into one PDF."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeModal}
+              disabled={isSavingToDevice}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 disabled:opacity-50"
+              aria-label="Close crop export options"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+          {exportModalView === "choice" ? (
+            <>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => openSeparateExportSettings()}
+                  disabled={isSavingToDevice}
+                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_12px_30px_rgba(255,45,45,0.22)] transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Save className="h-5 w-5" aria-hidden="true" />
+                  Save separately
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveMultipleAsPdf()}
+                  disabled={isSavingToDevice}
+                  className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-[#FF2D2D] transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                >
+                  <FileArchive className="h-5 w-5" aria-hidden="true" />
+                  Combine into PDF
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={closeModal}
+                disabled={isSavingToDevice}
+                className="mt-3 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mt-5 grid gap-4">
+                <label className="grid gap-1.5 text-sm font-bold text-slate-800">
+                  Base filename
+                  <input
+                    type="text"
+                    aria-label="Base filename"
+                    value={separateExportBaseName}
+                    onChange={(event) => setSeparateExportBaseName(event.target.value)}
+                    disabled={isSavingToDevice || isSeparateExportComplete}
+                    className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm font-bold text-slate-800">
+                  Format
+                  <select
+                    aria-label="Output format"
+                    value={separateExportFormat}
+                    onChange={(event) => setSeparateExportFormat(event.target.value as SeparateExportFormat)}
+                    disabled={isSavingToDevice || isSeparateExportComplete}
+                    className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                  >
+                    <option value="jpg">JPG / JPEG</option>
+                    <option value="png">PNG</option>
+                  </select>
+                </label>
+                <div className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-800">Save location (optional)</span>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                    <span className={`text-sm ${separateExportDirectory ? "font-black text-slate-950" : "font-semibold text-slate-700"}`}>
+                      {!usesSingleFilePicker && separateExportDirectory
+                        ? `Selected folder: ${separateExportDirectory.name}`
+                        : "Default Downloads"}
+                    </span>
+                    {usesSingleFilePicker && isSaveFilePickerSupported && (
+                      <button
+                        type="button"
+                        onClick={() => void saveSingleSeparateCropAs()}
+                        disabled={isSavingToDevice || isSeparateExportComplete}
+                        className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        {isSavingToDevice
+                          ? (isTargetSizeExport ? "Optimizing…" : "Saving...")
+                          : "Save as..."}
+                      </button>
+                    )}
+                    {!usesSingleFilePicker && isDirectoryPickerSupported && (
+                      <button
+                        type="button"
+                        onClick={() => void chooseSeparateExportDirectory()}
+                        disabled={isSavingToDevice || isSeparateExportComplete}
+                        className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        {separateExportDirectory ? "Change folder" : "Choose output folder"}
+                      </button>
+                    )}
+                  </div>
+                  {!usesSingleFilePicker && separateExportDirectory && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSeparateExportDirectory(null);
+                        setDeviceSaveNotice(null);
+                      }}
+                      disabled={isSavingToDevice || isSeparateExportComplete}
+                      className="w-fit text-sm font-bold text-[#FF2D2D] transition hover:text-red-700 disabled:opacity-50"
+                    >
+                      Use Downloads instead
+                    </button>
+                  )}
+                  {usesSingleFilePicker && !isSaveFilePickerSupported && (
+                    <p className="text-sm font-medium leading-5 text-slate-600">
+                      Save As is not supported in this browser. Files will use the browser&apos;s normal download location.
+                    </p>
+                  )}
+                  {!usesSingleFilePicker && !isDirectoryPickerSupported && (
+                    <p className="text-sm font-medium leading-5 text-slate-600">
+                      Folder selection is not supported in this browser. Files will use the browser&apos;s normal download location.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {deviceSaveNotice && (
+                <p role="status" className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+                  {deviceSaveNotice}
+                </p>
+              )}
+              <div className="mt-5 grid gap-3 sm:grid-cols-[auto_1fr]">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  disabled={isSavingToDevice}
+                  className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                >
+                  {isSeparateExportComplete ? "Done" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void downloadSeparateCrops()}
+                  disabled={isSavingToDevice || isSeparateExportComplete}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 py-3 text-sm font-black text-white shadow-[0_12px_30px_rgba(255,45,45,0.22)] transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {separateExportDirectory
+                    ? <Save className="h-5 w-5" aria-hidden="true" />
+                    : <Download className="h-5 w-5" aria-hidden="true" />}
+                  {isSavingToDevice
+                    ? (isTargetSizeExport
+                        ? "Optimizing…"
+                        : (separateExportDirectory ? "Saving..." : "Downloading..."))
+                    : (isSeparateExportComplete
+                        ? `Saved ${exportQueue.length} file${exportQueue.length === 1 ? "" : "s"}`
+                        : `${separateExportDirectory ? "Save" : "Download"} ${exportQueue.length} file${exportQueue.length === 1 ? "" : "s"}`)}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (stage === "success" && results.length) {
     const singleResult = results.length === 1 ? results[0] : null;
+    const singleResultSaved = Boolean(singleResult && savedCropKeys.has(cropResultKey(singleResult)));
+    const unsavedResultCount = results.filter((result) => !savedCropKeys.has(cropResultKey(result))).length;
     const resultSizeLabel = singleResult ? formatResultSize(singleResult.sizeKb) : formatResultSize(results.reduce((total, result) => total + result.sizeKb, 0));
 
     return (
@@ -3251,31 +4378,76 @@ export function CropImageTool() {
                       <a
                         href={singleResult.url}
                         download={singleResult.fileName}
+                        onClick={guardExistingDownload}
+                        aria-disabled={isDownloading}
                         className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
                       >
-                        Download Image
+                        {isDownloading ? "Downloading..." : "Download Image"}
                         <Download className="h-5 w-5" aria-hidden="true" />
                       </a>
                       <button
                         type="button"
-                        onClick={() => void saveResultAs(singleResult)}
-                        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-6 py-4 text-base font-black text-[#FF2D2D] transition hover:-translate-y-0.5 hover:bg-red-50"
+                        onClick={() => void saveCompletedToDevice()}
+                        disabled={singleResultSaved || isSavingToDevice}
+                        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-6 py-4 text-base font-black text-[#FF2D2D] transition hover:-translate-y-0.5 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Save As
+                        {singleResultSaved ? "Saved" : isSavingToDevice ? "Saving..." : "Save As"}
                         <Save className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </div>
                   )}
                   {!singleResult && zipUrl && (
-                    <a
-                      href={zipUrl}
-                      download="PDFRoot-cropped-images.zip"
-                      className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
-                    >
-                      Download ZIP
-                      <FileArchive className="h-5 w-5" aria-hidden="true" />
-                    </a>
+                    <div className="mt-7 grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                      <a
+                        href={zipUrl}
+                        download="PDFRoot-cropped-images.zip"
+                        onClick={guardExistingDownload}
+                        aria-disabled={isDownloading}
+                        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600"
+                      >
+                        {isDownloading ? "Downloading..." : "Download ZIP"}
+                        <FileArchive className="h-5 w-5" aria-hidden="true" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => void saveCompletedToDevice()}
+                        disabled={isSavingToDevice}
+                        className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-6 py-4 text-base font-black text-[#FF2D2D] transition hover:-translate-y-0.5 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isSavingToDevice
+                          ? "Saving..."
+                          : unsavedResultCount
+                            ? `Save ${unsavedResultCount} ${unsavedResultCount === 1 ? "Image" : "Images"}`
+                            : "Saved"}
+                        <Save className="h-5 w-5" aria-hidden="true" />
+                      </button>
+                    </div>
                   )}
+                  {deviceSaveNotice && (
+                    <p role="status" data-crop-image-device-save-notice="true" className="mt-3 text-sm font-semibold text-slate-600">
+                      {deviceSaveNotice}
+                    </p>
+                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={undoLastCrop}
+                      disabled={!undoHistory.length}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Undo2 className="h-4 w-4" aria-hidden="true" />
+                      Undo last crop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void redoLastCrop()}
+                      disabled={!redoHistory.length}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Redo2 className="h-4 w-4" aria-hidden="true" />
+                      Redo crop
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={resetTool}
@@ -3289,6 +4461,7 @@ export function CropImageTool() {
             </div>
           </div>
         </div>
+        {renderExportModal()}
       </section>
     );
   }
@@ -3350,6 +4523,7 @@ export function CropImageTool() {
           </div>}
           {renderMobileSettingsDrawer()}
         </div>
+        {renderExportModal()}
       </section>
     );
   }

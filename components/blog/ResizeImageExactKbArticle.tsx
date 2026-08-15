@@ -62,7 +62,7 @@ function ArticleCta() {
 function BlogBrandName() {
   return (
     <span className="whitespace-nowrap text-current normal-case" aria-label="PDFRoot">
-      <span className="text-[#EF4444]">PDF</span><span className="text-foreground">Root</span>
+      <span className="text-[#B91C1C]">PDF</span><span className="text-foreground">Root</span>
     </span>
   );
 }
@@ -180,7 +180,7 @@ export function ResizeImageExactKbArticle() {
                 </li>
               ))}
             </ul>
-            <BodyParagraph>The exact-KB workflow runs in the browser using local image and canvas processing. If you need different dimensions before reducing file size, try <Link href="/resize-image" className="font-semibold text-primary underline-offset-4 hover:underline">Resize Image</Link>. You can also use <Link href="/compress-image" className="font-semibold text-primary underline-offset-4 hover:underline">Compress Image</Link>, <Link href="/crop-image" className="font-semibold text-primary underline-offset-4 hover:underline">Crop Image</Link>, or <Link href="/passport-photo-maker" className="font-semibold text-primary underline-offset-4 hover:underline">Passport Photo Maker</Link> when those workflows better match the form instructions.</BodyParagraph>
+            <BodyParagraph>The exact-KB workflow runs in the browser using local image and canvas processing. If you need different dimensions before reducing file size, try <Link href="/resize-image" className="font-semibold text-primary underline-offset-4 hover:underline">Resize Image</Link>. You can also use <Link href="/compress-image" className="font-semibold text-primary underline-offset-4 hover:underline">Compress Image</Link> or <Link href="/crop-image" className="font-semibold text-primary underline-offset-4 hover:underline">Crop Image</Link> when those workflows better match the form instructions.</BodyParagraph>
           </ArticleSection>
 
           <ArticleSection title="Important Tips Before Uploading Your Image">

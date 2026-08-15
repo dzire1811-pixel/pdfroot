@@ -7,8 +7,8 @@ export function BrandText({ styled = false }: { styled?: boolean }) {
 
   return (
     <span className="whitespace-nowrap text-current normal-case" aria-label="PDFRoot">
-      <span className="text-[#EF4444]">PDF</span>
-      <span className="text-[#111111]">Root</span>
+      <span className="text-[#B91C1C]">PDF</span>
+      <span data-pdfroot-logo-root="true" className="text-[#111111]">Root</span>
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import "../route-styles.css";
 import { ArrowRight } from "lucide-react";
 import { BrandPhrase, BrandText } from "@/components/Brand";
 import { InfoCta, InfoPageLayout } from "@/components/InfoPageLayout";
@@ -39,7 +40,7 @@ const faqs = [
   {
     question: "Which tools are available on PDFRoot?",
     answer:
-      "PDFRoot includes tools such as JPG to PDF, PDF to JPG, Merge PDF, Split PDF, Compress PDF, Rotate PDF, Protect PDF, Unlock PDF, Resize Image to Exact KB, Compress Image, Crop Image, Resize Image, Passport Photo Maker, Signature Resize Tool, and government form helper tools.",
+      "PDFRoot includes tools such as JPG to PDF, PDF to JPG, Merge PDF, Split PDF, Compress PDF, Rotate PDF, Protect PDF, Unlock PDF, Resize Image to Exact KB, Compress Image, Crop Image, Resize Image, Signature Resize Tool, and government form helper tools.",
   },
   {
     question: "Can I resize image to exact KB?",
@@ -134,7 +135,7 @@ export default function FaqPage() {
 
       <InfoCta>
         <h2 className="text-3xl font-bold text-primary-foreground">Still need help?</h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/80">
+        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/90">
           Contact <BrandText /> support for questions about PDF tools, image tools, government form files, or upload issues.
         </p>
         <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-lg bg-background px-7 py-4 text-base font-medium text-foreground transition hover:-translate-y-0.5">

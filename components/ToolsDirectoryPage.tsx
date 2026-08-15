@@ -5,10 +5,14 @@ import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { ToolCard } from "@/components/ToolCard";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { imageTools, pdfTools, tools } from "@/lib/tools";
 
-const popularTools = tools.filter((tool) => tool.popular);
-const governmentTools = tools.filter((tool) => tool.government);
+const visibleTools = filterVisibleTools(tools);
+const visiblePdfTools = filterVisibleTools(pdfTools);
+const visibleImageTools = filterVisibleTools(imageTools);
+const popularTools = visibleTools.filter((tool) => tool.popular);
+const governmentTools = visibleTools.filter((tool) => tool.government);
 
 function PreviewGrid({ items }: { items: typeof tools }) {
   return (
@@ -66,14 +70,14 @@ export function ToolsDirectoryPage() {
         <section className="bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="PDF Tools" title="Convert, compress, merge, and organize PDFs" description="Use PDFRoot tools for common PDF workflows across office, school, and upload portals." />
-            <PreviewGrid items={pdfTools} />
+            <PreviewGrid items={visiblePdfTools} />
           </div>
         </section>
 
         <section className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
             <SectionHeading eyebrow="Image Tools" title="Resize, compress, convert, and prepare images" description="Image utilities for photos, signatures, scans, cards, and online forms." />
-            <PreviewGrid items={imageTools} />
+            <PreviewGrid items={visibleImageTools} />
           </div>
         </section>
 
@@ -85,7 +89,7 @@ export function ToolsDirectoryPage() {
         </section>
         <WhyChoosePdfRoot />
       </main>
-      <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={governmentTools} />
+      <HomepageSiteFooter pdfTools={visiblePdfTools} imageTools={visibleImageTools} governmentTools={governmentTools} />
     </div>
   );
 }

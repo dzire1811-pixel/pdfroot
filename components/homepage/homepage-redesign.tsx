@@ -8,7 +8,12 @@ import { BrandPhrase } from "@/components/Brand";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { blogPosts } from "@/lib/blog";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
+
+const visibleTools = filterVisibleTools(tools);
+const visibleImageTools = filterVisibleTools(imageTools);
+const visiblePdfTools = filterVisibleTools(pdfTools);
 
 type FaqItem = {
   question: string;
@@ -82,13 +87,13 @@ function ToolGrid({ items, compact = false }: { items: Tool[]; compact?: boolean
 
 export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
   const [query, setQuery] = useState("");
-  const popularTools = tools.filter((tool) => tool.popular || tool.featured).slice(0, 16);
-  const governmentTools = tools.filter((tool) => tool.government);
+  const popularTools = visibleTools.filter((tool) => tool.popular || tool.featured).slice(0, 16);
+  const governmentTools = visibleTools.filter((tool) => tool.government);
 
   const filteredTools = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return [];
-    return tools
+    return visibleTools
       .filter((tool) => {
         const haystack = [tool.name, tool.description, tool.category, ...tool.keywords].join(" ").toLowerCase();
         return haystack.includes(normalized);
@@ -148,7 +153,7 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
 
             <div className="mt-6 flex flex-wrap gap-2">
               {["Merge PDF", "Resize Image to Exact KB", "Compress PDF", "JPG to PDF", "Signature Resize Tool"].map((name) => {
-                const tool = tools.find((item) => item.name === name);
+                const tool = visibleTools.find((item) => item.name === name);
                 return tool ? (
                   <Link key={tool.slug} href={`/${tool.slug}`} style={getToolRowTintStyle(tool.slug)} className="rounded-full border border-border bg-card px-3 py-1.5 text-sm font-normal text-foreground transition-colors hover:border-primary/40 hover:bg-[var(--tool-row-tint)] focus-visible:bg-[var(--tool-row-tint)] active:bg-[var(--tool-row-tint)]">
                     {tool.name}
@@ -177,11 +182,11 @@ export function HomepageRedesign({ faqs }: { faqs: FaqItem[] }) {
       </SectionShell>
 
       <SectionShell id="image-tools" eyebrow="Image tools" title="Resize, compress, crop, and convert images" description="Prepare JPG, PNG, WebP, photos, and signatures for documents, websites, and online forms.">
-        <ToolGrid items={imageTools} compact />
+        <ToolGrid items={visibleImageTools} compact />
       </SectionShell>
 
       <SectionShell id="pdf-tools" eyebrow="PDF tools" title="Convert, organize, secure, and edit PDFs" description="Merge, split, compress, convert, rotate, crop, watermark, protect, and unlock PDF files online." tone="muted">
-        <ToolGrid items={pdfTools} compact />
+        <ToolGrid items={visiblePdfTools} compact />
       </SectionShell>
 
       <section id="showcase" className="border-b border-border bg-background">

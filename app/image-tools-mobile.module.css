@@ -1,0 +1,260 @@
+.imageToolPage {
+  min-height: 100vh;
+}
+
+@supports (min-height: 100dvh) {
+  .imageToolPage {
+    min-height: 100dvh;
+  }
+}
+
+@media (max-width: 767px), (orientation: landscape) and (max-width: 900px) and (max-height: 500px) {
+  .imageToolPage {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .imageToolPage[data-image-mobile-action-active="true"] {
+    padding-bottom: calc(var(--image-mobile-action-height, 0px) + 0.75rem);
+  }
+
+  .imageToolPage :global([data-tool-workspace-hero]) {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    padding-right: calc(1.5rem + env(safe-area-inset-right));
+    padding-left: calc(1.5rem + env(safe-area-inset-left));
+  }
+
+  .imageToolPage :global([data-tool-workspace-hero] > .relative),
+  .imageToolPage :global(main),
+  .imageToolPage :global(section[id$="-tool"]),
+  .imageToolPage :global([data-v0-result-screen="true"]),
+  .imageToolPage :global([data-merge-result-only]) {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .imageToolPage :global([data-tool-workspace-hero] h1),
+  .imageToolPage :global([data-v0-result-screen="true"] h1),
+  .imageToolPage :global([data-v0-result-screen="true"] h2),
+  .imageToolPage :global([data-merge-result-only] [role="heading"]) {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .imageToolPage :global([data-v0-result-screen="true"] img),
+  .imageToolPage :global([data-merge-result-only] img) {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .imageToolPage :global([data-v0-result-screen="true"] p),
+  .imageToolPage :global([data-v0-result-screen="true"] a),
+  .imageToolPage :global([data-merge-result-only] p),
+  .imageToolPage :global([data-merge-result-only] a) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .imageToolPage :is(
+      :global([data-exact-kb-preview-area="true"]),
+      :global([data-compress-image-preview-area="true"]),
+      :global([data-crop-image-preview-area="true"]),
+      :global([data-resize-image-preview-area="true"]),
+      :global([data-jpg-to-png-preview-area="true"]),
+      :global([data-png-to-jpg-preview-area="true"]),
+      :global([data-signature-resize-preview-area="true"]),
+      :global([data-ssc-signature-preview-area="true"]),
+      :global([data-rrb-signature-preview-area="true"]),
+      :global([data-ibps-document-preview-area="true"]),
+      :global([data-passport-photo-preview-area="true"])
+    ):not(:global([data-v0-result-screen="true"])) {
+    height: auto !important;
+    min-height: 0 !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .imageToolPage :is(
+      :global([data-exact-kb-preview-grid="true"]),
+      :global([data-compress-image-preview-grid="true"]),
+      :global([data-crop-image-preview-grid="true"]),
+      :global([data-resize-image-preview-grid="true"]),
+      :global([data-jpg-to-png-preview-grid="true"]),
+      :global([data-png-to-jpg-preview-grid="true"]),
+      :global([data-signature-resize-preview-grid="true"]),
+      :global([data-ssc-signature-preview-grid="true"]),
+      :global([data-rrb-signature-preview-grid="true"]),
+      :global([data-ibps-document-preview-grid="true"]),
+      :global([data-ojas-photo-preview-grid="true"]),
+      :global([data-gpsc-photo-preview-grid="true"]),
+      :global([data-upsc-photo-preview-grid="true"]),
+      :global([data-card-merge-preview-grid="true"])
+    ) {
+    padding-bottom: 0.75rem !important;
+  }
+
+  .imageToolPage :is(
+      :global([data-exact-kb-action-bar="true"]),
+      :global([data-compress-image-action-bar="true"]),
+      :global([data-crop-image-action-bar="true"]),
+      :global([data-resize-image-action-bar="true"]),
+      :global([data-jpg-to-png-action-bar="true"]),
+      :global([data-png-to-jpg-action-bar="true"]),
+      :global([data-passport-photo-action-bar="true"]),
+      :global([data-signature-resize-action-bar="true"]),
+      :global([data-ssc-signature-action-bar="true"]),
+      :global([data-rrb-signature-action-bar="true"]),
+      :global([data-ibps-document-action-bar="true"])
+    ) {
+    position: fixed !important;
+    z-index: 50 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    box-sizing: border-box !important;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: 100vh;
+    max-height: 100dvh;
+    margin: 0 !important;
+    padding-right: calc(0.75rem + env(safe-area-inset-right)) !important;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)) !important;
+    padding-left: calc(0.75rem + env(safe-area-inset-left)) !important;
+    overflow-x: visible;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .imageToolPage :is(
+      :global([data-exact-kb-action-bar="true"]),
+      :global([data-compress-image-action-bar="true"]),
+      :global([data-crop-image-action-bar="true"]),
+      :global([data-resize-image-action-bar="true"]),
+      :global([data-jpg-to-png-action-bar="true"]),
+      :global([data-png-to-jpg-action-bar="true"]),
+      :global([data-passport-photo-action-bar="true"]),
+      :global([data-signature-resize-action-bar="true"]),
+      :global([data-ssc-signature-action-bar="true"]),
+      :global([data-rrb-signature-action-bar="true"]),
+      :global([data-ibps-document-action-bar="true"])
+    ) :global(*) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .imageToolPage :global([id$="-mobile-settings-drawer"]) {
+    right: env(safe-area-inset-right) !important;
+    bottom: 0 !important;
+    left: env(safe-area-inset-left) !important;
+    box-sizing: border-box;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - env(safe-area-inset-top)) !important;
+  }
+
+  .imageToolPage :global([id$="-mobile-settings-drawer"] > [class*="overflow-y-auto"]) {
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+
+  .imageToolPage :global([data-crop-image-zoom-control="true"]) {
+    right: 0.75rem !important;
+    left: auto !important;
+    width: auto !important;
+    max-width: calc(100% - 1.5rem) !important;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .imageToolPage :global([data-passport-photo-action-content="true"]) {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-left: 0 !important;
+  }
+
+  .imageToolPage.imageToolPage
+    :global(#passport-photo-maker-tool[data-passport-photo-workspace="true"]) {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  .imageToolPage.imageToolPage
+    :global(#passport-photo-maker-tool[data-passport-photo-workspace="true"])
+    :global([data-passport-photo-action-content="true"]) {
+    padding-left: 0 !important;
+  }
+
+  .imageToolPage :global([data-passport-photo-action-content="true"] > *) {
+    min-width: 0;
+  }
+
+  .imageToolPage :global(#passport-photo-maker-tool [aria-label="Background presets"]),
+  .imageToolPage :global(#passport-photo-maker-tool [aria-label="Outfit filters"]) {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .imageToolPage :global(#passport-photo-maker-tool [aria-label="Outfit presets"]) {
+    grid-auto-columns: auto;
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+}
+
+@media (max-width: 359px) {
+  .imageToolPage :is(
+      :global([data-exact-kb-action-bar="true"]),
+      :global([data-compress-image-action-bar="true"]),
+      :global([data-crop-image-action-bar="true"]),
+      :global([data-resize-image-action-bar="true"]),
+      :global([data-jpg-to-png-action-bar="true"]),
+      :global([data-png-to-jpg-action-bar="true"]),
+      :global([data-signature-resize-action-bar="true"]),
+      :global([data-ssc-signature-action-bar="true"]),
+      :global([data-rrb-signature-action-bar="true"]),
+      :global([data-ibps-document-action-bar="true"])
+    ) :global(.grid) {
+    grid-template-columns: 2.75rem minmax(0, 1fr) minmax(0, auto) !important;
+    padding-left: 0 !important;
+  }
+
+  .imageToolPage:has(:global(#ibps-document-resize-tool))
+    :global([data-ibps-document-action-bar="true"])
+    :global(.grid) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.72fr) 2.75rem !important;
+  }
+
+  .imageToolPage:has(:global(#front-back-card-merge-tool))
+    :global([data-ibps-document-action-bar="true"])
+    :global(.grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .imageToolPage :is(
+      :global([data-exact-kb-action-bar="true"]),
+      :global([data-compress-image-action-bar="true"]),
+      :global([data-crop-image-action-bar="true"]),
+      :global([data-resize-image-action-bar="true"]),
+      :global([data-jpg-to-png-action-bar="true"]),
+      :global([data-png-to-jpg-action-bar="true"]),
+      :global([data-signature-resize-action-bar="true"]),
+      :global([data-ssc-signature-action-bar="true"]),
+      :global([data-rrb-signature-action-bar="true"]),
+      :global([data-ibps-document-action-bar="true"])
+    ) :global(button) {
+    white-space: nowrap !important;
+  }
+}

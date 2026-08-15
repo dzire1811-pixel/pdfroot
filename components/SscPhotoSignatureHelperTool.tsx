@@ -1,11 +1,12 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+import styles from "./SscPhotoSignatureHelperTool.module.css";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
 
@@ -191,6 +192,7 @@ export function SscPhotoSignatureHelperTool() {
   const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
   const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
   const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -450,11 +452,8 @@ export function SscPhotoSignatureHelperTool() {
       }
       const viewportHeight = window.innerHeight;
       const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
-      const barHeight = actionBarRef.current?.offsetHeight ?? 110;
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : true);
     };
 
     const scheduleUpdate = () => {
@@ -471,6 +470,53 @@ export function SscPhotoSignatureHelperTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [signatures.length, stage]);
+
+  useLayoutEffect(() => {
+    if (!signatures.length || stage !== "workspace" || !isActionBarVisible) return;
+
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
+
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      const previewPaddingTop = Number.parseFloat(window.getComputedStyle(previewWorkspace).paddingTop) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-ssc-signature-preview-grid='true']");
+      const requiredPreviewHeight = previewGrid?.scrollHeight ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+
+      previewWorkspace.style.setProperty("--ssc-signature-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--ssc-signature-workspace-height", `${availableHeight}px`);
+      setIsConstrainedWorkspace(requiredPreviewHeight > availableHeight + 1);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-ssc-signature-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--ssc-signature-workspace-height");
+      previewWorkspace.style.removeProperty("--ssc-signature-preview-padding");
+    };
+  }, [isActionBarVisible, signatures.length, stage]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -870,7 +916,7 @@ export function SscPhotoSignatureHelperTool() {
         }}
         data-v0-managed-flow="true"
         id="ssc-signature-resize-tool"
-        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
+        className={`mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)] ${styles.toolScope}`}
       >
         <div>
           <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
@@ -894,7 +940,7 @@ export function SscPhotoSignatureHelperTool() {
         data-v0-managed-flow="true"
         data-crop-image-workspace="true"
         id="ssc-signature-resize-tool"
-        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
+        className={`mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left ${styles.toolScope}`}
       >
         <div className="relative min-w-0 overflow-visible bg-slate-100">
           <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
@@ -924,12 +970,14 @@ export function SscPhotoSignatureHelperTool() {
   }
 
   if (stage === "workspace" && signatures.length) {
+    const hasSingleSignature = signatures.length === 1;
+
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ssc-signature-workspace="true" id="ssc-signature-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ssc-signature-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ssc-signature-workspace="true" id="ssc-signature-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none ${styles.toolScope} ${styles.workspaceSection} ${isConstrainedWorkspace ? styles.constrainedWorkspaceSection : ""}`}>
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${styles.workspaceShell} ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          <div ref={workAreaRef} data-ssc-signature-preview-area="true" className={`relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 ${styles.previewWorkspace} ${hasSingleSignature ? styles.singleSignatureWorkspace : ""}`}>
             <input id="ssc-add-signature-upload" name="ssc-add-signature-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
-            <div data-ssc-signature-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+            <div data-ssc-signature-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28 ${hasSingleSignature ? styles.singleSignatureGrid : ""}`}>
               {signatures.map((signature, index) => {
                 const displayName = splitFileName(signature.file.name);
 
@@ -975,8 +1023,8 @@ export function SscPhotoSignatureHelperTool() {
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ssc-signature-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ssc-signature-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? styles.flowActionBar : ""}`}>
+              <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                   <div className="flex min-w-0 items-center justify-between gap-3">
                     <p className="truncate text-sm font-black text-slate-950">
@@ -998,7 +1046,7 @@ export function SscPhotoSignatureHelperTool() {
                     {renderRequirementStatus()}
                   </div>
                 </div>
-                <div className="min-w-0 lg:ml-auto">
+                <div className="w-full min-w-0 max-w-full lg:ml-auto lg:w-auto">
                   {renderActionButtons()}
                 </div>
               </div>
@@ -1011,7 +1059,7 @@ export function SscPhotoSignatureHelperTool() {
   }
 
   return (
-    <section ref={toolSectionRef} data-v0-managed-flow="true" id="ssc-signature-resize-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
+    <section ref={toolSectionRef} data-v0-managed-flow="true" id="ssc-signature-resize-tool" className={`mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6 ${styles.toolScope}`}>
       {renderUploadBox()}
       {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
     </section>

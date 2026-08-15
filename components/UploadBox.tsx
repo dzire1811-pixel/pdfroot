@@ -5,6 +5,7 @@ import { ChangeEvent, DragEvent, useEffect, useId, useMemo, useRef, useState } f
 import { Download, ImageUp, UploadCloud } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { isToolVisibleInListings } from "@/lib/toolVisibility";
 import { tools } from "@/lib/tools";
 import { clearUploadSession, readUploadSession, saveUploadSession } from "@/lib/uploadSession";
 
@@ -70,7 +71,7 @@ function suggestedSlugs(groups: FileGroup[]) {
 
   return Array.from(slugs)
     .map((slug) => tools.find((tool) => tool.slug === slug))
-    .filter((tool): tool is (typeof tools)[number] => Boolean(tool))
+    .filter((tool): tool is (typeof tools)[number] => tool !== undefined && isToolVisibleInListings(tool))
     .slice(0, 6);
 }
 

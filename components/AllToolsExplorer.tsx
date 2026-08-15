@@ -3,11 +3,15 @@
 import { ChangeEvent, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { ToolCard } from "@/components/ToolCard";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { pdfTools, imageTools, tools } from "@/lib/tools";
 
 type Filter = "All Tools" | "Popular Tools" | "PDF Tools" | "Image Tools" | "Government Form Tools";
 
 const filters: Filter[] = ["All Tools", "Popular Tools", "PDF Tools", "Image Tools", "Government Form Tools"];
+const visibleTools = filterVisibleTools(tools);
+const visiblePdfTools = filterVisibleTools(pdfTools);
+const visibleImageTools = filterVisibleTools(imageTools);
 
 const aliases: Record<string, string[]> = {
   "front-back-card-merge": ["aadhaar", "aadhar", "pan", "voter", "driving licence", "driving license", "rc book", "passport card", "atm card", "employee id", "student id"],
@@ -31,11 +35,11 @@ function matchesSearch(tool: (typeof tools)[number], query: string) {
 }
 
 function filterTools(filter: Filter) {
-  if (filter === "Popular Tools") return tools.filter((tool) => tool.popular);
-  if (filter === "PDF Tools") return pdfTools;
-  if (filter === "Image Tools") return imageTools;
-  if (filter === "Government Form Tools") return tools.filter((tool) => tool.government);
-  return tools;
+  if (filter === "Popular Tools") return visibleTools.filter((tool) => tool.popular);
+  if (filter === "PDF Tools") return visiblePdfTools;
+  if (filter === "Image Tools") return visibleImageTools;
+  if (filter === "Government Form Tools") return visibleTools.filter((tool) => tool.government);
+  return visibleTools;
 }
 
 export function AllToolsExplorer() {
@@ -45,7 +49,7 @@ export function AllToolsExplorer() {
   const hasSearchQuery = Boolean(normalizedQuery);
 
   const filteredTools = useMemo(() => {
-    const sourceTools = normalizedQuery ? tools : filterTools(activeFilter);
+    const sourceTools = normalizedQuery ? visibleTools : filterTools(activeFilter);
     return sourceTools.filter((tool) => matchesSearch(tool, normalizedQuery));
   }, [activeFilter, normalizedQuery]);
 

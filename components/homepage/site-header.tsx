@@ -4,15 +4,19 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, FileOutput, Home, Menu, Shapes, X } from "lucide-react";
-import { HorizontalLogo } from "@/components/Logo";
+import { Logo } from "@/components/Logo";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
 
 type OpenMenu = "convert" | "government" | "all" | null;
 type MobileNavSection = "convert" | "government" | "all";
 
-const toolBySlug = new Map(tools.map((tool) => [tool.slug, tool]));
+const visibleTools = filterVisibleTools(tools);
+const visibleImageTools = filterVisibleTools(imageTools);
+const visiblePdfTools = filterVisibleTools(pdfTools);
+const toolBySlug = new Map(visibleTools.map((tool) => [tool.slug, tool]));
 
 const governmentToolSlugs = [
   "image-compressor-for-government-forms",
@@ -32,10 +36,10 @@ const governmentTools = governmentToolSlugs.flatMap((slug) => {
   return tool ? [tool] : [];
 });
 
-const mobileGovernmentTools = imageTools.filter((tool) => tool.government);
-const standardImageTools = imageTools.filter((tool) => !tool.government);
+const mobileGovernmentTools = visibleImageTools.filter((tool) => tool.government);
+const standardImageTools = visibleImageTools.filter((tool) => !tool.government);
 const allToolGroups = [
-  { label: "PDF Tools", items: pdfTools },
+  { label: "PDF Tools", items: visiblePdfTools },
   { label: "Image Tools", items: standardImageTools },
   { label: "Recruitment Resize Tools", items: mobileGovernmentTools },
 ];
@@ -70,6 +74,7 @@ const desktopDirectNavItems = [
 function MegaMenuToolLink({ tool, onClick, touched, onTouchChange, mobileReadable = false, mobileSingleLine = false, desktopCompact = false, displayName }: { tool: Tool; onClick: () => void; touched: boolean; onTouchChange: (touched: boolean) => void; mobileReadable?: boolean; mobileSingleLine?: boolean; desktopCompact?: boolean; displayName?: string }) {
   return (
     <Link
+      prefetch={false}
       href={`/${tool.slug}`}
       onClick={onClick}
       onTouchStart={() => onTouchChange(true)}
@@ -201,9 +206,14 @@ export function HomepageSiteHeader() {
       window.removeEventListener("resize", updateMobileMenuTop);
       window.removeEventListener("scroll", preserveBackgroundScroll);
       document.removeEventListener("touchmove", preventBackgroundTouchMove);
+      const shouldRestoreScroll =
+        window.scrollX !== mobileScrollPositionRef.current.x
+        || window.scrollY !== mobileScrollPositionRef.current.y;
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overscrollBehavior = previousOverscrollBehavior;
-      window.scrollTo(mobileScrollPositionRef.current.x, mobileScrollPositionRef.current.y);
+      if (shouldRestoreScroll) {
+        window.scrollTo(mobileScrollPositionRef.current.x, mobileScrollPositionRef.current.y);
+      }
       document.documentElement.style.scrollBehavior = previousScrollBehavior;
     };
   }, [isMobileMenuOpen]);
@@ -232,7 +242,7 @@ export function HomepageSiteHeader() {
   const mobileAccordionSections = [
     { id: "convert" as const, label: "Convert PDF", items: conversionTools, icon: FileOutput, accent: "#d94b20" },
     { id: "government" as const, label: "Recruitment Resize Tools", items: mobileGovernmentTools, icon: Shapes, accent: "#4a9b38" },
-    { id: "all" as const, label: "All Tools", items: tools, icon: Menu, accent: "#64748b" },
+    { id: "all" as const, label: "All Tools", items: visibleTools, icon: Menu, accent: "#64748b" },
   ];
 
   const mobileMenuOverlay = isMobileMenuOpen && typeof document !== "undefined"
@@ -249,7 +259,7 @@ export function HomepageSiteHeader() {
           role="menu"
           aria-label="Mobile navigation menu"
         >
-          <div data-mobile-menu-actions className="sticky top-0 z-30 flex h-11 shrink-0 items-start justify-end border-b border-border bg-white px-3">
+          <div data-mobile-menu-actions className="sticky top-0 z-30 flex h-12 shrink-0 items-center justify-end border-b border-border bg-white px-3">
             <button type="button" onClick={closeMobileMenu} className="grid h-11 w-11 shrink-0 place-items-center text-foreground" aria-label="Close mobile menu">
               <span data-mobile-close-visual className="grid h-8 w-8 place-items-center rounded-lg border border-border transition-colors hover:bg-muted">
                 <X className="h-4 w-4" aria-hidden="true" />
@@ -261,7 +271,7 @@ export function HomepageSiteHeader() {
             {mobileDirectLinks.map((item) => {
               const itemStyle = { "--mobile-accent": item.accent, "--mobile-tint": `${item.accent}12` } as CSSProperties;
               return (
-                <Link key={item.label} href={item.href} onClick={closeMobileMenu} style={itemStyle} className="flex min-h-12 w-full items-center gap-3 rounded-xl bg-[var(--mobile-tint)] px-3 py-3 text-sm text-foreground transition-colors active:text-[var(--mobile-accent)]">
+                <Link prefetch={false} key={item.label} href={item.href} onClick={closeMobileMenu} style={itemStyle} className="flex min-h-12 w-full items-center gap-3 rounded-xl bg-[var(--mobile-tint)] px-3 py-3 text-sm text-foreground transition-colors active:text-[var(--mobile-accent)]">
                   {"tool" in item ? (
                     <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center"><ToolDirectoryIcon tool={item.tool} /></span>
                   ) : (() => {
@@ -315,14 +325,14 @@ export function HomepageSiteHeader() {
     <>
     <header ref={headerRef} className="sticky top-0 z-50 border-b border-[#e5e7eb] bg-white shadow-sm">
       <div className="mx-auto flex h-16 max-w-[1800px] items-center justify-between gap-5 px-6 lg:px-8">
-        <Link href="/" aria-label="PDFRoot home" className="shrink-0">
-          <HorizontalLogo />
+        <Link prefetch={false} href="/" aria-label="PDFRoot home" className="shrink-0">
+          <Logo />
         </Link>
 
         <nav className="hidden min-w-0 flex-1 items-center justify-center gap-[10px] pr-[148px] min-[1320px]:flex" aria-label="Main navigation">
           {desktopDirectNavItems.map((item) => {
             return (
-              <Link key={item.label} href={item.href} onClick={closeDesktopMenu} onTouchStart={() => setTouchedDesktopNav(item.label)} onTouchEnd={() => setTouchedDesktopNav(null)} onTouchCancel={() => setTouchedDesktopNav(null)} style={{ "--nav-accent": item.accent } as CSSProperties} className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground outline-none transition-colors [@media(hover:hover)]:hover:text-[var(--nav-accent)] focus-visible:text-[var(--nav-accent)] 2xl:px-3 2xl:text-sm ${touchedDesktopNav === item.label ? "text-[var(--nav-accent)]" : ""}`}>
+              <Link prefetch={false} key={item.label} href={item.href} onClick={closeDesktopMenu} onTouchStart={() => setTouchedDesktopNav(item.label)} onTouchEnd={() => setTouchedDesktopNav(null)} onTouchCancel={() => setTouchedDesktopNav(null)} style={{ "--nav-accent": item.accent } as CSSProperties} className={`inline-flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[0.78rem] font-medium text-muted-foreground outline-none transition-colors [@media(hover:hover)]:hover:text-[var(--nav-accent)] focus-visible:text-[var(--nav-accent)] 2xl:px-3 2xl:text-sm ${touchedDesktopNav === item.label ? "text-[var(--nav-accent)]" : ""}`}>
                 {item.label}
               </Link>
             );

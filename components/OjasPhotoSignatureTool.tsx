@@ -1165,8 +1165,8 @@ export function OjasPhotoSignatureTool() {
           <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
             <input id="ojas-add-image-upload" name="ojas-add-image-upload" ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
             <div data-ojas-photo-preview-grid="true" className="mx-auto grid w-full max-w-[1600px] justify-center gap-5 sm:block" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
-              <div className="mx-auto w-full max-w-[14rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:max-w-5xl sm:p-5">
-                <div className="mb-4 hidden flex-col gap-2 text-center sm:flex sm:flex-row sm:items-center sm:justify-between sm:text-left">
+              <div data-recruitment-compact-card="true" className="mx-auto w-full max-w-[14rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:max-w-5xl sm:p-5">
+                <div data-recruitment-compact-heading="true" className="mb-4 hidden flex-col gap-2 text-center sm:flex sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-950">{config.label} preview</p>
                     <p className="mt-1 truncate text-xs font-bold text-slate-500">{activeImageIndex + 1} of {selectedImages.length}: {selectedImage.file.name}</p>
@@ -1182,7 +1182,7 @@ export function OjasPhotoSignatureTool() {
                     </div>
                   )}
                 </div>
-                <div ref={previewHostRef} className="relative grid place-items-center overflow-visible rounded-xl border border-slate-100 bg-white p-3 sm:border-0 sm:bg-slate-50 sm:p-4">
+                <div ref={previewHostRef} data-recruitment-compact-media="true" className="relative grid place-items-center overflow-visible rounded-xl border border-slate-100 bg-white p-3 sm:border-0 sm:bg-slate-50 sm:p-4">
                   <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)] sm:hidden">{activeImageIndex + 1}</span>
                   <button type="button" onClick={() => removeSelectedImage(selectedImage.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95 sm:hidden" aria-label={`Remove ${selectedImage.file.name}`}>
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -1190,7 +1190,7 @@ export function OjasPhotoSignatureTool() {
                   <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm sm:hidden">
                     <GripVertical className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <img src={selectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="block h-auto w-full rounded-lg object-contain sm:hidden" draggable={false} />
+                  <img data-recruitment-compact-image="true" src={selectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="block h-auto w-full rounded-lg object-contain sm:hidden" draggable={false} />
                   <div
                     ref={cropFrameRef}
                     role="application"
@@ -1199,6 +1199,7 @@ export function OjasPhotoSignatureTool() {
                     onPointerMove={onCropPointerMove}
                     onPointerUp={onCropPointerEnd}
                     onPointerCancel={onCropPointerEnd}
+                    data-recruitment-desktop-crop="true"
                     className="relative hidden touch-none cursor-move place-items-center overflow-hidden rounded-xl border-2 border-[#FF2D2D] bg-white shadow-inner sm:grid"
                     style={cropFrameStyle}
                   >
@@ -1206,7 +1207,7 @@ export function OjasPhotoSignatureTool() {
                     <div className="pointer-events-none absolute inset-0 border border-white/80" />
                   </div>
                 </div>
-                <div className="mt-2 min-w-0 sm:hidden">
+                <div data-recruitment-compact-meta="true" className="mt-2 min-w-0 sm:hidden">
                   <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={selectedImage.file.name}>
                     <span className="min-w-0 truncate">{displayName.stem}</span>
                     <span className="shrink-0">{displayName.extension}</span>

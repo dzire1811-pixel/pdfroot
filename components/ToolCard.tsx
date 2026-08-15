@@ -2,9 +2,12 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { isToolVisibleInListings } from "@/lib/toolVisibility";
 import type { Tool } from "@/lib/tools";
 
 export function ToolCard({ tool, compact = false }: { tool: Tool; compact?: boolean }) {
+  if (!isToolVisibleInListings(tool)) return null;
+
   return (
     <Link
       href={`/${tool.slug}`}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
+import { isToolVisibleInListings } from "@/lib/toolVisibility";
 import { tools } from "@/lib/tools";
 
 const tabDefinitions = [
@@ -11,10 +12,12 @@ const tabDefinitions = [
   { id: "jpg", slug: "jpg-to-pdf" },
 ] as const;
 
-const tabs = tabDefinitions.map((tab) => ({
-  ...tab,
-  tool: tools.find((tool) => tool.slug === tab.slug)!,
-}));
+const tabs = tabDefinitions
+  .filter((tab) => isToolVisibleInListings(tab.slug))
+  .map((tab) => ({
+    ...tab,
+    tool: tools.find((tool) => tool.slug === tab.slug)!,
+  }));
 
 type TabId = (typeof tabs)[number]["id"];
 
@@ -64,7 +67,7 @@ export function ProductShowcase() {
         <div className="mx-auto mt-7 flex w-full flex-col items-center">
           <WorkflowIllustration active={active} />
           <div className="mt-8 flex justify-center md:mt-9">
-            <Link href={`/${activeTab.slug}`} className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-normal text-primary-foreground transition hover:bg-primary/90">
+            <Link prefetch={false} href={`/${activeTab.slug}`} className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-normal text-primary-foreground transition hover:bg-primary/90">
               Open {activeTab.tool.name}
             </Link>
           </div>
@@ -117,7 +120,7 @@ function MobileWorkflowIllustration({ active, previewLabel }: { active: TabId; p
       <rect x="42" y="38" width="20" height="20" rx="6" fill="#e53935" />
       <path d="M48 43h8v10h-8zM50 41h4l2 2h-6z" fill="#ffffff" />
       <text x="72" y="55" fill="#111827" fontFamily="Inter, Arial, sans-serif" fontSize="14" fontWeight="700">{previewLabel}</text>
-      <text x="316" y="55" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="12.5" fontWeight="700" letterSpacing="-0.3"><tspan fill="#EF4444">PDF</tspan><tspan fill="#111111">Root</tspan></text>
+      <text x="316" y="55" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="12.5" fontWeight="700" letterSpacing="-0.3"><tspan fill="#B91C1C">PDF</tspan><tspan fill="#111111">Root</tspan></text>
 
       <rect x="28" y="84" width="304" height="220" rx="22" fill="url(#mobile-workflow-photo)" stroke="#edf0f4" />
       {active === "jpg" ? (
@@ -273,7 +276,7 @@ function WorkflowIllustration({ active }: { active: TabId }) {
         <rect x="140" y="78" width="22" height="22" rx="7" fill="#e53935" />
         <path d="M146 84h10v11h-10zM148 81h5l3 3h-8z" fill="#ffffff" />
         <text x="176" y="100" fill="#111827" fontFamily="Arial, sans-serif" fontSize="19" fontWeight="700">{previewLabel}</text>
-        <text x="692" y="100" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="17" fontWeight="700" letterSpacing="-0.425"><tspan fill="#EF4444">PDF</tspan><tspan fill="#111111">Root</tspan></text>
+        <text x="692" y="100" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="17" fontWeight="700" letterSpacing="-0.425"><tspan fill="#B91C1C">PDF</tspan><tspan fill="#111111">Root</tspan></text>
 
         <g>
           <rect x="118" y="138" width="398" height="334" rx="30" fill="#f8fafc" stroke="#edf0f4" strokeWidth="1" filter="url(#preview-frame-shadow)" />
@@ -348,7 +351,7 @@ function WorkflowIllustration({ active }: { active: TabId }) {
         <rect x="130" y="53" width="24" height="24" rx="7" fill="#e53935" />
         <path d="M137 59h10v12h-10zM139 56h5l3 3h-8z" fill="#ffffff" />
         <text x="170" y="75" fill="#111827" fontFamily="Arial, sans-serif" fontSize="24" fontWeight="700">{previewLabel}</text>
-        <text x="760" y="75" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="24" fontWeight="700" letterSpacing="-0.6"><tspan fill="#EF4444">PDF</tspan><tspan fill="#111111">Root</tspan></text>
+        <text x="760" y="75" textAnchor="end" fontFamily="Inter, Arial, sans-serif" fontSize="24" fontWeight="700" letterSpacing="-0.6"><tspan fill="#B91C1C">PDF</tspan><tspan fill="#111111">Root</tspan></text>
 
         <rect x="108" y="108" width="684" height="240" rx="28" fill="url(#preview-photo-bg)" stroke="#edf0f4" strokeWidth="1" filter="url(#preview-frame-shadow)" />
         {active === "jpg" ? (

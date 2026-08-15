@@ -1,11 +1,12 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CalendarDays, CheckCircle2, Download, FileArchive, FileImage, GripVertical, ImageUp, Minus, PenLine, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import JSZip from "jszip";
 import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { ImageProcessingScreen, ImageSuccessScreen, ImageUploadBox, ImageWorkflowStage, useImageToolStageEffects } from "@/components/ImageToolWorkflow";
+import upscStyles from "./UpscPhotoSignatureTool.module.css";
 
 type GpscStage = "upload" | "workspace" | "processing" | "success";
 type GpscOjasType = "photo" | "signature";
@@ -1224,8 +1225,8 @@ function GpscOjasStyleTool() {
           <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
             <input id="gpsc-add-image-upload" name="gpsc-add-image-upload" ref={addInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddInputChange} />
             <div data-gpsc-photo-preview-grid="true" className="mx-auto grid w-full max-w-[1600px] justify-center gap-5 sm:block" style={{ paddingBottom: `${Math.max(actionBarHeight + 56, 168)}px` }}>
-              <div className="mx-auto w-full max-w-[14rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:max-w-5xl sm:p-5">
-                <div className="mb-4 hidden flex-col gap-2 text-center sm:flex sm:flex-row sm:items-center sm:justify-between sm:text-left">
+              <div data-recruitment-compact-card="true" className="mx-auto w-full max-w-[14rem] rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:max-w-5xl sm:p-5">
+                <div data-recruitment-compact-heading="true" className="mb-4 hidden flex-col gap-2 text-center sm:flex sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <div className="min-w-0">
                     <p className="text-sm font-black text-slate-950">{config.label} preview</p>
                     <p className="mt-1 truncate text-xs font-bold text-slate-500">{activeImageIndex + 1} of {GpscSelectedImages.length}: {GpscSelectedImage.file.name}</p>
@@ -1241,7 +1242,7 @@ function GpscOjasStyleTool() {
                     </div>
                   )}
                 </div>
-                <div ref={previewHostRef} className="relative grid place-items-center overflow-visible rounded-xl border border-slate-100 bg-white p-3 sm:border-0 sm:bg-slate-50 sm:p-4">
+                <div ref={previewHostRef} data-recruitment-compact-media="true" className="relative grid place-items-center overflow-visible rounded-xl border border-slate-100 bg-white p-3 sm:border-0 sm:bg-slate-50 sm:p-4">
                   <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)] sm:hidden">{activeImageIndex + 1}</span>
                   <button type="button" onClick={() => removeSelectedImage(GpscSelectedImage.id)} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95 sm:hidden" aria-label={`Remove ${GpscSelectedImage.file.name}`}>
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -1249,7 +1250,7 @@ function GpscOjasStyleTool() {
                   <span className="absolute bottom-2 right-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/95 text-slate-600 shadow-sm sm:hidden">
                     <GripVertical className="h-4 w-4" aria-hidden="true" />
                   </span>
-                  <img src={GpscSelectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="block h-auto w-full rounded-lg object-contain sm:hidden" draggable={false} />
+                  <img data-recruitment-compact-image="true" src={GpscSelectedImage.previewUrl} alt={`Uploaded ${config.label} preview`} className="block h-auto w-full rounded-lg object-contain sm:hidden" draggable={false} />
                   <div
                     ref={cropFrameRef}
                     role="application"
@@ -1258,6 +1259,7 @@ function GpscOjasStyleTool() {
                     onPointerMove={onCropPointerMove}
                     onPointerUp={onCropPointerEnd}
                     onPointerCancel={onCropPointerEnd}
+                    data-recruitment-desktop-crop="true"
                     className="relative hidden touch-none cursor-move place-items-center overflow-hidden rounded-xl border-2 border-[#FF2D2D] bg-white shadow-inner sm:grid"
                     style={cropFrameStyle}
                   >
@@ -1265,7 +1267,7 @@ function GpscOjasStyleTool() {
                     <div className="pointer-events-none absolute inset-0 border border-white/80" />
                   </div>
                 </div>
-                <div className="mt-2 min-w-0 sm:hidden">
+                <div data-recruitment-compact-meta="true" className="mt-2 min-w-0 sm:hidden">
                   <p className="flex min-w-0 max-w-full items-baseline text-sm font-black leading-snug text-slate-950" title={GpscSelectedImage.file.name}>
                     <span className="min-w-0 truncate">{displayName.stem}</span>
                     <span className="shrink-0">{displayName.extension}</span>
@@ -2086,6 +2088,7 @@ function UpscOfficialPhotoSignatureTool() {
   const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
   const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
   const [actionBarHeight, setActionBarHeight] = useState(128);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -2307,12 +2310,10 @@ function UpscOfficialPhotoSignatureTool() {
       }
       const viewportHeight = window.innerHeight;
       const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
       const barHeight = actionBarRef.current?.offsetHeight ?? 110;
       setActionBarHeight(barHeight);
       const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
+      setIsActionBarVisible(window.innerWidth < 640 ? workAreaInView : true);
     };
 
     const scheduleUpdate = () => {
@@ -2329,6 +2330,54 @@ function UpscOfficialPhotoSignatureTool() {
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [document, stage]);
+
+  useLayoutEffect(() => {
+    if (!document || stage !== "workspace" || !isActionBarVisible) return;
+
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
+
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      const previewPaddingTop = Number.parseFloat(window.getComputedStyle(previewWorkspace).paddingTop) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-upsc-photo-preview-grid='true']");
+      const requiredPreviewHeight = previewGrid?.scrollHeight ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+
+      setActionBarHeight(actionBar.offsetHeight);
+      previewWorkspace.style.setProperty("--upsc-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--upsc-workspace-height", `${availableHeight}px`);
+      setIsConstrainedWorkspace(requiredPreviewHeight > availableHeight + 1);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-upsc-photo-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--upsc-workspace-height");
+      previewWorkspace.style.removeProperty("--upsc-preview-padding");
+    };
+  }, [document, isActionBarVisible, selectedType, stage]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -2765,12 +2814,12 @@ function UpscOfficialPhotoSignatureTool() {
     const displayName = gpscSplitFileName(document.file.name);
 
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-upsc-photo-workspace="true" id="upsc-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
-          <div ref={workAreaRef} data-ibps-document-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8">
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-ibps-document-workspace="true" data-upsc-photo-workspace="true" id="upsc-document-resize-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none ${upscStyles.workspaceSection} ${isConstrainedWorkspace ? upscStyles.constrainedWorkspaceSection : ""}`}>
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${upscStyles.workspaceShell} ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+          <div ref={workAreaRef} data-ibps-document-preview-area="true" className={`relative min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 sm:pt-8 ${upscStyles.previewWorkspace} ${upscStyles.singleDocumentWorkspace}`}>
             <input id="upsc-add-document-upload" name="upsc-add-document-upload" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-            <div data-upsc-photo-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:block sm:pb-72 lg:pb-56">
-              <article className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:hidden">
+            <div data-upsc-photo-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:block sm:pb-72 lg:pb-56 ${upscStyles.singleDocumentGrid}`}>
+              <article data-recruitment-compact-card="true" className="group relative flex h-full min-w-0 cursor-grab flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition duration-200 hover:-translate-y-1 hover:scale-[1.015] hover:border-red-200 hover:shadow-md sm:hidden">
                 <div className="relative grid aspect-square place-items-center overflow-hidden rounded-xl border border-slate-100 bg-white">
                   <span className="absolute left-2 top-2 z-10 grid h-8 min-w-8 place-items-center rounded-full bg-[#FF2D2D] px-2 text-xs font-black text-white shadow-[0_10px_20px_rgba(255,45,45,0.24)]">1</span>
                   <button type="button" onClick={removeDocument} className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-lg bg-red-50 text-[#FF2D2D] shadow-sm transition hover:bg-red-100 active:scale-95" aria-label={`Remove ${document.file.name}`}>
@@ -2793,7 +2842,7 @@ function UpscOfficialPhotoSignatureTool() {
                   </p>
                 </div>
               </article>
-              <div className="mx-auto hidden w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-5">
+              <div data-recruitment-desktop-preview="true" className="mx-auto hidden w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:block sm:p-5">
                 <div className="mb-4 flex flex-col gap-1 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
                   <p className="text-sm font-black text-slate-950">UPSC {config.label} preview</p>
                   <p className="text-xs font-bold text-slate-500">{config.hint}</p>
@@ -2818,8 +2867,8 @@ function UpscOfficialPhotoSignatureTool() {
           </div>
 
           {isActionBarVisible && (
-            <div ref={actionBarRef} data-ibps-document-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-              <div className="mx-auto flex max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-ibps-document-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? upscStyles.flowActionBar : ""}`}>
+              <div className="mx-auto flex w-full max-w-[1600px] min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                   <div className="hidden shrink-0 sm:block">{renderStickyTypeSelector()}</div>
                   <div className="flex min-w-0 items-center justify-between gap-3">
@@ -2837,7 +2886,7 @@ function UpscOfficialPhotoSignatureTool() {
                     </button>
                   </div>
                 </div>
-                <div className="min-w-0 lg:ml-auto">
+                <div className="w-full min-w-0 max-w-full lg:ml-auto lg:w-auto">
                   <div className="hidden sm:block">
                     <div className="grid grid-cols-[3.5rem_minmax(15rem,1fr)_auto] gap-2 lg:min-w-[38rem]">
                       {renderAddButton()}

@@ -2,8 +2,9 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    "./app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/layout.tsx",
+    "./app/not-found.tsx",
+    "./components/AnalyticsConsent.tsx",
   ],
   theme: {
     extend: {
@@ -14,20 +15,20 @@ const config: Config = {
         "card-foreground": "oklch(0.18 0 0)",
         popover: "oklch(1 0 0)",
         "popover-foreground": "oklch(0.18 0 0)",
-        primary: "oklch(0.598 0.214 27.3)",
-        "primary-foreground": "oklch(0.99 0 0)",
+        primary: "#B91C1C",
+        "primary-foreground": "#FFFFFF",
         secondary: "oklch(0.97 0 0)",
         "secondary-foreground": "oklch(0.205 0 0)",
         muted: "oklch(0.968 0 0)",
         "muted-foreground": "oklch(0.5 0 0)",
         accent: "oklch(0.968 0.008 27)",
-        "accent-foreground": "oklch(0.598 0.214 27.3)",
-        destructive: "oklch(0.598 0.214 27.3)",
+        "accent-foreground": "#B91C1C",
+        destructive: "#B91C1C",
         border: "oklch(0.922 0 0)",
         input: "oklch(0.922 0 0)",
-        ring: "oklch(0.598 0.214 27.3)",
-        success: "oklch(0.62 0.16 150)",
-        "success-foreground": "oklch(0.99 0 0)",
+        ring: "#2563EB",
+        success: "#15803D",
+        "success-foreground": "#FFFFFF",
         brand: {
           50: "#fff1f1",
           100: "#ffe1e1",

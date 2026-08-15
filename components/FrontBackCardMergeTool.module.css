@@ -1,0 +1,160 @@
+.workspaceSection {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--card-merge-workspace-height, 100dvh);
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspaceShell {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+:global(#front-back-card-merge-tool).workspaceSection[data-card-merge-workspace="true"] {
+  padding: 0 !important;
+}
+
+.constrainedWorkspaceSection {
+  height: auto;
+}
+
+.flowActionBar {
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+:global(#front-back-card-merge-tool).workspaceSection[data-card-merge-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-ibps-document-preview-area="true"] {
+  display: grid;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  place-items: center;
+  overflow: visible !important;
+  padding-bottom: var(--card-merge-preview-padding) !important;
+}
+
+:global(#front-back-card-merge-tool).constrainedWorkspaceSection[data-card-merge-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-ibps-document-preview-area="true"] {
+  height: auto !important;
+  min-height: min-content !important;
+  max-height: none !important;
+  flex: 1 0 auto;
+}
+
+.cardGrid {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-content: center !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+.cardPreview {
+  min-height: 8rem;
+  height: var(--card-merge-card-preview-height);
+  aspect-ratio: auto !important;
+}
+
+.constrainedWorkspaceSection .cardPreview {
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+@media (min-width: 640px) {
+  .constrainedWorkspaceSection .cardPreview {
+    aspect-ratio: 4 / 3 !important;
+  }
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).workspaceSection[data-card-merge-workspace="true"]
+  .previewWorkspace[data-ibps-document-preview-area="true"] {
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).workspaceSection[data-card-merge-workspace="true"]
+  .cardGrid[data-card-merge-preview-grid="true"] {
+  width: min(100%, 72rem) !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-content: center !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+  padding-bottom: 0 !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"] {
+  height: var(--card-merge-workspace-height) !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  > .workspaceShell {
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  .previewWorkspace[data-recruitment-preview-fit="true"] {
+  display: grid !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).constrainedWorkspaceSection[data-recruitment-workspace-fit="true"] {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).constrainedWorkspaceSection[data-recruitment-workspace-fit="true"]
+  > .workspaceShell {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#front-back-card-merge-tool))
+  :global(#front-back-card-merge-tool).constrainedWorkspaceSection[data-recruitment-workspace-fit="true"]
+  .previewWorkspace[data-recruitment-preview-fit="true"] {
+  height: auto !important;
+  min-height: min-content !important;
+  max-height: none !important;
+  overflow: visible !important;
+}

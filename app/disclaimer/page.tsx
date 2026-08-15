@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import "../route-styles.css";
 import { ArrowRight } from "lucide-react";
 import { BrandPhrase, BrandText } from "@/components/Brand";
 import { InfoCard, InfoCta, InfoPageLayout } from "@/components/InfoPageLayout";
@@ -90,7 +91,7 @@ export default function DisclaimerPage() {
 
       <InfoCta>
         <h2 className="text-3xl font-bold text-primary-foreground">Need help understanding this disclaimer?</h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/80">
+        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/90">
           Contact <BrandText /> support if you have questions about file processing, government form tools, or safe website use.
         </p>
         <Link href="/contact" className="mt-7 inline-flex items-center justify-center gap-2 rounded-lg bg-background px-7 py-4 text-base font-medium text-foreground transition hover:-translate-y-0.5">

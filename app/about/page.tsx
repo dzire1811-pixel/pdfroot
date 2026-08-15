@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import "../route-styles.css";
 import { ArrowRight } from "lucide-react";
 import { BrandText } from "@/components/Brand";
 import { InfoBulletGrid, InfoCard, InfoCta, InfoPageLayout } from "@/components/InfoPageLayout";
+import { isToolNameVisibleInListings } from "@/lib/toolVisibility";
 
 export const metadata: Metadata = {
   title: "About PDFRoot",
@@ -106,7 +108,7 @@ export default function AboutPage() {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">Image Tools</h3>
-            <InfoBulletGrid items={imageTools} />
+            <InfoBulletGrid items={imageTools.filter(isToolNameVisibleInListings)} />
           </div>
         </div>
       </InfoCard>
@@ -141,7 +143,7 @@ export default function AboutPage() {
 
       <InfoCta>
         <h2 className="text-3xl font-bold text-primary-foreground">We created <BrandText /> with one clear purpose</h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/80">To make PDF and image file work simple for everyone.</p>
+        <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-primary-foreground/90">To make PDF and image file work simple for everyone.</p>
         <Link href="/tools" className="mt-7 inline-flex items-center justify-center gap-2 rounded-lg bg-background px-7 py-4 text-base font-medium text-foreground transition hover:-translate-y-0.5">
           Browse Tools
           <ArrowRight className="h-5 w-5 text-primary" aria-hidden="true" />

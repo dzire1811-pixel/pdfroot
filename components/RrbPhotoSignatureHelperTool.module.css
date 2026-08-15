@@ -1,0 +1,145 @@
+.workspaceSection {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: var(--rrb-signature-workspace-height, 100dvh);
+  min-height: 0;
+  flex-direction: column;
+}
+
+.workspaceShell {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+}
+
+:global(#rrb-signature-resize-tool).workspaceSection[data-rrb-signature-workspace="true"] {
+  padding: 0 !important;
+}
+
+.constrainedWorkspaceSection {
+  height: auto;
+}
+
+.flowActionBar {
+  position: relative !important;
+  inset: auto !important;
+  width: 100%;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+:global(#rrb-signature-resize-tool).workspaceSection[data-rrb-signature-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-rrb-signature-preview-area="true"] {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0 !important;
+  flex: 1 1 auto;
+  overflow: visible !important;
+  padding-bottom: var(--rrb-signature-preview-padding) !important;
+}
+
+:global(#rrb-signature-resize-tool).constrainedWorkspaceSection[data-rrb-signature-workspace="true"]
+  .workspaceShell
+  .previewWorkspace[data-rrb-signature-preview-area="true"] {
+  min-height: min-content !important;
+  flex: 1 0 auto;
+}
+
+:global(#rrb-signature-resize-tool).workspaceSection[data-rrb-signature-workspace="true"]
+  .workspaceShell
+  .singleSignatureWorkspace {
+  display: grid;
+  place-items: center;
+}
+
+:global(#rrb-signature-resize-tool).workspaceSection[data-rrb-signature-workspace="true"]
+  .workspaceShell
+  .previewWorkspace
+  .singleSignatureGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  padding-bottom: 0 !important;
+}
+
+.singleSignatureWorkspace {
+  display: grid !important;
+  place-items: center !important;
+}
+
+.singleSignatureGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+.previewWorkspace [data-rrb-signature-preview-grid="true"] {
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .singleSignatureWorkspace {
+  display: grid !important;
+  place-items: center !important;
+}
+
+:global(.v0-tool-page) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .previewWorkspace .singleSignatureGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+:global(.v0-tool-page) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .previewWorkspace [data-rrb-signature-preview-grid="true"] {
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool)) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .singleSignatureWorkspace {
+  display: grid !important;
+  place-items: center !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool)) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .previewWorkspace .singleSignatureGrid {
+  min-height: 0 !important;
+  flex: none;
+  align-content: center !important;
+  overflow: visible !important;
+  padding-bottom: 0 !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool)) :global(#rrb-signature-resize-tool)[data-rrb-signature-workspace="true"] .previewWorkspace [data-rrb-signature-preview-grid="true"] {
+  overflow: visible !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool))
+  :global(#rrb-signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"] {
+  height: var(--rrb-signature-workspace-height) !important;
+  min-height: 0 !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool))
+  :global(#rrb-signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  > .workspaceShell {
+  height: 100% !important;
+  min-height: 0 !important;
+}
+
+:global(.v0-tool-page:has(#rrb-signature-resize-tool))
+  :global(#rrb-signature-resize-tool).workspaceSection:not(.constrainedWorkspaceSection)[data-recruitment-workspace-fit="true"]
+  .previewWorkspace[data-recruitment-preview-fit="true"] {
+  height: 100% !important;
+  min-height: 0 !important;
+}

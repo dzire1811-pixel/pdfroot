@@ -1,15 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import Script from "next/script";
 import type { ReactNode } from "react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { AnalyticsConsent } from "@/components/AnalyticsConsent";
+import { DeferredSpeedInsights } from "@/components/DeferredSpeedInsights";
+import {
+  ANALYTICS_CONSENT_COOKIE_NAME,
+  isAnalyticsConsentChoice,
+} from "@/lib/analyticsConsent";
 import "./globals.css";
+import "./homepage.css";
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-  display: "swap",
+  display: "optional",
 });
 
 const siteUrl = "https://www.pdfroot.com";
@@ -47,19 +53,10 @@ export const metadata: Metadata = {
   authors: [{ name: "PDFRoot" }],
   creator: "PDFRoot",
   publisher: "PDFRoot",
-  manifest: "/branding/site.webmanifest",
+  manifest: "/site.webmanifest",
   icons: {
-    icon: [
-      { url: "/branding/favicon.ico", type: "image/x-icon" },
-      { url: "/branding/favicon.svg", type: "image/svg+xml" },
-      { url: "/branding/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/branding/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/branding/favicon-48x48.png", sizes: "48x48", type: "image/png" },
-      { url: "/branding/favicon-96x96.png", sizes: "96x96", type: "image/png" },
-      { url: "/branding/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/branding/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
-    ],
-    apple: [{ url: "/branding/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    icon: [{ url: "/favicon.ico", type: "image/x-icon" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   openGraph: {
     title: "PDFRoot - Smart PDF & Image Toolkit",
@@ -117,13 +114,22 @@ const organizationSchema = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const storedConsent = cookieStore.get(ANALYTICS_CONSENT_COOKIE_NAME)?.value;
+  const initialConsent = isAnalyticsConsentChoice(storedConsent) ? storedConsent : null;
+
   return (
-    <html lang="en" data-scroll-behavior="smooth" className={inter.variable}>
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      data-analytics-consent={initialConsent ?? "pending"}
+      className={inter.variable}
+    >
       <body className="font-sans">
         {children}
         <Script
@@ -133,8 +139,8 @@ export default function RootLayout({
             __html: JSON.stringify(organizationSchema),
           }}
         />
-        <AnalyticsConsent />
-        <SpeedInsights />
+        <AnalyticsConsent initialConsent={initialConsent} />
+        <DeferredSpeedInsights />
       </body>
     </html>
   );

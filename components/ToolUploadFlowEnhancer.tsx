@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 
 const HOMEPAGE_UPLOAD_KEY = "pdfroot-homepage-upload";
 const HOMEPAGE_UPLOAD_STORE = "homepage-uploads";
@@ -678,6 +679,8 @@ async function applyPendingHomepageUpload() {
 }
 
 export function ToolUploadFlowEnhancer() {
+  const pathname = usePathname();
+
   useEffect(() => {
     const setupAllSections = () => {
       document.querySelectorAll<HTMLElement>('section[id$="-tool"]').forEach(setupWorkflowSection);
@@ -749,6 +752,112 @@ export function ToolUploadFlowEnhancer() {
       homepageUploadTimers.forEach((timer) => window.clearTimeout(timer));
     };
   }, []);
+
+  useEffect(() => {
+    const recruitmentRoutes = new Set([
+      "/image-compressor-for-government-forms",
+      "/signature-resize-tool",
+      "/ssc-photo-resize",
+      "/rrb-signature-resize",
+      "/ibps-photo-resize",
+      "/ojas-photo-resize",
+      "/gpsc-photo-resize",
+      "/upsc-photo-resize",
+      "/passport-photo-maker",
+      "/front-back-card-merge",
+      "/resize-image-to-exact-kb",
+    ]);
+
+    if (!recruitmentRoutes.has(pathname)) return;
+
+    const workspaceSelector = [
+      'section[data-compress-image-workspace="true"]',
+      'section[data-signature-resize-workspace="true"]',
+      'section[data-ssc-signature-workspace="true"]',
+      'section[data-rrb-signature-workspace="true"]',
+      'section[data-ibps-document-workspace="true"]',
+      'section[data-passport-photo-workspace="true"]',
+      'section[data-exact-kb-workspace="true"]',
+    ].join(",");
+    const previewSelector = [
+      '[data-compress-image-preview-area="true"]',
+      '[data-signature-resize-preview-area="true"]',
+      '[data-ssc-signature-preview-area="true"]',
+      '[data-rrb-signature-preview-area="true"]',
+      '[data-ibps-document-preview-area="true"]',
+      '[data-passport-photo-preview-area="true"]',
+      '[data-exact-kb-preview-area="true"]',
+    ].join(",");
+    const actionBarSelector = [
+      '[data-compress-image-action-bar="true"]',
+      '[data-signature-resize-action-bar="true"]',
+      '[data-ssc-signature-action-bar="true"]',
+      '[data-rrb-signature-action-bar="true"]',
+      '[data-ibps-document-action-bar="true"]',
+      '[data-passport-photo-action-bar="true"]',
+      '[data-exact-kb-action-bar="true"]',
+    ].join(",");
+
+    let animationFrame = 0;
+    let observedActionBar: HTMLElement | null = null;
+    const actionBarObserver = new ResizeObserver(() => scheduleLayout());
+
+    function clearLayout(workspace: HTMLElement) {
+      workspace.removeAttribute("data-recruitment-workspace-fit");
+      workspace.style.removeProperty("--recruitment-workspace-height");
+      workspace.style.removeProperty("--recruitment-workspace-inline-size");
+      workspace.querySelector<HTMLElement>('[data-recruitment-preview-fit="true"]')?.removeAttribute("data-recruitment-preview-fit");
+      workspace.querySelector<HTMLElement>('[data-recruitment-action-bar-fit="true"]')?.removeAttribute("data-recruitment-action-bar-fit");
+    }
+
+    function updateLayout() {
+      const workspace = document.querySelector<HTMLElement>(workspaceSelector);
+      if (!workspace) return;
+
+      if (window.innerWidth < 768) {
+        clearLayout(workspace);
+        return;
+      }
+
+      const preview = workspace.querySelector<HTMLElement>(`${previewSelector}:not([data-v0-result-screen="true"])`);
+      const actionBar = workspace.querySelector<HTMLElement>(actionBarSelector);
+      if (!preview || !actionBar) return;
+
+      if (observedActionBar !== actionBar) {
+        actionBarObserver.disconnect();
+        observedActionBar = actionBar;
+        actionBarObserver.observe(actionBar);
+      }
+
+      const previewDocumentTop = preview.getBoundingClientRect().top + window.scrollY;
+      const actionBarHeight = actionBar.getBoundingClientRect().height;
+      const availableHeight = Math.max(0, window.innerHeight - previewDocumentTop - actionBarHeight);
+
+      workspace.dataset.recruitmentWorkspaceFit = "true";
+      preview.dataset.recruitmentPreviewFit = "true";
+      actionBar.dataset.recruitmentActionBarFit = "true";
+      workspace.style.setProperty("--recruitment-workspace-height", `${availableHeight}px`);
+      workspace.style.setProperty("--recruitment-workspace-inline-size", `${document.documentElement.clientWidth}px`);
+    }
+
+    function scheduleLayout() {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(updateLayout);
+    }
+
+    const mutationObserver = new MutationObserver(scheduleLayout);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", scheduleLayout);
+    scheduleLayout();
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      mutationObserver.disconnect();
+      actionBarObserver.disconnect();
+      window.removeEventListener("resize", scheduleLayout);
+      document.querySelectorAll<HTMLElement>(workspaceSelector).forEach(clearLayout);
+    };
+  }, [pathname]);
 
   return null;
 }

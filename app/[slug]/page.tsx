@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import "../route-styles.css";
+import "../tool-pages.css";
 import { Check, ClipboardList, Download, FileLock2, FileText, MonitorSmartphone, ShieldCheck, UploadCloud, Zap } from "lucide-react";
 import { BrandPhrase, BrandText, SectionHeading } from "@/components/Brand";
+import { CropImageArticle } from "@/components/CropImageArticle";
 import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { MergeResultExploreButton } from "@/components/MergeResultExploreButton";
 import { ToolCard } from "@/components/ToolCard";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { ToolFeedback } from "@/components/ToolFeedback";
+import { ImageToolsMobileGuard } from "@/components/ImageToolsMobileGuard";
 import { ToolRenderer } from "@/components/ToolRenderer";
 import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
 import { WhyChoosePdfRoot } from "@/components/WhyChoosePdfRoot";
 import { getToolRowTintStyle } from "@/lib/toolInteractionColors";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import { getToolBySlug, imageTools, pdfTools, recruitmentPlatforms, tools } from "@/lib/tools";
+import mobileStyles from "../image-tools-mobile.module.css";
 
 type ToolPageProps = {
   params: Promise<{
@@ -109,7 +115,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
   const displayHeading = tool.slug === "image-compressor-for-government-forms" ? "Govt. Form Image Compressor" : pageTitle;
   const supportsStickyToolPanel = tool.category === "Image Tools";
-  const related = tools.filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
+  const related = filterVisibleTools(tools).filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
   const usesApprovedPdfResultPage = tool.slug === "front-back-card-merge" || tool.slug === "resize-image-to-exact-kb" || tool.slug === "compress-image" || tool.slug === "image-compressor-for-government-forms" || tool.slug === "crop-image" || tool.slug === "resize-image" || tool.slug === "jpg-to-png" || tool.slug === "png-to-jpg" || tool.slug === "passport-photo-maker" || tool.slug === "signature-resize-tool" || tool.slug === "ssc-photo-resize" || tool.slug === "rrb-signature-resize" || tool.slug === "ibps-photo-resize" || tool.slug === "ojas-photo-resize" || tool.slug === "gpsc-photo-resize" || tool.slug === "upsc-photo-resize" || tool.slug === "merge-pdf" || tool.slug === "split-pdf" || tool.slug === "compress-pdf" || tool.slug === "pdf-to-word" || tool.slug === "pdf-to-excel" || tool.slug === "pdf-to-powerpoint" || tool.slug === "pdf-to-jpg" || tool.slug === "jpg-to-pdf" || tool.slug === "png-to-pdf" || tool.slug === "word-to-pdf" || tool.slug === "excel-to-pdf" || tool.slug === "powerpoint-to-pdf" || tool.slug === "rotate-pdf" || tool.slug === "organize-pdf-pages" || tool.slug === "delete-pdf-pages" || tool.slug === "watermark-pdf" || tool.slug === "crop-pdf" || tool.slug === "protect-pdf" || tool.slug === "unlock-pdf";
   const resultPrimaryActions = tool.slug === "upsc-photo-resize"
     ? [
@@ -284,7 +290,10 @@ export default async function ToolPage({ params }: ToolPageProps) {
   };
 
   return (
-    <div className="v0-homepage v0-tool-page min-h-screen bg-background text-foreground">
+    <div
+      data-image-tool-page={tool.category === "Image Tools" ? "true" : undefined}
+      className={`v0-homepage v0-tool-page min-h-screen bg-background text-foreground ${tool.category === "Image Tools" ? mobileStyles.imageToolPage : ""}`}
+    >
       {tool.slug === "resize-image" && (
         <style>{`
           .v0-tool-page:has(#resize-image-tool [data-workflow-step="download"]) [data-tool-page-extra] {
@@ -434,6 +443,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         `}</style>
       )}
       <ToolUploadFlowEnhancer />
+      {tool.category === "Image Tools" && <ImageToolsMobileGuard />}
       <HomepageSiteHeader />
       <main className={supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}>
         <section data-tool-workspace-hero className={`relative border-b border-border bg-background px-6 pb-12 pt-10 sm:pb-14 sm:pt-12 lg:px-8 ${supportsStickyToolPanel ? "overflow-visible" : "overflow-hidden"}`}>
@@ -564,7 +574,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
                       <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
                         <Step className="h-6 w-6" aria-hidden="true" />
                       </span>
-                      <span className="text-4xl font-bold text-muted">0{index + 1}</span>
+                      <span className="text-4xl font-bold text-muted-foreground">0{index + 1}</span>
                     </div>
                     <h3 className="mt-6 text-base font-semibold text-foreground">{title as string}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -650,6 +660,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
         <div data-tool-page-extra="why-choose">
           <WhyChoosePdfRoot />
         </div>
+        {tool.slug === "crop-image" && <CropImageArticle />}
       </main>
       {usesApprovedPdfResultPage && (
         <div data-merge-result-only="footer">

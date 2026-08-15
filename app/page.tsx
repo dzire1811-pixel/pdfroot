@@ -9,6 +9,7 @@ import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { Stats } from "@/components/homepage/stats";
 import { WhyChoose } from "@/components/homepage/why-choose";
+import { filterVisibleTools, isToolVisibleInListings } from "@/lib/toolVisibility";
 import { imageTools, pdfTools, tools, type Tool } from "@/lib/tools";
 
 export const metadata: Metadata = {
@@ -74,13 +75,17 @@ const faqs = [
   },
 ];
 
+const visibleFaqs = faqs.filter((item) => item.question !== "Does PDFRoot include a passport photo maker?");
+
 const selectedTools = (names: string[]) =>
   names
     .map((name) => tools.find((tool) => tool.name === name))
-    .filter((tool): tool is Tool => Boolean(tool));
+    .filter((tool): tool is Tool => tool !== undefined && isToolVisibleInListings(tool));
 
 const governmentTools = selectedTools(governmentToolNames);
-const popularTools = tools.filter((tool) => tool.popular || tool.featured).slice(0, 8);
+const visiblePdfTools = filterVisibleTools(pdfTools);
+const visibleImageTools = filterVisibleTools(imageTools);
+const popularTools = filterVisibleTools(tools).filter((tool) => tool.popular || tool.featured).slice(0, 8);
 
 const faqSchema = {
   "@context": "https://schema.org",
@@ -138,9 +143,9 @@ export default function Home() {
         <BlogSection />
         <WhyChoose />
         <Stats />
-        <Faq items={faqs} />
+        <Faq items={visibleFaqs} />
       </main>
-      <HomepageSiteFooter pdfTools={pdfTools} imageTools={imageTools} governmentTools={governmentTools} />
+      <HomepageSiteFooter pdfTools={visiblePdfTools} imageTools={visibleImageTools} governmentTools={governmentTools} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

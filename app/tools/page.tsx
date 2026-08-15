@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "../route-styles.css";
 import { ToolsDirectoryPage } from "@/components/ToolsDirectoryPage";
 
 export const metadata: Metadata = {

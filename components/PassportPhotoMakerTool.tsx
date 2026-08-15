@@ -1,28 +1,68 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Download, IdCard, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Sparkles, UploadCloud, X } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import {
+  Check,
+  CheckCircle2,
+  Download,
+  IdCard,
+  ImageUp,
+  Palette,
+  RefreshCw,
+  RotateCcw,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 
-type Stage = "upload" | "workspace" | "processing" | "success";
-type SheetSizeKey = "4x6" | "5x7" | "8x12" | "10x15" | "12x18";
-type BackgroundMode = "white" | "blue" | "custom";
+type Stage = "upload" | "workspace" | "success";
+type Category = "female" | "male" | "children";
+type BackgroundId = "original" | "white" | "light-blue" | "blue" | "light-grey" | "red" | "custom";
+type PassportSizeId = "35x45" | "2x2" | "indian";
+type SheetSizeId = "4x6" | "5x7" | "8x12";
 type OutputFormat = "jpg" | "png" | "pdf";
-type PreviewMode = "original" | "enhanced";
-type ImageDimensions = { width: number; height: number };
+type ProcessingStatus = "original" | "preparing" | "applying-background" | "applying-outfit" | "ready" | "failed";
+type FaceBox = { x: number; y: number; width: number; height: number };
+type CachedCutout = { sourceKey: string; blob: Blob; url: string };
+type GeneratedResult = { outfitId: string; blob: Blob; url: string };
 
-type SheetPreset = {
-  key: SheetSizeKey;
+type MakerState = {
+  originalFile: File | null;
+  originalUrl: string | null;
+  originalHash: string | null;
+  category: Category | null;
+  background: BackgroundId;
+  customBackground: string;
+  cachedCutout: CachedCutout | null;
+  backgroundRemovalAvailable: boolean | null;
+  selectedOutfitId: string;
+  generatedResult: GeneratedResult | null;
+  passportSize: PassportSizeId;
+  sheetSize: SheetSizeId;
+  outputFormat: OutputFormat;
+  status: ProcessingStatus;
+  faceBox: FaceBox | null;
+  faceError: string | null;
+  shouldersVisible: boolean;
+  sourceDimensions: { width: number; height: number } | null;
+};
+
+type OutfitPreset = {
+  id: string;
+  category: Category;
   label: string;
-  widthIn: number;
-  heightIn: number;
+  filter: string;
+  colors: [string, string];
+  style: "original" | "shirt" | "blazer" | "suit";
+  tie?: boolean;
+  original?: boolean;
 };
 
 type OutputState = {
   url: string;
   previewUrl: string;
-  blob: Blob;
   fileName: string;
   width: number;
   height: number;
@@ -30,18 +70,94 @@ type OutputState = {
   format: OutputFormat;
 };
 
+const PASSPORT_PAGE_HEADING = "Passport Photo Maker Online";
 const DPI = 300;
-const sheetPresets: SheetPreset[] = [
-  { key: "4x6", label: "4x6", widthIn: 6, heightIn: 4 },
-  { key: "5x7", label: "5x7", widthIn: 7, heightIn: 5 },
-  { key: "8x12", label: "8x12", widthIn: 12, heightIn: 8 },
-  { key: "10x15", label: "10x15", widthIn: 15, heightIn: 10 },
-  { key: "12x18", label: "12x18", widthIn: 18, heightIn: 12 },
+const INITIAL_STATE: MakerState = {
+  originalFile: null,
+  originalUrl: null,
+  originalHash: null,
+  category: null,
+  background: "white",
+  customBackground: "#f5f5f5",
+  cachedCutout: null,
+  backgroundRemovalAvailable: null,
+  selectedOutfitId: "original",
+  generatedResult: null,
+  passportSize: "35x45",
+  sheetSize: "4x6",
+  outputFormat: "jpg",
+  status: "original",
+  faceBox: null,
+  faceError: null,
+  shouldersVisible: true,
+  sourceDimensions: null,
+};
+
+const PASSPORT_SIZES = [
+  { id: "35x45" as const, label: "35 × 45 mm", detail: "Default", widthMm: 35, heightMm: 45, headroom: 0.14 },
+  { id: "2x2" as const, label: "2 × 2 inch", detail: "Square", widthMm: 50.8, heightMm: 50.8, headroom: 0.14 },
+  { id: "indian" as const, label: "Indian Passport", detail: "India crop", widthMm: 35, heightMm: 45, headroom: 0.12 },
 ];
 
-function formatKb(bytes: number) {
-  return (bytes / 1024).toFixed(1);
-}
+const SHEET_SIZES = [
+  { id: "4x6" as const, label: "4 × 6", widthIn: 6, heightIn: 4 },
+  { id: "5x7" as const, label: "5 × 7", widthIn: 7, heightIn: 5 },
+  { id: "8x12" as const, label: "8 × 12", widthIn: 12, heightIn: 8 },
+];
+
+const BACKGROUNDS = [
+  { id: "original" as const, label: "Original", color: "transparent" },
+  { id: "white" as const, label: "White", color: "#ffffff" },
+  { id: "light-blue" as const, label: "Light Blue", color: "#dbeafe" },
+  { id: "blue" as const, label: "Blue", color: "#93c5fd" },
+  { id: "light-grey" as const, label: "Light Grey", color: "#e5e7eb" },
+  { id: "red" as const, label: "Red", color: "#dc2626" },
+  { id: "custom" as const, label: "Custom", color: "#f5f5f5" },
+];
+
+const OUTFIT_FILTERS: Record<Category, string[]> = {
+  female: ["All", "Formal Shirt", "Blazer", "Suit"],
+  male: ["All", "Formal Shirt", "Blazer", "Suit"],
+  children: ["All", "Plain Shirt", "Blazer"],
+};
+
+const ORIGINAL_OUTFIT: OutfitPreset = {
+  id: "original",
+  category: "female",
+  label: "Original Clothes",
+  filter: "All",
+  colors: ["#f8fafc", "#cbd5e1"],
+  style: "original",
+  original: true,
+};
+
+const OUTFITS: OutfitPreset[] = [
+  { id: "female-white-formal-shirt", category: "female", label: "White Formal Shirt", filter: "Formal Shirt", colors: ["#f8fafc", "#cbd5e1"], style: "shirt" },
+  { id: "female-light-blue-formal-shirt", category: "female", label: "Light Blue Formal Shirt", filter: "Formal Shirt", colors: ["#bfdbfe", "#60a5fa"], style: "shirt" },
+  { id: "female-black-formal-blazer", category: "female", label: "Black Formal Blazer", filter: "Blazer", colors: ["#111827", "#374151"], style: "blazer" },
+  { id: "female-navy-formal-blazer", category: "female", label: "Navy Formal Blazer", filter: "Blazer", colors: ["#172554", "#1e3a8a"], style: "blazer" },
+  { id: "female-black-suit", category: "female", label: "Black Formal Suit", filter: "Suit", colors: ["#0f172a", "#334155"], style: "suit" },
+  { id: "female-navy-suit", category: "female", label: "Navy Formal Suit", filter: "Suit", colors: ["#172554", "#1e40af"], style: "suit" },
+  { id: "male-white-formal-shirt", category: "male", label: "White Formal Shirt", filter: "Formal Shirt", colors: ["#f8fafc", "#cbd5e1"], style: "shirt" },
+  { id: "male-light-blue-formal-shirt", category: "male", label: "Light Blue Formal Shirt", filter: "Formal Shirt", colors: ["#bfdbfe", "#60a5fa"], style: "shirt" },
+  { id: "male-black-suit-tie", category: "male", label: "Black Suit with Tie", filter: "Suit", colors: ["#020617", "#334155"], style: "suit", tie: true },
+  { id: "male-navy-suit", category: "male", label: "Navy Suit", filter: "Suit", colors: ["#172554", "#1e40af"], style: "suit", tie: true },
+  { id: "male-black-blazer-white-shirt", category: "male", label: "Black Formal Blazer", filter: "Blazer", colors: ["#111827", "#475569"], style: "blazer" },
+  { id: "male-navy-blazer-white-shirt", category: "male", label: "Navy Formal Blazer", filter: "Blazer", colors: ["#1e3a8a", "#334155"], style: "blazer" },
+  { id: "children-white-plain-shirt", category: "children", label: "White Plain Shirt", filter: "Plain Shirt", colors: ["#f8fafc", "#cbd5e1"], style: "shirt" },
+  { id: "children-light-blue-plain-shirt", category: "children", label: "Light Blue Plain Shirt", filter: "Plain Shirt", colors: ["#bfdbfe", "#60a5fa"], style: "shirt" },
+  { id: "children-simple-black-blazer", category: "children", label: "Simple Black Blazer", filter: "Blazer", colors: ["#111827", "#475569"], style: "blazer" },
+  { id: "children-simple-navy-blazer", category: "children", label: "Simple Navy Blazer", filter: "Blazer", colors: ["#172554", "#1e3a8a"], style: "blazer" },
+];
+
+const STATUS_LABELS: Record<ProcessingStatus, string> = {
+  original: "Original",
+  preparing: "Preparing photo",
+  "applying-background": "Applying background",
+  "applying-outfit": "Applying outfit",
+  ready: "Ready",
+  failed: "Failed",
+};
 
 function isImage(file: File) {
   return ["image/jpeg", "image/png", "image/webp"].includes(file.type) || /\.(jpe?g|png|webp)$/i.test(file.name);
@@ -51,1178 +167,1062 @@ function safeBaseName(name: string) {
   return name.replace(/\.[^.]+$/, "").replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "passport-photo";
 }
 
-function splitFileName(name: string) {
-  const match = name.match(/^(.*?)(\.[^.]+)$/);
-  if (!match) return { stem: name, extension: "" };
-  return { stem: match[1] || name, extension: match[2] };
+function formatKb(bytes: number) {
+  return (bytes / 1024).toFixed(1);
 }
 
-function mmToPx(mm: number) {
-  return Math.max(1, Math.round((mm / 25.4) * DPI));
+function mmToPx(value: number) {
+  return Math.max(1, Math.round((value / 25.4) * DPI));
 }
 
-function inchesToPx(inches: number) {
-  return Math.max(1, Math.round(inches * DPI));
+function inchesToPx(value: number) {
+  return Math.max(1, Math.round(value * DPI));
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, type: "image/jpeg" | "image/png", quality = 0.94) {
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: "image/jpeg" | "image/png", quality = 0.95) {
   return new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not prepare the download."))), type, quality);
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not prepare the passport photo."))), type, quality);
   });
 }
 
-function loadImageFromFile(file: File) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Could not read this photo. Please upload JPG, JPEG, PNG, or WEBP."));
-    };
-    image.src = url;
-  });
-}
-
-function loadImageFromUrl(url: string) {
+function loadImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Could not prepare the enhanced photo."));
+    image.onerror = () => reject(new Error("The selected photo could not be read."));
     image.src = url;
   });
 }
 
-function enhanceCanvas(canvas: HTMLCanvasElement) {
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support photo enhancement.");
-
-  const { width, height } = canvas;
-  const source = context.getImageData(0, 0, width, height);
-  const original = source.data;
-  const softened = new Uint8ClampedArray(original);
-  const output = new Uint8ClampedArray(original.length);
-
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const index = (y * width + x) * 4;
-      for (let channel = 0; channel < 3; channel += 1) {
-        const average =
-          original[index + channel] * 4 +
-          original[index - 4 + channel] +
-          original[index + 4 + channel] +
-          original[index - width * 4 + channel] +
-          original[index + width * 4 + channel];
-        softened[index + channel] = Math.round(average / 8);
-      }
-      softened[index + 3] = original[index + 3];
-    }
-  }
-
-  for (let index = 0; index < original.length; index += 4) {
-    for (let channel = 0; channel < 3; channel += 1) {
-      const value = original[index + channel];
-      const smooth = softened[index + channel];
-      const brightened = value * 1.04 + 3;
-      const contrasted = (brightened - 128) * 1.08 + 128;
-      const sharpened = contrasted + (value - smooth) * 0.34;
-      output[index + channel] = Math.max(0, Math.min(255, Math.round(sharpened)));
-    }
-    output[index + 3] = original[index + 3];
-  }
-
-  context.putImageData(new ImageData(output, width, height), 0, 0);
-  return canvas;
+async function hashFile(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function drawEnhancedSource(image: HTMLImageElement) {
-  const maxSide = 2200;
-  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support photo enhancement.");
-
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.filter = "brightness(1.035) contrast(1.055) saturate(1.015)";
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  context.filter = "none";
-  return enhanceCanvas(canvas);
-}
-
-function coverImage(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
-  const sourceRatio = image.naturalWidth / image.naturalHeight;
-  const targetRatio = width / height;
-  let sourceX = 0;
-  let sourceY = 0;
-  let sourceWidth = image.naturalWidth;
-  let sourceHeight = image.naturalHeight;
-
-  if (sourceRatio > targetRatio) {
-    sourceWidth = image.naturalHeight * targetRatio;
-    sourceX = (image.naturalWidth - sourceWidth) / 2;
-  } else {
-    sourceHeight = image.naturalWidth / targetRatio;
-    sourceY = Math.max(0, (image.naturalHeight - sourceHeight) * 0.24);
-  }
-
-  context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
-}
-
-function resolveBackground(mode: BackgroundMode, customColor: string) {
-  if (mode === "blue") return "#dbeafe";
-  if (mode === "custom") return customColor || "#ffffff";
+function backgroundColor(background: BackgroundId, custom: string) {
+  if (background === "light-blue") return "#dbeafe";
+  if (background === "blue") return "#93c5fd";
+  if (background === "light-grey") return "#e5e7eb";
+  if (background === "red") return "#dc2626";
+  if (background === "custom") return custom;
   return "#ffffff";
 }
 
-function calculateLayout(sheetWidth: number, sheetHeight: number, photoWidth: number, photoHeight: number, gap: number) {
-  const columns = Math.max(1, Math.floor((sheetWidth + gap) / (photoWidth + gap)));
-  const rows = Math.max(1, Math.floor((sheetHeight + gap) / (photoHeight + gap)));
-  const count = columns * rows;
-  const usedWidth = columns * photoWidth + (columns - 1) * gap;
-  const usedHeight = rows * photoHeight + (rows - 1) * gap;
-  const startX = Math.max(0, Math.round((sheetWidth - usedWidth) / 2));
-  const startY = Math.max(0, Math.round((sheetHeight - usedHeight) / 2));
-  return { columns, rows, count, usedWidth, usedHeight, startX, startY };
+function drawAutomaticCrop(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  faceBox: FaceBox | null,
+  headroom: number,
+) {
+  const sourceWidth = image.naturalWidth;
+  const sourceHeight = image.naturalHeight;
+  const targetRatio = width / height;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceWidth / targetRatio;
+  if (cropHeight > sourceHeight) {
+    cropHeight = sourceHeight;
+    cropWidth = sourceHeight * targetRatio;
+  }
+
+  let sourceX = (sourceWidth - cropWidth) / 2;
+  let sourceY = Math.max(0, Math.min(sourceHeight - cropHeight, sourceHeight * 0.04));
+  if (faceBox) {
+    const faceCenterX = (faceBox.x + faceBox.width / 2) * sourceWidth;
+    const faceTop = faceBox.y * sourceHeight;
+    sourceX = clamp(faceCenterX - cropWidth / 2, 0, sourceWidth - cropWidth);
+    sourceY = clamp(faceTop - cropHeight * headroom, 0, sourceHeight - cropHeight);
+  }
+
+  context.drawImage(image, sourceX, sourceY, cropWidth, cropHeight, 0, 0, width, height);
 }
 
-function drawSheet(image: HTMLImageElement, settings: {
-  sheet: SheetPreset;
-  photoWidthMm: number;
-  photoHeightMm: number;
-  gapMm: number;
-  background: string;
-}) {
-  const sheetWidth = inchesToPx(settings.sheet.widthIn);
-  const sheetHeight = inchesToPx(settings.sheet.heightIn);
-  const photoWidth = mmToPx(settings.photoWidthMm);
-  const photoHeight = mmToPx(settings.photoHeightMm);
-  const gap = Math.max(0, mmToPx(settings.gapMm));
-  const layout = calculateLayout(sheetWidth, sheetHeight, photoWidth, photoHeight, gap);
-  const canvas = document.createElement("canvas");
-  canvas.width = sheetWidth;
-  canvas.height = sheetHeight;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support sheet generation.");
+async function fallbackForegroundCutout(file: Blob) {
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(sourceUrl);
+    const scale = Math.min(1, 1400 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Background processing is not supported by this browser.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+    const samples: Array<[number, number, number]> = [];
+    const step = Math.max(1, Math.floor(Math.min(canvas.width, canvas.height) / 40));
+    const sample = (x: number, y: number) => {
+      const index = (y * canvas.width + x) * 4;
+      samples.push([pixels[index], pixels[index + 1], pixels[index + 2]]);
+    };
+    for (let x = 0; x < canvas.width; x += step) {
+      sample(x, 0);
+      sample(x, canvas.height - 1);
+    }
+    for (let y = 0; y < canvas.height; y += step) {
+      sample(0, y);
+      sample(canvas.width - 1, y);
+    }
+    const median = (channel: 0 | 1 | 2) => {
+      const values = samples.map((item) => item[channel]).sort((a, b) => a - b);
+      return values[Math.floor(values.length / 2)] ?? 255;
+    };
+    const edge = [median(0), median(1), median(2)];
+    const visited = new Uint8Array(canvas.width * canvas.height);
+    const queue = new Int32Array(canvas.width * canvas.height);
+    let start = 0;
+    let end = 0;
+    const enqueue = (pixelIndex: number) => {
+      if (visited[pixelIndex]) return;
+      const dataIndex = pixelIndex * 4;
+      const red = pixels[dataIndex] - edge[0];
+      const green = pixels[dataIndex + 1] - edge[1];
+      const blue = pixels[dataIndex + 2] - edge[2];
+      if (red * red + green * green + blue * blue > 72 * 72) return;
+      visited[pixelIndex] = 1;
+      queue[end++] = pixelIndex;
+    };
+    for (let x = 0; x < canvas.width; x += 1) {
+      enqueue(x);
+      enqueue((canvas.height - 1) * canvas.width + x);
+    }
+    for (let y = 0; y < canvas.height; y += 1) {
+      enqueue(y * canvas.width);
+      enqueue(y * canvas.width + canvas.width - 1);
+    }
+    while (start < end) {
+      const pixelIndex = queue[start++];
+      const x = pixelIndex % canvas.width;
+      const y = Math.floor(pixelIndex / canvas.width);
+      if (x > 0) enqueue(pixelIndex - 1);
+      if (x + 1 < canvas.width) enqueue(pixelIndex + 1);
+      if (y > 0) enqueue(pixelIndex - canvas.width);
+      if (y + 1 < canvas.height) enqueue(pixelIndex + canvas.width);
+    }
+    for (let index = 0; index < visited.length; index += 1) {
+      if (visited[index]) pixels[index * 4 + 3] = 0;
+    }
+    context.putImageData(imageData, 0, 0);
+    return canvasToBlob(canvas, "image/png");
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
 
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, sheetWidth, sheetHeight);
+async function createForegroundCutout(file: File) {
+  try {
+    const { removeBackground } = await import("@imgly/background-removal");
+    return await removeBackground(file, {
+      model: "isnet_quint8",
+      device: "cpu",
+      proxyToWorker: true,
+      output: { format: "image/png", quality: 1 },
+    });
+  } catch {
+    return fallbackForegroundCutout(file);
+  }
+}
+
+async function inspectPortrait(image: HTMLImageElement) {
+  const fallbackShoulders = image.naturalHeight / image.naturalWidth >= 0.9;
+  const FaceDetectorConstructor = (window as unknown as {
+    FaceDetector?: new (options: { fastMode: boolean; maxDetectedFaces: number }) => {
+      detect: (source: HTMLImageElement) => Promise<Array<{ boundingBox: DOMRectReadOnly }>>;
+    };
+  }).FaceDetector;
+  if (!FaceDetectorConstructor) return { faceBox: null, faceError: null, shouldersVisible: fallbackShoulders };
+
+  try {
+    const detector = new FaceDetectorConstructor({ fastMode: true, maxDetectedFaces: 3 });
+    const faces = await detector.detect(image);
+    if (faces.length === 0) {
+      return { faceBox: null, faceError: "Face not detected. Upload a clear front-facing photo.", shouldersVisible: false };
+    }
+    if (faces.length > 1) {
+      return { faceBox: null, faceError: "Please upload a photo containing only one person.", shouldersVisible: false };
+    }
+    const box = faces[0].boundingBox;
+    const normalized = {
+      x: box.x / image.naturalWidth,
+      y: box.y / image.naturalHeight,
+      width: box.width / image.naturalWidth,
+      height: box.height / image.naturalHeight,
+    };
+    const pixelsBelowFace = image.naturalHeight - (box.y + box.height);
+    return { faceBox: normalized, faceError: null, shouldersVisible: pixelsBelowFace >= box.height * 0.7 };
+  } catch {
+    return { faceBox: null, faceError: null, shouldersVisible: fallbackShoulders };
+  }
+}
+
+async function composePassportPhoto(
+  sourceUrl: string,
+  cutoutUrl: string | null,
+  background: BackgroundId,
+  customBackground: string,
+  sizeId: PassportSizeId,
+  faceBox: FaceBox | null,
+) {
+  const size = PASSPORT_SIZES.find((item) => item.id === sizeId) ?? PASSPORT_SIZES[0];
+  const canvas = document.createElement("canvas");
+  canvas.width = mmToPx(size.widthMm);
+  canvas.height = mmToPx(size.heightMm);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Photo preparation is not supported by this browser.");
+  if (background !== "original" && !cutoutUrl) throw new Error("Background removal is currently unavailable.");
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
 
-  for (let row = 0; row < layout.rows; row += 1) {
-    for (let column = 0; column < layout.columns; column += 1) {
-      const x = layout.startX + column * (photoWidth + gap);
-      const y = layout.startY + row * (photoHeight + gap);
-      context.fillStyle = settings.background;
-      context.fillRect(x, y, photoWidth, photoHeight);
-      coverImage(context, image, x, y, photoWidth, photoHeight);
-      context.strokeStyle = "rgba(15, 23, 42, 0.16)";
-      context.lineWidth = 1;
-      context.strokeRect(x + 0.5, y + 0.5, photoWidth - 1, photoHeight - 1);
-    }
+  const source = await loadImage(background === "original" || !cutoutUrl ? sourceUrl : cutoutUrl);
+  if (background !== "original") {
+    context.fillStyle = backgroundColor(background, customBackground);
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  drawAutomaticCrop(context, source, canvas.width, canvas.height, faceBox, size.headroom);
+  return canvas;
+}
+
+function OutfitThumbnail({ outfit }: { outfit: OutfitPreset }) {
+  if (outfit.original) {
+    return (
+      <span className="relative grid h-24 place-items-center overflow-hidden bg-[linear-gradient(135deg,#f8fafc_25%,#e2e8f0_25%,#e2e8f0_50%,#f8fafc_50%,#f8fafc_75%,#e2e8f0_75%)] bg-[length:14px_14px]">
+        <span className="absolute bottom-[-0.6rem] h-16 w-20 rounded-t-[2.5rem] border-2 border-slate-400 bg-white/90" />
+        <span className="relative rounded-full border border-slate-300 bg-white px-2 py-1 text-[0.55rem] font-black uppercase tracking-wide text-slate-600">Your clothes</span>
+      </span>
+    );
   }
 
-  return { canvas, count: layout.count };
+  const hasJacket = outfit.style === "blazer" || outfit.style === "suit";
+  const garmentLabel = outfit.tie ? "Suit + tie" : outfit.style === "shirt" ? "Formal shirt" : outfit.style === "suit" ? "Formal suit" : "Formal blazer";
+  return (
+    <span className="relative block h-24 overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200" aria-hidden="true">
+      <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[0.5rem] font-black uppercase tracking-wide text-slate-600 shadow-sm">{garmentLabel}</span>
+      <span className="absolute bottom-[-0.8rem] left-1/2 h-[4.9rem] w-[6.6rem] -translate-x-1/2 rounded-t-[2.6rem] shadow-[0_8px_18px_rgba(15,23,42,0.22)]" style={{ background: `linear-gradient(135deg, ${outfit.colors[0]}, ${outfit.colors[1]})` }}>
+        <span className="absolute left-1/2 top-0 h-full w-8 -translate-x-1/2 bg-white" />
+        <span className="absolute left-1/2 top-0 h-5 w-8 -translate-x-1/2 bg-slate-100" style={{ clipPath: "polygon(0 0, 50% 100%, 100% 0)" }} />
+        {hasJacket && (
+          <>
+            <span className="absolute left-[1.05rem] top-0 h-12 w-8 origin-top-right -rotate-[8deg] border-r border-white/30" style={{ backgroundColor: outfit.colors[0], clipPath: "polygon(0 0, 100% 0, 100% 100%, 35% 58%)" }} />
+            <span className="absolute right-[1.05rem] top-0 h-12 w-8 origin-top-left rotate-[8deg] border-l border-white/30" style={{ backgroundColor: outfit.colors[0], clipPath: "polygon(0 0, 100% 0, 65% 58%, 0 100%)" }} />
+          </>
+        )}
+        {outfit.tie && <><span className="absolute left-1/2 top-3 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#FF2D2D]" /><span className="absolute left-1/2 top-5 h-8 w-2 -translate-x-1/2 bg-[#b91c1c]" style={{ clipPath: "polygon(50% 0, 100% 82%, 50% 100%, 0 82%)" }} /></>}
+        {!hasJacket && <span className="absolute left-1/2 top-8 h-px w-10 -translate-x-1/2 bg-slate-300" />}
+      </span>
+    </span>
+  );
+}
+
+function createSheetCanvas(photo: HTMLCanvasElement, sheetId: SheetSizeId) {
+  const sheet = SHEET_SIZES.find((item) => item.id === sheetId) ?? SHEET_SIZES[0];
+  const canvas = document.createElement("canvas");
+  canvas.width = inchesToPx(sheet.widthIn);
+  canvas.height = inchesToPx(sheet.heightIn);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Sheet creation is not supported by this browser.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+
+  const gap = mmToPx(3);
+  const margin = mmToPx(2);
+  const columns = Math.max(1, Math.floor((canvas.width - margin * 2 + gap) / (photo.width + gap)));
+  const rows = Math.max(1, Math.floor((canvas.height - margin * 2 + gap) / (photo.height + gap)));
+  const count = columns * rows;
+  const usedWidth = columns * photo.width + (columns - 1) * gap;
+  const usedHeight = rows * photo.height + (rows - 1) * gap;
+  const startX = Math.round((canvas.width - usedWidth) / 2);
+  const startY = Math.round((canvas.height - usedHeight) / 2);
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const x = startX + column * (photo.width + gap);
+      const y = startY + row * (photo.height + gap);
+      context.drawImage(photo, x, y);
+      context.strokeStyle = "#cbd5e1";
+      context.lineWidth = 1;
+      context.strokeRect(x + 0.5, y + 0.5, photo.width - 1, photo.height - 1);
+    }
+  }
+  return { canvas, count };
+}
+
+async function createNeckDownMask(file: File, faceBox: FaceBox | null) {
+  if (!faceBox) return null;
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await loadImage(url);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "#000000";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    const editFromY = Math.round((faceBox.y + faceBox.height * 0.95) * canvas.height);
+    context.clearRect(0, editFromY, canvas.width, canvas.height - editFromY);
+    return canvasToBlob(canvas, "image/png");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function PassportPhotoMakerTool() {
   const [stage, setStage] = useState<Stage>("upload");
-  const [file, setFile] = useState<File | null>(null);
-  const [originalDimensions, setOriginalDimensions] = useState<ImageDimensions | null>(null);
-  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
-  const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
-  const [previewMode, setPreviewMode] = useState<PreviewMode>("enhanced");
-  const [photoWidthMm, setPhotoWidthMm] = useState(35);
-  const [photoHeightMm, setPhotoHeightMm] = useState(45);
-  const [sheetKey, setSheetKey] = useState<SheetSizeKey>("4x6");
-  const [gapMm, setGapMm] = useState(3);
-  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("white");
-  const [customBackground, setCustomBackground] = useState("#ffffff");
-  const [outputFormat, setOutputFormat] = useState<OutputFormat>("jpg");
+  const [state, setState] = useState<MakerState>(INITIAL_STATE);
+  const [activeFilter, setActiveFilter] = useState("All");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [output, setOutput] = useState<OutputState | null>(null);
-  const [sheetPreviewUrl, setSheetPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("Upload one photo to create a passport photo sheet.");
-  const [isCreatingSheet, setIsCreatingSheet] = useState(false);
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isSettingsDrawerOpen, setIsSettingsDrawerOpen] = useState(false);
-  const [isSettingsDrawerClosing, setIsSettingsDrawerClosing] = useState(false);
-  const [isSettingsDrawerDragging, setIsSettingsDrawerDragging] = useState(false);
-  const [settingsDrawerDragOffset, setSettingsDrawerDragOffset] = useState(0);
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isCreatingSheet, setIsCreatingSheet] = useState(false);
+  const toolSectionRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const toolSectionRef = useRef<HTMLElement | null>(null);
-  const processingSectionRef = useRef<HTMLElement | null>(null);
-  const successSectionRef = useRef<HTMLElement | null>(null);
-  const workspaceRef = useRef<HTMLDivElement>(null);
-  const workAreaRef = useRef<HTMLDivElement>(null);
+  const headingSlotRef = useRef<HTMLDivElement>(null);
+  const backgroundSectionRef = useRef<HTMLDivElement>(null);
+  const outfitSectionRef = useRef<HTMLDivElement>(null);
   const actionBarRef = useRef<HTMLDivElement>(null);
-  const mobileSettingsButtonRef = useRef<HTMLButtonElement>(null);
-  const drawerDragStartYRef = useRef<number | null>(null);
-  const drawerDragOffsetRef = useRef(0);
-  const settingsDrawerClosingRef = useRef(false);
-  const shouldScrollToUploadRef = useRef(false);
-  const originalUrlRef = useRef<string | null>(null);
-  const enhancedUrlRef = useRef<string | null>(null);
-  const outputUrlRef = useRef<string | null>(null);
-  const sheetPreviewUrlRef = useRef<string | null>(null);
-  const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const activeHashRef = useRef<string | null>(null);
+  const ownedUrlsRef = useRef(new Set<string>());
+  const outfitCacheRef = useRef(new Map<string, Blob>());
+  const cutoutCacheRef = useRef(new Map<string, CachedCutout>());
+  const generatingRef = useRef(false);
 
-  const selectedSheet = sheetPresets.find((preset) => preset.key === sheetKey) ?? sheetPresets[0];
-  const background = resolveBackground(backgroundMode, customBackground);
-  const activePhotoUrl = previewMode === "original" ? originalUrl : enhancedUrl;
-  const displayFileName = file ? splitFileName(file.name) : null;
+  const selectedOutfit = state.selectedOutfitId === ORIGINAL_OUTFIT.id
+    ? ORIGINAL_OUTFIT
+    : OUTFITS.find((item) => item.id === state.selectedOutfitId) ?? ORIGINAL_OUTFIT;
+  const selectedPassportSize = PASSPORT_SIZES.find((item) => item.id === state.passportSize) ?? PASSPORT_SIZES[0];
+  const selectedSheet = SHEET_SIZES.find((item) => item.id === state.sheetSize) ?? SHEET_SIZES[0];
+  const selectedBackground = BACKGROUNDS.find((item) => item.id === state.background) ?? BACKGROUNDS[1];
+  const filteredOutfits = state.category
+    ? [
+        ...(activeFilter === "All" ? [ORIGINAL_OUTFIT] : []),
+        ...OUTFITS.filter((item) => item.category === state.category && (activeFilter === "All" || item.filter === activeFilter)),
+      ]
+    : [ORIGINAL_OUTFIT];
+  const activeSourceUrl = state.generatedResult?.url ?? state.originalUrl;
+  const activeSourceKey = state.generatedResult ? `${state.originalHash}:${state.generatedResult.outfitId}` : state.originalHash;
+  const activeCutoutUrl = state.cachedCutout?.sourceKey === activeSourceKey ? state.cachedCutout.url : null;
+  const previewBackground = state.background !== "original" && state.backgroundRemovalAvailable !== true ? "original" : state.background;
+  const generatedOutfitDisabled = Boolean(state.faceError) || !state.shouldersVisible || aiAvailable === false;
+  const readyForSheet = state.status === "ready" && Boolean(previewUrl);
+  const isGenerating = state.status === "applying-outfit" || state.status === "applying-background" || state.status === "preparing";
+  const generateDisabled = !state.category || isGenerating || Boolean(state.faceError) || (!selectedOutfit.original && generatedOutfitDisabled);
+  const generateLabel = !state.category
+    ? "Choose an outfit category"
+    : isGenerating
+      ? "Generating Passport Photo…"
+      : state.status === "ready"
+        ? "Try Another Style"
+        : selectedOutfit.original
+          ? "Prepare Passport Photo"
+          : `Generate with ${selectedOutfit.label}`;
 
-  function clearNativeInput() {
-    if (fileInputRef.current) fileInputRef.current.value = "";
+  function ownUrl(blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    ownedUrlsRef.current.add(url);
+    return url;
+  }
+
+  function revokeOwnedUrl(url: string | null | undefined) {
+    if (!url || !ownedUrlsRef.current.has(url)) return;
+    URL.revokeObjectURL(url);
+    ownedUrlsRef.current.delete(url);
   }
 
   function clearOutput() {
-    if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
-    if (output?.previewUrl && output.previewUrl !== outputUrlRef.current) URL.revokeObjectURL(output.previewUrl);
-    outputUrlRef.current = null;
+    if (output) {
+      revokeOwnedUrl(output.url);
+      if (output.previewUrl !== output.url) revokeOwnedUrl(output.previewUrl);
+    }
     setOutput(null);
   }
 
-  function clearSheetPreview() {
-    if (sheetPreviewUrlRef.current) URL.revokeObjectURL(sheetPreviewUrlRef.current);
-    sheetPreviewUrlRef.current = null;
-    setSheetPreviewUrl(null);
+  function clearCutoutCache() {
+    cutoutCacheRef.current.forEach((cutout) => revokeOwnedUrl(cutout.url));
+    cutoutCacheRef.current.clear();
   }
 
-  function clearOriginal() {
-    if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
-    originalUrlRef.current = null;
-    setOriginalUrl(null);
+  async function prepareCutout(file: File, sourceKey: string) {
+    const cached = cutoutCacheRef.current.get(sourceKey);
+    if (cached) return cached;
+    const blob = await createForegroundCutout(file);
+    const url = ownUrl(blob);
+    if (activeHashRef.current !== sourceKey.split(":")[0]) {
+      revokeOwnedUrl(url);
+      throw new Error("Photo changed while preparing the background.");
+    }
+    const cutout = { sourceKey, blob, url };
+    cutoutCacheRef.current.set(sourceKey, cutout);
+    return cutout;
   }
 
-  function clearEnhanced() {
-    if (enhancedUrlRef.current) URL.revokeObjectURL(enhancedUrlRef.current);
-    enhancedUrlRef.current = null;
-    setEnhancedUrl(null);
-  }
-
-  function resetTool() {
-    clearOutput();
-    clearSheetPreview();
-    clearOriginal();
-    clearEnhanced();
-    setStage("upload");
-    setFile(null);
-    setOriginalDimensions(null);
-    setPreviewMode("enhanced");
-    setPhotoWidthMm(35);
-    setPhotoHeightMm(45);
-    setSheetKey("4x6");
-    setGapMm(3);
-    setBackgroundMode("white");
-    setCustomBackground("#ffffff");
-    setOutputFormat("jpg");
-    setError(null);
-    setStatus("Upload one photo to create a passport photo sheet.");
-    setIsCreatingSheet(false);
-    setIsDragging(false);
-    setIsSettingsDrawerOpen(false);
-    setIsSettingsDrawerClosing(false);
-    setIsSettingsDrawerDragging(false);
-    setSettingsDrawerDragOffset(0);
-    setIsAdvancedOpen(false);
-    drawerDragStartYRef.current = null;
-    drawerDragOffsetRef.current = 0;
-    settingsDrawerClosingRef.current = false;
-    clearNativeInput();
-    shouldScrollToUploadRef.current = true;
-  }
-
-  async function handleFile(nextFile: File | undefined) {
-    setError(null);
-    clearOutput();
-    clearSheetPreview();
-
-    if (!nextFile) return;
-    if (!isImage(nextFile)) {
-      setError("Please upload only JPG, JPEG, PNG, or WEBP photos.");
+  async function acceptFile(file: File) {
+    if (!isImage(file)) {
+      setError("Upload a JPG, PNG or WEBP photo.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setError("Upload a photo smaller than 15 MB.");
       return;
     }
 
-    clearEnhanced();
-    clearOriginal();
-    const nextOriginalUrl = URL.createObjectURL(nextFile);
-    originalUrlRef.current = nextOriginalUrl;
-    setOriginalUrl(nextOriginalUrl);
-    setPreviewMode("enhanced");
-    setOriginalDimensions(null);
-    setIsSettingsDrawerOpen(false);
-    setIsSettingsDrawerClosing(false);
-    setIsSettingsDrawerDragging(false);
-    setSettingsDrawerDragOffset(0);
-    setIsAdvancedOpen(false);
-    drawerDragStartYRef.current = null;
-    drawerDragOffsetRef.current = 0;
-    settingsDrawerClosingRef.current = false;
-    setFile(nextFile);
-    setStage("processing");
-    setStatus("Enhancing photo quality...");
-    clearNativeInput();
+    generatingRef.current = false;
+    clearOutput();
+    setError(null);
+    setPreviewUrl((current) => {
+      revokeOwnedUrl(current);
+      return null;
+    });
+    revokeOwnedUrl(state.originalUrl);
+    revokeOwnedUrl(state.generatedResult?.url);
+    outfitCacheRef.current.clear();
+    clearCutoutCache();
 
+    const originalUrl = ownUrl(file);
     try {
-      const image = await loadImageFromFile(nextFile);
-      setOriginalDimensions({ width: image.naturalWidth, height: image.naturalHeight });
-      const canvas = drawEnhancedSource(image);
-      const blob = await canvasToBlob(canvas, "image/jpeg", 0.96);
-      const url = URL.createObjectURL(blob);
-      enhancedUrlRef.current = url;
-      setEnhancedUrl(url);
+      const [hash, image] = await Promise.all([hashFile(file), loadImage(originalUrl)]);
+      const inspection = await inspectPortrait(image);
+      activeHashRef.current = hash;
+      setState({
+        ...INITIAL_STATE,
+        originalFile: file,
+        originalUrl,
+        originalHash: hash,
+        status: "preparing",
+        faceBox: inspection.faceBox,
+        faceError: inspection.faceError,
+        shouldersVisible: inspection.shouldersVisible,
+        sourceDimensions: { width: image.naturalWidth, height: image.naturalHeight },
+      });
+      setActiveFilter("All");
       setStage("workspace");
-      setStatus("Photo enhanced. Choose sheet settings and create your print sheet.");
-      window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-    } catch (err) {
-      clearOriginal();
-      clearEnhanced();
-      setStage("upload");
-      setFile(null);
-      setOriginalDimensions(null);
-      setError(err instanceof Error ? err.message : "Could not enhance this photo. Please try another image.");
+
+      try {
+        const cutout = await prepareCutout(file, hash);
+        setState((current) => {
+          if (current.originalHash !== hash) {
+            revokeOwnedUrl(cutout.url);
+            return current;
+          }
+          return { ...current, cachedCutout: cutout, backgroundRemovalAvailable: true, status: inspection.faceError ? "failed" : "original" };
+        });
+      } catch {
+        if (activeHashRef.current === hash) {
+          setState((current) => ({ ...current, background: "original", backgroundRemovalAvailable: false, status: inspection.faceError ? "failed" : "original" }));
+          setError("Background removal is currently unavailable.");
+        }
+      }
+    } catch {
+      revokeOwnedUrl(originalUrl);
+      setError("The selected photo could not be read.");
     }
   }
 
   function onInputChange(event: ChangeEvent<HTMLInputElement>) {
-    void handleFile(event.target.files?.[0]);
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void acceptFile(file);
   }
 
-  function hasDraggedFiles(event: DragEvent<HTMLElement>) {
-    return Array.from(event.dataTransfer.types).includes("Files");
-  }
-
-  function onFileDragOver(event: DragEvent<HTMLElement>) {
-    if (!hasDraggedFiles(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-    setIsDragging(true);
-  }
-
-  function onFileDragLeave(event: DragEvent<HTMLElement>) {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-    setIsDragging(false);
-  }
-
-  function onUploadDrop(event: DragEvent<HTMLLabelElement>) {
+  function onDrop(event: DragEvent<HTMLElement>) {
     event.preventDefault();
     setIsDragging(false);
-    void handleFile(event.dataTransfer.files?.[0]);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void acceptFile(file);
   }
 
-  function updateSettings(update: () => void) {
+  function resetTool() {
+    generatingRef.current = false;
+    activeHashRef.current = null;
     clearOutput();
-    update();
-    setStatus("Settings updated. Preview refreshed automatically.");
+    setPreviewUrl((current) => {
+      revokeOwnedUrl(current);
+      return null;
+    });
+    revokeOwnedUrl(state.originalUrl);
+    revokeOwnedUrl(state.generatedResult?.url);
+    outfitCacheRef.current.clear();
+    clearCutoutCache();
+    setState(INITIAL_STATE);
+    setActiveFilter("All");
+    setError(null);
+    setStage("upload");
   }
 
-  function updatePreviewMode(mode: PreviewMode) {
-    if (mode === previewMode) return;
+  function selectCategory(category: Category) {
+    revokeOwnedUrl(state.generatedResult?.url);
+    setActiveFilter("All");
+    setState((current) => ({
+      ...current,
+      category,
+      selectedOutfitId: ORIGINAL_OUTFIT.id,
+      generatedResult: null,
+      cachedCutout: current.originalHash ? cutoutCacheRef.current.get(current.originalHash) ?? null : null,
+      status: current.faceError ? "failed" : "original",
+    }));
     clearOutput();
-    setPreviewMode(mode);
-    setStatus(mode === "enhanced" ? "Showing client-side enhanced HD preview." : "Showing original uploaded photo preview.");
   }
 
-  function handleAiHdEnhancePlaceholder() {
-    setStatus("AI HD Enhance API is not connected yet. Current enhancement is basic client-side processing.");
+  function selectOutfit(outfit: OutfitPreset) {
+    if (!outfit.original && generatedOutfitDisabled) return;
+    revokeOwnedUrl(state.generatedResult?.url);
+    setState((current) => ({
+      ...current,
+      selectedOutfitId: outfit.id,
+      generatedResult: null,
+      cachedCutout: current.originalHash ? cutoutCacheRef.current.get(current.originalHash) ?? null : null,
+      status: current.faceError ? "failed" : "original",
+    }));
+    clearOutput();
+  }
+
+  async function selectBackground(background: BackgroundId) {
+    if (background !== "original" && state.backgroundRemovalAvailable === false) {
+      setError("Background removal is currently unavailable.");
+      return;
+    }
+    setError(null);
+    setState((current) => ({ ...current, background }));
+    clearOutput();
+    if (background === "original" || activeCutoutUrl || state.backgroundRemovalAvailable === null || !activeSourceKey || !state.originalFile) return;
+
+    const wasReady = state.status === "ready";
+    setState((current) => ({ ...current, status: "applying-background" }));
+    try {
+      const sourceFile = state.generatedResult
+        ? new File([state.generatedResult.blob], `${state.generatedResult.outfitId}.png`, { type: "image/png" })
+        : state.originalFile;
+      const cutout = await prepareCutout(sourceFile, activeSourceKey);
+      setState((current) => ({ ...current, cachedCutout: cutout, backgroundRemovalAvailable: true, status: wasReady ? "ready" : "original" }));
+    } catch {
+      setState((current) => ({ ...current, background: "original", backgroundRemovalAvailable: false, status: wasReady ? "ready" : "original" }));
+      setError("Background removal is currently unavailable.");
+    }
+  }
+
+  async function generatePassportPhoto() {
+    if (generatingRef.current || !state.originalFile || !state.originalUrl || !state.originalHash) return;
+    if (!state.category) {
+      setError("Choose an outfit category");
+      return;
+    }
+    if (state.faceError) {
+      setError(state.faceError);
+      return;
+    }
+    if (!selectedOutfit.original && !state.shouldersVisible) {
+      setError("Upload a wider photo showing the shoulders to apply a formal outfit.");
+      return;
+    }
+    if (!selectedOutfit.original && aiAvailable === false) {
+      setError("AI formal outfits are currently unavailable.");
+      return;
+    }
+
+    generatingRef.current = true;
+    clearOutput();
+    setError(null);
+    try {
+      if (selectedOutfit.original) {
+        setState((current) => ({ ...current, status: current.background === "original" ? "preparing" : "applying-background" }));
+        let cutout = state.cachedCutout;
+        if (state.background !== "original" && cutout?.sourceKey !== state.originalHash) {
+          cutout = await prepareCutout(state.originalFile, state.originalHash);
+        }
+        setState((current) => ({
+          ...current,
+          generatedResult: null,
+          cachedCutout: cutout,
+          backgroundRemovalAvailable: current.background === "original" ? current.backgroundRemovalAvailable : true,
+          status: "ready",
+        }));
+        return;
+      }
+
+      setState((current) => ({ ...current, status: "applying-outfit" }));
+      const cacheKey = `${state.originalHash}:${selectedOutfit.id}`;
+      let generatedBlob = outfitCacheRef.current.get(cacheKey) ?? null;
+      if (!generatedBlob) {
+        const formData = new FormData();
+        formData.append("image", state.originalFile, state.originalFile.name);
+        formData.append("outfitId", selectedOutfit.id);
+        formData.append("category", state.category);
+        const mask = await createNeckDownMask(state.originalFile, state.faceBox);
+        if (mask) formData.append("mask", mask, "neck-down-mask.png");
+
+        const response = await fetch("/api/passport-photo/apply-outfit", { method: "POST", body: formData });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+          throw new Error(payload?.message || "Passport photo could not be generated. Your original photo is safe.");
+        }
+        generatedBlob = await response.blob();
+        outfitCacheRef.current.set(cacheKey, generatedBlob);
+      }
+
+      const generatedUrl = ownUrl(generatedBlob);
+      setState((current) => ({
+        ...current,
+        generatedResult: { outfitId: selectedOutfit.id, blob: generatedBlob, url: generatedUrl },
+        status: current.background === "original" ? "preparing" : "applying-background",
+      }));
+
+      const generatedFile = new File([generatedBlob], `${selectedOutfit.id}.png`, { type: "image/png" });
+      const cutout = state.background === "original" ? null : await prepareCutout(generatedFile, cacheKey);
+      setState((current) => ({
+        ...current,
+        generatedResult: { outfitId: selectedOutfit.id, blob: generatedBlob, url: generatedUrl },
+        cachedCutout: cutout,
+        backgroundRemovalAvailable: current.background === "original" ? current.backgroundRemovalAvailable : true,
+        status: "ready",
+      }));
+    } catch (caught) {
+      setState((current) => ({
+        ...current,
+        generatedResult: null,
+        cachedCutout: current.cachedCutout?.sourceKey === current.originalHash ? current.cachedCutout : null,
+        status: "failed",
+      }));
+      setError(
+        caught instanceof Error && caught.message === "AI formal outfits are currently unavailable."
+          ? caught.message
+          : "Passport photo could not be generated. Your original photo is safe.",
+      );
+    } finally {
+      generatingRef.current = false;
+    }
   }
 
   async function createPassportSheet() {
-    if (!file || !activePhotoUrl) {
-      setError("Please upload a photo first.");
-      setStage("upload");
-      return;
-    }
-
-    if (!Number.isFinite(photoWidthMm) || !Number.isFinite(photoHeightMm) || photoWidthMm < 10 || photoHeightMm < 10 || photoWidthMm > 100 || photoHeightMm > 100) {
-      setError("Enter passport photo width and height between 10mm and 100mm.");
-      return;
-    }
-
+    if (!readyForSheet || !activeSourceUrl || isCreatingSheet || !state.originalFile) return;
     setIsCreatingSheet(true);
     setError(null);
     clearOutput();
-    setStatus(`Creating final passport photo sheet from the ${previewMode} photo...`);
-
     try {
-      const image = await loadImageFromUrl(activePhotoUrl);
-      const { canvas, count } = drawSheet(image, {
-        sheet: selectedSheet,
-        photoWidthMm,
-        photoHeightMm,
-        gapMm,
-        background,
-      });
-      const baseName = safeBaseName(file.name);
+      const photo = await composePassportPhoto(
+        activeSourceUrl,
+        activeCutoutUrl,
+        state.background,
+        state.customBackground,
+        state.passportSize,
+        state.faceBox,
+      );
+      const { canvas, count } = createSheetCanvas(photo, state.sheetSize);
       const previewBlob = await canvasToBlob(canvas, "image/jpeg", 0.94);
-      const previewUrl = URL.createObjectURL(previewBlob);
+      const preview = ownUrl(previewBlob);
       let blob: Blob;
-      let fileName: string;
-
-      if (outputFormat === "pdf") {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error("Could not prepare PDF image."));
-          reader.readAsDataURL(previewBlob);
-        });
+      if (state.outputFormat === "pdf") {
         const { jsPDF } = await import("jspdf");
         const pdf = new jsPDF({ orientation: "landscape", unit: "in", format: [selectedSheet.widthIn, selectedSheet.heightIn] });
-        pdf.addImage(dataUrl, "JPEG", 0, 0, selectedSheet.widthIn, selectedSheet.heightIn);
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.96), "JPEG", 0, 0, selectedSheet.widthIn, selectedSheet.heightIn);
         blob = pdf.output("blob");
-        fileName = `${baseName}-passport-sheet-${selectedSheet.label}.pdf`;
       } else {
-        blob = await canvasToBlob(canvas, outputFormat === "png" ? "image/png" : "image/jpeg", outputFormat === "jpg" ? 0.94 : undefined);
-        fileName = `${baseName}-passport-sheet-${selectedSheet.label}.${outputFormat}`;
+        blob = await canvasToBlob(canvas, state.outputFormat === "png" ? "image/png" : "image/jpeg", 0.96);
       }
-
-      const url = URL.createObjectURL(blob);
-      outputUrlRef.current = url;
-      setOutput({ url, previewUrl, blob, fileName, width: canvas.width, height: canvas.height, count, format: outputFormat });
-      setStatus("Passport photo sheet is ready to download.");
+      const url = ownUrl(blob);
+      setOutput({
+        url,
+        previewUrl: preview,
+        fileName: `${safeBaseName(state.originalFile.name)}-${state.sheetSize}.${state.outputFormat}`,
+        width: canvas.width,
+        height: canvas.height,
+        count,
+        format: state.outputFormat,
+      });
       setStage("success");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not create the passport photo sheet.");
+    } finally {
       setIsCreatingSheet(false);
-      window.scrollTo({ top: 0, behavior: "auto" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create passport photo sheet.");
-      setIsCreatingSheet(false);
-      setStage("workspace");
     }
   }
 
   useEffect(() => {
-    let isActive = true;
-    void readUploadSession(isStoredImage).then((files) => {
-      if (isActive && files[0]) {
-        void handleFile(files[0]);
-      }
-    });
+    void fetch("/api/passport-photo/apply-outfit", { method: "GET", cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { available?: boolean }) => setAiAvailable(Boolean(payload.available)))
+      .catch(() => setAiAvailable(false));
+  }, []);
 
-    return () => {
-      isActive = false;
-    };
+  useEffect(() => {
+    void readUploadSession(isStoredImage).then((files) => {
+      if (files[0]) void acceptFile(files[0]);
+    });
+    // The upload handoff is intentionally consumed only once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (stage !== "processing") return;
-
-    window.requestAnimationFrame(() => {
-      const processingSection = processingSectionRef.current;
-      if (!processingSection) return;
-      window.scrollTo({ top: 0, behavior: "auto" });
-      processingSection.scrollIntoView({ behavior: "auto", block: "center" });
-    });
-  }, [stage]);
-
-  useEffect(() => {
-    if (stage !== "upload" || !shouldScrollToUploadRef.current) return;
-
-    shouldScrollToUploadRef.current = false;
-    window.requestAnimationFrame(() => {
-      const uploadSection = toolSectionRef.current;
-      if (!uploadSection) return;
-      const pageHero = uploadSection.parentElement?.closest<HTMLElement>("section");
-      const target = pageHero ?? uploadSection;
-      const y = target.getBoundingClientRect().top + window.scrollY - 100;
-      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
-    });
-  }, [stage]);
-
-  useEffect(() => {
-    const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
-    if (!page) return;
-
-    if (stage === "workspace") {
-      page.dataset.passportPhotoActiveWorkspace = "true";
-    } else {
-      delete page.dataset.passportPhotoActiveWorkspace;
-    }
-
-    return () => {
-      delete page.dataset.passportPhotoActiveWorkspace;
-    };
-  }, [stage]);
-
-  useEffect(() => {
-    if (stage !== "success" || !output) return;
-
-    const heroSection = toolSectionRef.current?.parentElement?.closest("section");
-    if (!(heroSection instanceof HTMLElement)) return;
-
-    const hadHeroBorder = heroSection.classList.contains("border-b");
-    const hadHeroBorderColor = heroSection.classList.contains("border-border");
-    const heroPaddingBottom = heroSection.style.paddingBottom;
-    heroSection.classList.remove("border-b", "border-border");
-    heroSection.style.paddingBottom = "26px";
-
-    return () => {
-      if (hadHeroBorder) heroSection.classList.add("border-b");
-      if (hadHeroBorderColor) heroSection.classList.add("border-border");
-      heroSection.style.paddingBottom = heroPaddingBottom;
-    };
-  }, [output, stage]);
-
-  useEffect(() => {
-    if (stage !== "workspace" || !activePhotoUrl) {
-      setIsActionBarVisible(false);
-      return;
-    }
-
-    let frame = 0;
-
-    const updateActionBarVisibility = () => {
-      const workspace = workspaceRef.current;
-      const workArea = workAreaRef.current;
-
-      if (!workspace || !workArea) {
-        setIsActionBarVisible(false);
-        return;
-      }
-
-      const viewportHeight = window.innerHeight;
-      const workAreaRect = workArea.getBoundingClientRect();
-      const workspaceRect = workspace.getBoundingClientRect();
-      const fallbackBarHeight = window.innerWidth < 640 ? 260 : 150;
-      const barHeight = actionBarRef.current?.offsetHeight ?? fallbackBarHeight;
-      const workAreaInView = workAreaRect.bottom > 0 && workAreaRect.top < viewportHeight;
-      const workspaceStillCoversBar = workspaceRect.bottom > viewportHeight - barHeight - 8;
-
-      setIsActionBarVisible(workAreaInView && workspaceStillCoversBar);
-    };
-
-    const scheduleUpdate = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(updateActionBarVisibility);
-    };
-
-    scheduleUpdate();
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [stage, activePhotoUrl]);
-
-  useEffect(() => {
-    if (stage !== "workspace" || !activePhotoUrl || !file) return;
-    if (!Number.isFinite(photoWidthMm) || !Number.isFinite(photoHeightMm) || photoWidthMm < 10 || photoHeightMm < 10 || photoWidthMm > 100 || photoHeightMm > 100) return;
-
-    let isActive = true;
-    setStatus("Refreshing passport photo sheet preview...");
-
+    if (stage !== "workspace" || !activeSourceUrl) return;
+    let active = true;
     void (async () => {
       try {
-        const image = await loadImageFromUrl(activePhotoUrl);
-        const { canvas, count } = drawSheet(image, {
-          sheet: selectedSheet,
-          photoWidthMm,
-          photoHeightMm,
-          gapMm,
-          background,
-        });
-        const previewBlob = await canvasToBlob(canvas, "image/jpeg", 0.92);
-        const previewUrl = URL.createObjectURL(previewBlob);
-
-        if (!isActive) {
-          URL.revokeObjectURL(previewUrl);
+        const photo = await composePassportPhoto(
+          activeSourceUrl,
+          activeCutoutUrl,
+          previewBackground,
+          state.customBackground,
+          state.passportSize,
+          state.faceBox,
+        );
+        const blob = await canvasToBlob(photo, "image/jpeg", 0.94);
+        const url = ownUrl(blob);
+        if (!active) {
+          revokeOwnedUrl(url);
           return;
         }
-
-        if (sheetPreviewUrlRef.current) URL.revokeObjectURL(sheetPreviewUrlRef.current);
-        sheetPreviewUrlRef.current = previewUrl;
-        setSheetPreviewUrl(previewUrl);
-        setStatus(`${count} photos fit on ${selectedSheet.label}. ${previewMode === "enhanced" ? "Enhanced" : "Original"} preview is ready.`);
-      } catch (err) {
-        if (!isActive) return;
-        setError(err instanceof Error ? err.message : "Could not refresh passport photo sheet preview.");
+        setPreviewUrl((current) => {
+          revokeOwnedUrl(current);
+          return url;
+        });
+      } catch (caught) {
+        if (active) setError(caught instanceof Error ? caught.message : "The passport preview could not be refreshed.");
       }
     })();
-
     return () => {
-      isActive = false;
+      active = false;
     };
-  }, [stage, activePhotoUrl, previewMode, file, photoWidthMm, photoHeightMm, sheetKey, gapMm, backgroundMode, customBackground, selectedSheet, background]);
+    // Object URLs and exact preset fields are the complete preview dependency set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage, activeSourceUrl, activeCutoutUrl, previewBackground, state.customBackground, state.passportSize, state.faceBox]);
 
   useEffect(() => {
-    return () => {
-      if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
-      if (enhancedUrlRef.current) URL.revokeObjectURL(enhancedUrlRef.current);
-      if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
-      if (sheetPreviewUrlRef.current) URL.revokeObjectURL(sheetPreviewUrlRef.current);
-      if (output?.previewUrl && output.previewUrl !== outputUrlRef.current) URL.revokeObjectURL(output.previewUrl);
+    if (stage !== "workspace") return;
+    const tool = toolSectionRef.current;
+    const page = tool?.closest<HTMLElement>(".v0-tool-page");
+    const hero = tool?.closest<HTMLElement>("[data-tool-workspace-hero]");
+    const content = tool?.parentElement?.closest<HTMLElement>("[data-tool-workspace-hero] > div");
+    const heading = hero?.querySelector<HTMLHeadingElement>("h1");
+    const slot = headingSlotRef.current;
+    if (!tool || !page || !hero || !content || !heading || !slot || heading.textContent?.trim() !== PASSPORT_PAGE_HEADING) return;
+
+    const heroCss = hero.style.cssText;
+    const contentCss = content.style.cssText;
+    const headingClass = heading.className;
+    const headingParent = heading.parentNode;
+    const headingSibling = heading.nextSibling;
+    const hiddenElements: Array<{ element: HTMLElement; hidden: boolean }> = [];
+    const hide = (element: HTMLElement) => {
+      hiddenElements.push({ element, hidden: element.hidden });
+      element.hidden = true;
     };
-  }, [output?.previewUrl]);
 
-  const closeSettingsDrawer = useCallback(() => {
-    if (!isSettingsDrawerOpen || isSettingsDrawerClosing || settingsDrawerClosingRef.current) return;
-    const closeDistance = Math.max(window.innerHeight, 420);
-    settingsDrawerClosingRef.current = true;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerDragging(false);
-    setIsSettingsDrawerClosing(true);
-    setSettingsDrawerDragOffset(closeDistance);
-    drawerDragOffsetRef.current = closeDistance;
-    window.setTimeout(() => {
-      setIsSettingsDrawerOpen(false);
-      setIsSettingsDrawerClosing(false);
-      setIsSettingsDrawerDragging(false);
-      setSettingsDrawerDragOffset(0);
-      settingsDrawerClosingRef.current = false;
-      drawerDragOffsetRef.current = 0;
-      window.requestAnimationFrame(() => {
-        mobileSettingsButtonRef.current?.focus();
+    Array.from(hero.children).forEach((element) => {
+      if (element !== content && element instanceof HTMLElement) hide(element);
+    });
+    Array.from(content.children).forEach((element) => {
+      if (element !== heading && element !== tool && !element.contains(tool) && element instanceof HTMLElement) hide(element);
+    });
+    const main = hero.parentElement;
+    if (main) {
+      Array.from(main.children).forEach((element) => {
+        if (element !== hero && element instanceof HTMLElement) hide(element);
       });
-    }, 240);
-  }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
+    }
+    page.querySelectorAll<HTMLElement>("[data-tool-page-extra]").forEach((element) => {
+      if (!hiddenElements.some((item) => item.element === element)) hide(element);
+    });
 
-  const updateSettingsDrawerDrag = useCallback((clientY: number) => {
-    if (drawerDragStartYRef.current === null) return;
-    const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
-    drawerDragOffsetRef.current = dragDistance;
-    setSettingsDrawerDragOffset(dragDistance);
+    hero.style.cssText += ";padding:0;border:0;background:#f1f5f9;overflow:visible";
+    content.style.cssText += ";width:100%;max-width:none;text-align:left";
+    heading.className = "text-xl font-black leading-tight tracking-tight text-slate-950 sm:text-2xl";
+    slot.appendChild(heading);
+    window.scrollTo({ top: 0, behavior: "auto" });
+
+    return () => {
+      hiddenElements.forEach(({ element, hidden }) => {
+        element.hidden = hidden;
+      });
+      hero.style.cssText = heroCss;
+      content.style.cssText = contentCss;
+      if (headingParent) {
+        if (headingSibling && headingSibling.parentNode === headingParent) headingParent.insertBefore(heading, headingSibling);
+        else headingParent.appendChild(heading);
+      }
+      heading.className = headingClass;
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    if (stage !== "workspace") return;
+    const tool = toolSectionRef.current;
+    const page = tool?.closest<HTMLElement>(".v0-tool-page");
+    const header = page?.querySelector<HTMLElement>("header");
+    const actionBar = actionBarRef.current;
+    if (!tool || !header || !actionBar) return;
+    const update = () => {
+      tool.style.setProperty("--passport-header-height", `${Math.ceil(header.getBoundingClientRect().height)}px`);
+      tool.style.setProperty("--passport-action-height", `${Math.ceil(actionBar.getBoundingClientRect().height)}px`);
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    observer.observe(actionBar);
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [stage]);
+
+  useEffect(() => {
+    const ownedUrls = ownedUrlsRef.current;
+    return () => {
+      ownedUrls.forEach((url) => URL.revokeObjectURL(url));
+      ownedUrls.clear();
+    };
   }, []);
 
-  const finishSettingsDrawerDrag = useCallback(
-    (clientY?: number) => {
-      if (drawerDragStartYRef.current === null) return;
-      if (typeof clientY === "number") {
-        const dragDistance = Math.max(0, clientY - drawerDragStartYRef.current);
-        drawerDragOffsetRef.current = dragDistance;
-        setSettingsDrawerDragOffset(dragDistance);
-      }
-
-      drawerDragStartYRef.current = null;
-      setIsSettingsDrawerDragging(false);
-
-      if (drawerDragOffsetRef.current >= 84) {
-        closeSettingsDrawer();
-        return;
-      }
-
-      drawerDragOffsetRef.current = 0;
-      setSettingsDrawerDragOffset(0);
-    },
-    [closeSettingsDrawer],
+  const lowResolution = Boolean(
+    state.sourceDimensions &&
+      (state.sourceDimensions.width < mmToPx(selectedPassportSize.widthMm) ||
+        state.sourceDimensions.height < mmToPx(selectedPassportSize.heightMm)),
   );
-
-  function openSettingsDrawer() {
-    if (window.innerWidth < 640) {
-      const workArea = workAreaRef.current;
-      if (workArea) {
-        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
-      }
-    }
-    setIsSettingsDrawerClosing(false);
-    setIsSettingsDrawerDragging(false);
-    setSettingsDrawerDragOffset(0);
-    settingsDrawerClosingRef.current = false;
-    drawerDragOffsetRef.current = 0;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerOpen(true);
-  }
-
-  function beginDrawerHandleDrag(clientY: number) {
-    if (settingsDrawerClosingRef.current) return;
-    drawerDragStartYRef.current = clientY;
-    drawerDragOffsetRef.current = 0;
-    setSettingsDrawerDragOffset(0);
-    setIsSettingsDrawerDragging(true);
-  }
-
-  function onDrawerHandlePointerDown(event: PointerEvent<HTMLButtonElement>) {
-    beginDrawerHandleDrag(event.clientY);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function onDrawerHandlePointerMove(event: PointerEvent<HTMLButtonElement>) {
-    updateSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleMouseDown(event: MouseEvent<HTMLButtonElement>) {
-    beginDrawerHandleDrag(event.clientY);
-  }
-
-  function onDrawerHandleTouchStart(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.touches[0];
-    if (touch) beginDrawerHandleDrag(touch.clientY);
-  }
-
-  function onDrawerHandleTouchMove(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.touches[0];
-    if (touch) updateSettingsDrawerDrag(touch.clientY);
-  }
-
-  function onDrawerHandlePointerEnd(event: PointerEvent<HTMLButtonElement>) {
-    finishSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleMouseUp(event: MouseEvent<HTMLButtonElement>) {
-    finishSettingsDrawerDrag(event.clientY);
-  }
-
-  function onDrawerHandleTouchEnd(event: TouchEvent<HTMLButtonElement>) {
-    const touch = event.changedTouches[0];
-    finishSettingsDrawerDrag(touch?.clientY);
-  }
-
-  function clearDrawerHandleDrag() {
-    if (settingsDrawerClosingRef.current) return;
-    drawerDragStartYRef.current = null;
-    setIsSettingsDrawerDragging(false);
-    drawerDragOffsetRef.current = 0;
-    setSettingsDrawerDragOffset(0);
-  }
-
-  useEffect(() => {
-    if (!isSettingsDrawerOpen) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeSettingsDrawer();
-    };
-
-    const onResize = () => {
-      if (window.innerWidth >= 640) closeSettingsDrawer();
-    };
-
-    const onPointerMove = (event: globalThis.PointerEvent) => {
-      updateSettingsDrawerDrag(event.clientY);
-    };
-
-    const onMouseMove = (event: globalThis.MouseEvent) => {
-      updateSettingsDrawerDrag(event.clientY);
-    };
-
-    const onTouchMove = (event: globalThis.TouchEvent) => {
-      const touch = event.touches[0];
-      if (touch) updateSettingsDrawerDrag(touch.clientY);
-    };
-
-    const clearDrawerDrag = () => {
-      if (settingsDrawerClosingRef.current) return;
-      drawerDragStartYRef.current = null;
-      setIsSettingsDrawerDragging(false);
-      drawerDragOffsetRef.current = 0;
-      setSettingsDrawerDragOffset(0);
-    };
-
-    const onPointerEnd = (event: globalThis.PointerEvent) => {
-      finishSettingsDrawerDrag(event.clientY);
-    };
-
-    const onMouseEnd = (event: globalThis.MouseEvent) => {
-      finishSettingsDrawerDrag(event.clientY);
-    };
-
-    const onTouchEnd = (event: globalThis.TouchEvent) => {
-      const touch = event.changedTouches[0];
-      finishSettingsDrawerDrag(touch?.clientY);
-    };
-
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", onResize);
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerEnd);
-    window.addEventListener("pointercancel", clearDrawerDrag);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseEnd);
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd);
-    window.addEventListener("touchcancel", clearDrawerDrag);
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerEnd);
-      window.removeEventListener("pointercancel", clearDrawerDrag);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseEnd);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
-      window.removeEventListener("touchcancel", clearDrawerDrag);
-    };
-  }, [isSettingsDrawerOpen, closeSettingsDrawer, finishSettingsDrawerDrag, updateSettingsDrawerDrag]);
-
-  function renderChangePhotoButton() {
-    return (
-      <button
-        type="button"
-        aria-label="Change photo"
-        title="Change photo"
-        onClick={() => fileInputRef.current?.click()}
-        className="relative inline-grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.3)] transition hover:-translate-y-0.5 hover:bg-red-600 active:scale-95 sm:h-14 sm:w-14"
-      >
-        <span className="absolute -left-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full bg-slate-950 px-1.5 text-[0.7rem] font-black leading-none text-white ring-2 ring-white">
-          1
-        </span>
-        <Plus className="h-7 w-7 stroke-[3]" aria-hidden="true" />
-      </button>
-    );
-  }
-
-  function renderMobileSettingsDrawer() {
-    if (!isSettingsDrawerOpen) return null;
-
-    return (
-      <div className="fixed inset-0 z-[60] sm:hidden">
-        <style>{`
-          @keyframes passportPhotoDrawerIn {
-            from {
-              transform: translateY(100%);
-            }
-            to {
-              transform: translateY(0);
-            }
-          }
-        `}</style>
-        <button
-          type="button"
-          className={`absolute inset-0 bg-slate-950/35 transition-opacity duration-200 ${isSettingsDrawerClosing ? "opacity-0" : "opacity-100"}`}
-          aria-label="Close settings backdrop"
-          onClick={closeSettingsDrawer}
-        />
-        <div
-          id="passport-photo-mobile-settings-drawer"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Passport photo settings"
-          style={{ transform: `translateY(${settingsDrawerDragOffset}px)` }}
-          className={`absolute inset-x-0 bottom-0 flex max-h-[min(72vh,36rem)] flex-col overflow-visible rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-20px_60px_rgba(15,23,42,0.18)] ${
-            isSettingsDrawerDragging ? "" : "transition-transform duration-[240ms] ease-out"
-          } ${isSettingsDrawerClosing ? "" : "animate-[passportPhotoDrawerIn_220ms_ease-out]"} ${
-            settingsDrawerDragOffset > 0 && !isSettingsDrawerClosing ? "will-change-transform" : ""
-          }`}
-        >
-          <button
-            type="button"
-            className="absolute left-1/2 top-2 z-10 flex h-10 w-24 -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab items-center justify-center bg-transparent active:cursor-grabbing"
-            aria-label="Drag down to close settings"
-            onPointerDown={onDrawerHandlePointerDown}
-            onPointerMove={onDrawerHandlePointerMove}
-            onPointerUp={onDrawerHandlePointerEnd}
-            onPointerCancel={clearDrawerHandleDrag}
-            onLostPointerCapture={clearDrawerHandleDrag}
-            onMouseDown={onDrawerHandleMouseDown}
-            onMouseUp={onDrawerHandleMouseUp}
-            onTouchStart={onDrawerHandleTouchStart}
-            onTouchMove={onDrawerHandleTouchMove}
-            onTouchEnd={onDrawerHandleTouchEnd}
-            onTouchCancel={clearDrawerHandleDrag}
-          >
-            <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
-          </button>
-          <div className="relative shrink-0 overflow-hidden rounded-t-2xl border-b border-slate-200 px-4 pb-3 pt-5">
-            <p className="text-sm font-black text-slate-950">Settings</p>
-            <button type="button" onClick={closeSettingsDrawer} className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 active:scale-95" aria-label="Close settings">
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4">
-            <div>
-              <p className="mb-2 text-xs font-black uppercase text-slate-500">Sheet size</p>
-              <div className="grid grid-cols-5 rounded-xl bg-slate-100 p-1">
-                {sheetPresets.map((preset) => (
-                  <button key={preset.key} type="button" onClick={() => updateSettings(() => setSheetKey(preset.key))} className={`h-10 rounded-lg px-1 text-xs font-black transition ${sheetKey === preset.key ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-black uppercase text-slate-500">Background</p>
-              <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-                {([
-                  ["white", "White"],
-                  ["blue", "Light Blue"],
-                ] as Array<[BackgroundMode, string]>).map(([mode, label]) => (
-                  <button key={mode} type="button" onClick={() => updateSettings(() => setBackgroundMode(mode))} className={`h-10 rounded-lg px-2 text-xs font-black transition ${backgroundMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="mb-2 text-xs font-black uppercase text-slate-500">Output</p>
-              <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1">
-                {(["jpg", "pdf"] as OutputFormat[]).map((format) => (
-                  <button key={format} type="button" onClick={() => updateSettings(() => setOutputFormat(format))} className={`h-10 rounded-lg px-2 text-xs font-black uppercase transition ${outputFormat === format ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                    {format}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-              <button type="button" onClick={() => setIsAdvancedOpen((open) => !open)} className="flex h-10 w-full items-center justify-between rounded-xl bg-white px-3 text-xs font-black text-slate-800" aria-expanded={isAdvancedOpen}>
-                Advanced Settings
-                <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
-              </button>
-              {isAdvancedOpen && (
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <label htmlFor="passport-photo-width-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
-                    Width mm
-                    <input id="passport-photo-width-mm-mobile" name="passport-photo-width-mm-mobile" type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                  </label>
-                  <label htmlFor="passport-photo-height-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
-                    Height mm
-                    <input id="passport-photo-height-mm-mobile" name="passport-photo-height-mm-mobile" type="number" min={10} max={100} value={photoHeightMm} onChange={(event) => updateSettings(() => setPhotoHeightMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                  </label>
-                  <label htmlFor="passport-photo-gap-mm-mobile" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
-                    Gap mm
-                    <input id="passport-photo-gap-mm-mobile" name="passport-photo-gap-mm-mobile" type="number" min={0} max={20} step={0.5} value={gapMm} onChange={(event) => updateSettings(() => setGapMm(Number(event.target.value)))} className="mt-1 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                  </label>
-                  <label htmlFor="passport-photo-custom-background" className="min-w-0 rounded-xl bg-white p-2 text-xs font-black text-slate-700">
-                    Custom bg
-                    <div className="mt-1 grid grid-cols-[1fr_3rem] gap-2">
-                      <button type="button" onClick={() => updateSettings(() => setBackgroundMode("custom"))} className={`h-11 rounded-xl border px-3 text-xs font-black transition ${backgroundMode === "custom" ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700"}`}>
-                        Use
-                      </button>
-                      <input id="passport-photo-custom-background" name="passport-photo-custom-background" type="color" value={customBackground} onChange={(event) => updateSettings(() => {
-                        setCustomBackground(event.target.value);
-                        setBackgroundMode("custom");
-                      })} className="h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
-                    </div>
-                  </label>
-                  <button type="button" onClick={() => updateSettings(() => setOutputFormat("png"))} className={`col-span-2 h-11 rounded-xl border px-3 text-xs font-black uppercase transition ${outputFormat === "png" ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-700"}`}>
-                    PNG output
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (stage === "processing") {
-    return (
-      <section
-        ref={(node) => {
-          toolSectionRef.current = node;
-          processingSectionRef.current = node;
-        }}
-        data-v0-managed-flow="true"
-        id="passport-photo-maker-tool"
-        className="mx-auto mt-6 grid min-h-[calc(100vh-120px)] w-[min(calc(100vw-2rem),64rem)] max-w-full place-items-center rounded-[2rem] border border-slate-200 bg-white p-6 text-center shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] lg:min-h-[calc(100vh-140px)]"
-      >
-        <div>
-          <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
-          <p className="mt-4 text-base font-black text-slate-950">{file && !enhancedUrl ? "Enhancing your photo..." : "Creating passport photo sheet..."}</p>
-          <p className="mt-2 text-sm font-semibold text-slate-500">{status}</p>
-        </div>
-      </section>
-    );
-  }
 
   if (stage === "success" && output) {
     return (
-      <section
-        ref={(node) => {
-          toolSectionRef.current = node;
-          successSectionRef.current = node;
-        }}
-        data-v0-managed-flow="true"
-        data-crop-image-workspace="true"
-        id="passport-photo-maker-tool"
-        className="mx-auto mt-3 w-full max-w-full overflow-visible bg-transparent p-0 text-left"
-      >
-        <div className="relative min-w-0 overflow-visible bg-slate-100">
-          <div data-crop-image-preview-area="true" data-v0-result-screen="true" data-workflow-step="download" className="relative min-w-0 bg-slate-100 p-4 text-left sm:p-6">
-            <div className="grid justify-items-center px-2 py-2 transition sm:px-4 sm:py-3">
-              <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8">
-                <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                  <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
-                </div>
-                <h3 className="mt-5 text-2xl font-black tracking-tight text-slate-950">Passport Photo Sheet Ready</h3>
-                <a href={output.url} download={output.fileName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
-                  Download Passport Photo Sheet
-                  <Download className="h-5 w-5" aria-hidden="true" />
-                </a>
-                <button type="button" onClick={resetTool} className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]">
-                  Make Another Passport Photo
-                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
+      <section ref={toolSectionRef} id="passport-photo-maker-tool" data-v0-managed-flow="true" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+        <div data-workflow-step="download" data-v0-result-screen="true" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-center">
+          <div className="grid min-h-[20rem] place-items-center overflow-hidden rounded-2xl bg-slate-100 p-4">
+            <img src={output.previewUrl} alt="Completed passport photo sheet" className="max-h-[32rem] max-w-full border border-slate-200 bg-white object-contain shadow-xl" />
+          </div>
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Passport sheet ready</span>
+            <h2 className="mt-4 text-2xl font-black text-slate-950">Your print sheet is ready</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{output.count} photos on {selectedSheet.label} at {DPI} DPI · {output.width} × {output.height} px</p>
+            <a href={output.url} download={output.fileName} className="mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 py-3 text-sm font-black text-white shadow-[0_14px_30px_rgba(255,45,45,0.24)] transition hover:bg-red-600"><Download className="h-5 w-5" aria-hidden="true" /> Download {output.format.toUpperCase()}</a>
+            <button type="button" onClick={() => setStage("workspace")} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"><IdCard className="h-4 w-4" aria-hidden="true" /> Change sheet preset</button>
+            <button type="button" onClick={resetTool} className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-black text-slate-500 transition hover:text-[#FF2D2D]"><RotateCcw className="h-4 w-4" aria-hidden="true" /> Start over</button>
           </div>
         </div>
       </section>
     );
   }
 
-  if (stage === "upload" || !file || !enhancedUrl || !originalUrl) {
+  if (stage === "upload" || !state.originalFile || !state.originalUrl) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" id="passport-photo-maker-tool" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:w-[min(calc(100vw-3rem),64rem)] sm:p-6">
-        <label
-          data-primary-upload="true"
-          htmlFor="passport-photo-upload"
-          onDragOver={onFileDragOver}
-          onDragLeave={onFileDragLeave}
-          onDrop={onUploadDrop}
-          className={`group flex min-h-72 cursor-pointer flex-col items-center justify-center rounded-[1.5rem] border-2 border-dashed p-7 text-center transition ${
-            isDragging ? "border-white/90 bg-red-600" : "border-white/70 bg-[#FF2D2D] hover:border-white hover:bg-red-600"
-          }`}
-        >
-          <input id="passport-photo-upload" name="passport-photo-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-          <span className="mb-5 grid h-auto w-auto place-items-center bg-transparent text-white transition group-hover:scale-105">
-            <ImageUp className="h-16 w-16 stroke-[1.35]" aria-hidden="true" />
-          </span>
-          <span className="sr-only">Upload one photo to create a passport photo sheet.</span>
-          <span className="mt-6 inline-flex min-h-[3.25rem] items-center justify-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-black uppercase tracking-wide text-slate-950 shadow-none transition group-hover:-translate-y-0.5">
-            Choose Photo
-            <UploadCloud className="h-5 w-5" aria-hidden="true" />
+      <section ref={toolSectionRef} id="passport-photo-maker-tool" data-v0-managed-flow="true" className="mx-auto mt-6 w-[min(calc(100vw-2rem),64rem)] max-w-full rounded-[2rem] border border-slate-200 bg-white p-4 text-left shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-6">
+        <label htmlFor="passport-photo-upload" data-primary-upload="true" onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setIsDragging(false)} onDrop={onDrop} className={`grid min-h-[18rem] cursor-pointer place-items-center rounded-2xl border-2 border-dashed p-6 text-center transition ${isDragging ? "border-[#FF2D2D] bg-red-50" : "border-slate-300 bg-slate-50 hover:border-red-300 hover:bg-red-50/40"}`}>
+          <input id="passport-photo-upload" name="passport-photo-upload" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" className="sr-only" onChange={onInputChange} />
+          <span>
+            <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#FF2D2D] text-white shadow-[0_14px_30px_rgba(255,45,45,0.2)]"><ImageUp className="h-8 w-8" aria-hidden="true" /></span>
+            <span className="mt-5 block text-lg font-black text-slate-950">Upload a portrait photo</span>
+            <span className="mt-2 block text-sm leading-6 text-slate-600">Choose a clear, front-facing JPG, PNG or WEBP photo showing one person and the shoulders.</span>
+            <span className="mx-auto mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 text-sm font-black text-white"><UploadCloud className="h-4 w-4" aria-hidden="true" /> Choose Photo</span>
           </span>
         </label>
-        {error && <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+        {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
       </section>
     );
   }
 
   return (
-    <section ref={toolSectionRef} data-v0-managed-flow="true" data-passport-photo-workspace="true" id="passport-photo-maker-tool" className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none sm:mt-8 sm:scroll-mt-40">
-      <div ref={workspaceRef} className="relative min-w-0 overflow-visible bg-slate-100">
-        <input id="passport-photo-workspace-upload" name="passport-photo-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
-        <div ref={workAreaRef} data-passport-photo-preview-area="true" className="relative min-w-0 overflow-visible bg-slate-100 p-2 pt-3 text-left sm:min-h-[calc(100vh-9rem)] sm:p-6 sm:pt-8">
-          <div className="mx-auto grid max-w-[1600px] place-items-center pb-[8.5rem] sm:min-h-[calc(100vh-22rem)] sm:pb-64 lg:pb-48">
-            <div className="w-full max-w-[calc(100vw-1rem)] rounded-xl bg-white p-3 shadow-sm sm:max-w-4xl sm:rounded-2xl sm:p-5">
-              <div className="mb-2 flex flex-col gap-1.5 sm:mb-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-slate-950">{sheetPreviewUrl ? "Passport photo sheet preview" : "Preparing sheet preview"}</p>
-                </div>
-                <div className="flex w-full max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden px-0.5 [scrollbar-width:none] sm:w-auto sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
-                  <div className="flex shrink-0 items-center gap-1.5" aria-label="Compare original and enhanced photo">
-                    {(["original", "enhanced"] as PreviewMode[]).map((mode) => (
-                      <button key={mode} type="button" onClick={() => updatePreviewMode(mode)} className={`h-6 shrink-0 rounded-full border px-1.5 text-[0.6rem] font-black capitalize shadow-[0_2px_0_rgba(15,23,42,0.06),0_6px_12px_rgba(15,23,42,0.05)] transition active:translate-y-px active:shadow-sm sm:h-8 sm:px-3 sm:text-xs ${previewMode === mode ? (mode === "enhanced" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-[#FF2D2D]") : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"}`}>
-                        {mode}
-                      </button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={handleAiHdEnhancePlaceholder} className="inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-full border border-red-100 bg-white px-1.5 text-[0.6rem] font-black text-slate-800 shadow-[0_2px_0_rgba(255,45,45,0.12),0_6px_12px_rgba(15,23,42,0.05)] transition hover:border-red-200 hover:text-[#FF2D2D] active:translate-y-px active:shadow-sm sm:h-8 sm:gap-1.5 sm:px-3 sm:text-xs">
-                    <Sparkles className="h-2.5 w-2.5 shrink-0 sm:h-3 sm:w-3" aria-hidden="true" />
-                    AI HD Enhance
-                  </button>
-                </div>
+    <section ref={toolSectionRef} id="passport-photo-maker-tool" data-v0-managed-flow="true" data-passport-photo-workspace="true" className="passport-photo-smart-workspace mx-auto w-full max-w-full overflow-visible bg-slate-100 text-left">
+      <style>{`
+        .passport-photo-smart-workspace.passport-photo-smart-workspace {
+          width: 100% !important;
+          max-width: 100% !important;
+          margin-left: 0 !important;
+          margin-right: 0 !important;
+        }
+        .passport-photo-smart-workspace.passport-photo-smart-workspace > [data-passport-photo-preview-area="true"] {
+          box-sizing: border-box !important;
+          display: block !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          padding: clamp(0.5rem, 1.2vw, 1rem) !important;
+          padding-bottom: calc(var(--passport-action-height, 6rem) + 0.75rem + env(safe-area-inset-bottom)) !important;
+        }
+        .passport-photo-smart-workspace.passport-photo-smart-workspace [data-passport-photo-preview-area="true"][data-recruitment-preview-fit="true"] > [data-passport-photo-editor="true"] {
+          width: 100% !important;
+          max-width: 1600px !important;
+        }
+        .passport-photo-smart-workspace.passport-photo-smart-workspace [data-passport-photo-action-bar="true"] {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        .passport-photo-smart-workspace.passport-photo-smart-workspace [data-passport-photo-action-content="true"] {
+          padding-left: 3rem !important;
+        }
+        .passport-photo-smart-workspace.passport-photo-smart-workspace [data-passport-generate="true"][disabled],
+        .passport-photo-smart-workspace.passport-photo-smart-workspace [data-passport-create-sheet="true"][disabled] {
+          background: #cbd5e1 !important;
+          color: #475569 !important;
+          box-shadow: none !important;
+          cursor: not-allowed !important;
+        }
+        @media (min-width: 768px) {
+          .passport-photo-smart-workspace.passport-photo-smart-workspace > [data-passport-photo-preview-area="true"] {
+            height: max(0px, calc(100dvh - var(--passport-header-height, 3.5rem) - var(--passport-action-height, 4.75rem))) !important;
+            min-height: 0 !important;
+            max-height: max(0px, calc(100dvh - var(--passport-header-height, 3.5rem) - var(--passport-action-height, 4.75rem))) !important;
+            overflow: hidden !important;
+            padding-bottom: clamp(0.5rem, 1.2vw, 1rem) !important;
+          }
+        }
+      `}</style>
+      <input id="passport-photo-workspace-upload" name="passport-photo-workspace-upload" ref={fileInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={onInputChange} />
+      <div data-passport-photo-preview-area="true" className="min-h-0 bg-slate-100 p-2 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:p-3 sm:pb-[calc(6rem+env(safe-area-inset-bottom))] md:h-[calc(100dvh-var(--passport-header-height,3.5rem)-var(--passport-action-height,4.75rem))] md:overflow-hidden lg:p-4">
+        <div data-passport-photo-editor="true" className="mx-auto grid min-h-0 w-full max-w-[1600px] gap-3 md:h-full md:grid-cols-[minmax(18rem,0.82fr)_minmax(0,1.55fr)] lg:gap-4">
+          <div data-passport-photo-preview-panel="true" className="flex min-h-[28rem] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-full md:min-h-0">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-950">Photo preview</p>
+                <p className="mt-0.5 truncate text-[0.7rem] font-bold text-slate-500">{state.originalFile.name} · {formatKb(state.originalFile.size)} KB</p>
               </div>
-              <div className="grid aspect-[3/2] w-full place-items-center overflow-hidden rounded-xl bg-slate-50 p-2 sm:aspect-auto sm:min-h-[26rem] sm:p-3">
-                {sheetPreviewUrl ? (
-                  <img src={sheetPreviewUrl} alt="Passport photo sheet preview" className="h-full max-h-[42vh] w-full max-w-full object-contain shadow-sm sm:h-auto sm:max-h-[min(68vh,44rem)] sm:w-auto" />
-                ) : (
-                  <div className="text-center">
-                    <RefreshCw className="mx-auto h-8 w-8 animate-spin text-[#FF2D2D]" aria-hidden="true" />
-                    <p className="mt-3 text-sm font-black text-slate-950">Preparing passport photo sheet preview...</p>
-                  </div>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[0.68rem] font-black ${state.status === "ready" ? "bg-emerald-50 text-emerald-700" : state.status === "failed" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-700"}`}>
+                {(state.status === "preparing" || state.status === "applying-background" || state.status === "applying-outfit") && <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                {state.status === "ready" && <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}
+                {STATUS_LABELS[state.status]}
+              </span>
+            </div>
+
+            <div className="relative grid min-h-[21rem] flex-1 place-items-center overflow-hidden bg-[linear-gradient(135deg,#eef2f7_25%,#e2e8f0_25%,#e2e8f0_50%,#eef2f7_50%,#eef2f7_75%,#e2e8f0_75%)] bg-[length:24px_24px] p-5 sm:p-7 md:min-h-0">
+              {previewUrl ? (
+                <div data-passport-photo-result-frame="true" className="relative h-full max-h-[29rem] max-w-full overflow-hidden rounded-lg border-4 border-white bg-white shadow-[0_22px_55px_rgba(15,23,42,0.22)]" style={{ aspectRatio: `${selectedPassportSize.widthMm} / ${selectedPassportSize.heightMm}` }}>
+                  <img src={previewUrl} alt={state.status === "ready" ? "Generated passport photo preview" : "Original passport photo preview"} className="block h-full w-full object-contain" />
+                  <span className="absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-slate-950/80 px-2.5 py-1 text-[0.62rem] font-black text-white backdrop-blur">{state.status === "ready" ? "Generated Passport Photo" : "Original Photo"}</span>
+                </div>
+              ) : (
+                <div className="text-center"><RefreshCw className="mx-auto h-8 w-8 animate-spin text-[#FF2D2D]" aria-hidden="true" /><p className="mt-3 text-sm font-black text-slate-700">Preparing photo preview…</p></div>
+              )}
+              <button type="button" onClick={resetTool} className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border border-red-100 bg-white text-[#FF2D2D] shadow-lg transition hover:bg-red-50" aria-label="Delete photo" title="Delete photo"><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+            </div>
+
+            <div className="shrink-0 border-t border-slate-200 p-3 sm:p-4">
+              {state.faceError && <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">{state.faceError}</p>}
+              {!state.shouldersVisible && !state.faceError && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">Upload a wider photo showing the shoulders to apply a formal outfit.</p>}
+              {lowResolution && <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">The source resolution may be low for this print size.</p>}
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]"><UploadCloud className="h-4 w-4" aria-hidden="true" /> Change Photo</button>
+                {state.status === "ready" && (
+                  <>
+                    <button type="button" onClick={() => outfitSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]">Try Another Outfit</button>
+                    <button type="button" onClick={() => selectOutfit(ORIGINAL_OUTFIT)} className="inline-flex min-h-10 items-center justify-center rounded-lg px-3 text-xs font-black text-[#FF2D2D] transition hover:bg-red-50">Restore Original</button>
+                  </>
                 )}
               </div>
-              {displayFileName && originalDimensions && (
-                <div className="mt-2 flex min-w-0 max-w-full items-center gap-2 sm:mt-3" title={file.name}>
-                  <p className="flex min-w-0 flex-1 items-baseline text-xs font-black leading-snug text-slate-950">
-                    <span className="min-w-0 truncate">{displayFileName.stem}</span>
-                    <span className="shrink-0">{displayFileName.extension}</span>
-                  </p>
-                  <p className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-1 text-[0.68rem] font-bold leading-none text-slate-600">
-                    {formatKb(file.size)} KB {"\u2022"} {originalDimensions.width}
-                    {"\u00d7"}
-                    {originalDimensions.height} px
-                  </p>
+              {state.status === "ready" && (
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-2 text-center text-[0.65rem] font-bold text-slate-500">
+                  <span><strong className="block truncate text-slate-900">{selectedBackground.label}</strong>Background</span>
+                  <span><strong className="block truncate text-slate-900">{selectedOutfit.label}</strong>Outfit</span>
+                  <span><strong className="block truncate text-slate-900">{selectedPassportSize.label}</strong>Size</span>
                 </div>
               )}
-              {error && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
             </div>
+          </div>
+
+          <aside data-passport-photo-settings-panel="true" aria-label="Smart passport photo presets" className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:h-full">
+            <div className="shrink-0 border-b border-slate-200 px-4 py-3">
+              <div ref={headingSlotRef} />
+              <p className="mt-1 text-xs font-semibold text-slate-500">Choose simple presets. Crop, alignment and print layout are automatic.</p>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-visible p-3 sm:p-4 md:overflow-y-auto">
+              <div>
+                <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-500">Choose an outfit category</p>
+                <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Person category">
+                  {(["female", "male", "children"] as Category[]).map((category) => (
+                    <button key={category} type="button" role="tab" aria-selected={state.category === category} onClick={() => selectCategory(category)} className={`min-h-10 rounded-lg border px-2 text-xs font-black capitalize transition ${state.category === category ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 bg-white text-slate-600 hover:border-red-200"}`}>{category}</button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[0.66rem] leading-4 text-slate-500">Your choice filters outfits only. PDFRoot does not infer gender or change facial identity.</p>
+              </div>
+
+              <div ref={backgroundSectionRef}>
+                <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-500">Background</p>
+                <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Background presets">
+                  {BACKGROUNDS.map((item) => {
+                    const selected = state.background === item.id;
+                    const color = item.id === "custom" ? state.customBackground : item.color;
+                    return (
+                      <button key={item.id} type="button" onClick={() => void selectBackground(item.id)} className="w-14 shrink-0 text-center" aria-pressed={selected} title={item.label}>
+                        <span className={`relative mx-auto grid h-10 w-10 place-items-center rounded-xl border-2 shadow-sm transition ${selected ? "border-[#FF2D2D] ring-2 ring-red-100" : "border-slate-200"} ${item.id === "original" ? "bg-[linear-gradient(135deg,#fff_25%,#e2e8f0_25%,#e2e8f0_50%,#fff_50%,#fff_75%,#e2e8f0_75%)] bg-[length:10px_10px]" : ""}`} style={item.id === "original" ? undefined : { backgroundColor: color }}>{selected && <Check className={`h-4 w-4 ${item.id === "white" || item.id === "light-grey" || item.id === "light-blue" ? "text-[#FF2D2D]" : "text-white"}`} aria-hidden="true" />}</span>
+                        <span className="mt-1 block truncate text-[0.58rem] font-bold text-slate-600">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {state.background === "custom" && (
+                  <label htmlFor="passport-custom-background" className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs font-bold text-slate-700"><Palette className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" /><input id="passport-custom-background" name="passport-custom-background" type="color" value={state.customBackground} onChange={(event) => { setState((current) => ({ ...current, customBackground: event.target.value })); clearOutput(); }} className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0" /><span className="font-mono uppercase">{state.customBackground}</span></label>
+                )}
+              </div>
+
+              <div className="grid gap-3 xl:grid-cols-2">
+                <div>
+                  <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-500">Passport size</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {PASSPORT_SIZES.map((item) => <button key={item.id} type="button" onClick={() => { setState((current) => ({ ...current, passportSize: item.id })); clearOutput(); }} className={`min-h-12 rounded-lg border px-1.5 py-1 text-[0.62rem] font-black leading-tight transition ${state.passportSize === item.id ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 text-slate-700 hover:border-red-200"}`}><span className="block">{item.label}</span><span className="mt-0.5 block text-[0.55rem] font-bold opacity-70">{item.detail}</span></button>)}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-500">Sheet size</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {SHEET_SIZES.map((item) => <button key={item.id} type="button" onClick={() => { setState((current) => ({ ...current, sheetSize: item.id })); clearOutput(); }} className={`min-h-12 rounded-lg border px-2 text-xs font-black transition ${state.sheetSize === item.id ? "border-[#FF2D2D] bg-red-50 text-[#FF2D2D]" : "border-slate-200 text-slate-700 hover:border-red-200"}`}>{item.label}</button>)}
+                  </div>
+                </div>
+              </div>
+
+              <div ref={outfitSectionRef}>
+                <p className="mb-2 text-[0.68rem] font-black uppercase tracking-[0.12em] text-slate-500">Formal outfit</p>
+                {state.category ? (
+                  <div className="flex max-w-full gap-1.5 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Outfit filters">
+                    {OUTFIT_FILTERS[state.category].map((filter) => <button key={filter} type="button" onClick={() => setActiveFilter(filter)} className={`min-h-8 shrink-0 rounded-full border px-3 text-[0.65rem] font-black transition ${activeFilter === filter ? "border-[#FF2D2D] bg-[#FF2D2D] text-white" : "border-slate-200 bg-white text-slate-600 hover:border-red-200"}`}>{filter}</button>)}
+                  </div>
+                ) : (
+                  <p className="mb-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600">Choose Female, Male or Children to see formal outfit presets.</p>
+                )}
+                <div className="grid auto-cols-[8.5rem] grid-flow-col gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:max-h-[16rem] md:auto-cols-auto md:grid-flow-row md:grid-cols-3 md:overflow-y-auto md:pr-1 xl:grid-cols-4" aria-label="Outfit presets">
+                  {filteredOutfits.map((outfit) => {
+                    const selected = state.selectedOutfitId === outfit.id;
+                    const disabled = !outfit.original && generatedOutfitDisabled;
+                    return (
+                      <button key={`${outfit.category}-${outfit.id}`} type="button" disabled={disabled} onClick={() => selectOutfit(outfit)} aria-pressed={selected} className={`group relative min-w-0 overflow-hidden rounded-xl border-2 bg-white text-left transition ${selected ? "border-[#FF2D2D] shadow-[0_8px_22px_rgba(255,45,45,0.13)]" : "border-slate-200 hover:border-red-200"} disabled:cursor-not-allowed disabled:opacity-60`}>
+                        <OutfitThumbnail outfit={outfit} />
+                        {selected && <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#FF2D2D] text-white shadow"><Check className="h-3 w-3" aria-hidden="true" /></span>}
+                        <span className="block min-h-[2.6rem] px-2 py-1.5 text-center text-[0.62rem] font-black leading-tight text-slate-700">{outfit.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {state.category && aiAvailable === false && <p className="mt-2 text-xs font-bold text-amber-700">AI formal outfits are currently unavailable.</p>}
+                {state.category && !state.shouldersVisible && !state.faceError && <p className="mt-2 text-xs font-bold text-amber-700">Upload a wider photo showing the shoulders to apply a formal outfit.</p>}
+                <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[0.65rem] leading-4 text-slate-500">Digitally changed clothing may not be accepted by every authority. Check the official photo requirements before submission.</p>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+              {error && <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">{error}</p>}
+              <button data-passport-generate="true" type="button" disabled={generateDisabled} aria-disabled={generateDisabled} onClick={() => { if (state.status === "ready") outfitSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); else void generatePassportPhoto(); }} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 text-sm font-black text-white shadow-[0_14px_32px_rgba(255,45,45,0.24)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none">
+                {isGenerating ? <RefreshCw className="h-5 w-5 animate-spin" aria-hidden="true" /> : <Sparkles className="h-5 w-5" aria-hidden="true" />}
+                {generateLabel}
+              </button>
+            </div>
+          </aside>
+        </div>
+      </div>
+
+      <div ref={actionBarRef} data-passport-photo-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-3 pb-[calc(0.65rem+env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-16px_40px_rgba(15,23,42,0.1)] backdrop-blur sm:px-5">
+        <div data-passport-photo-action-content="true" className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 pl-11 sm:flex-nowrap sm:gap-3 sm:pl-12">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="hidden shrink-0 text-xs font-black text-slate-950 md:inline">{readyForSheet ? "1 photo ready" : "1 photo uploaded"}</span>
+            <div className="flex shrink-0 rounded-lg bg-slate-100 p-1" aria-label="Output format">
+              {(["jpg", "png", "pdf"] as OutputFormat[]).map((format) => <button key={format} type="button" onClick={() => { setState((current) => ({ ...current, outputFormat: format })); clearOutput(); }} className={`min-h-9 min-w-11 rounded-md px-2 text-[0.65rem] font-black uppercase transition sm:min-w-12 ${state.outputFormat === format ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>{format}</button>)}
+            </div>
+          </div>
+          <div className="flex min-w-0 flex-1 justify-end gap-2">
+            <span id="passport-create-sheet-help" className="sr-only">{readyForSheet ? "Creates a sheet from the active passport result." : "Generate the passport photo first."}</span>
+            <button data-passport-create-sheet="true" type="button" disabled={!readyForSheet || isCreatingSheet} aria-disabled={!readyForSheet || isCreatingSheet} aria-describedby="passport-create-sheet-help" title={readyForSheet ? undefined : "Generate the passport photo first."} onClick={() => void createPassportSheet()} className="inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#FF2D2D] px-3 text-xs font-black text-white shadow-[0_12px_28px_rgba(255,45,45,0.22)] transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 disabled:shadow-none sm:max-w-[19rem] sm:text-sm"><span className="truncate">{isCreatingSheet ? "Creating sheet…" : "Create Passport Photo Sheet"}</span>{isCreatingSheet ? <RefreshCw className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" /> : <IdCard className="h-4 w-4 shrink-0" aria-hidden="true" />}</button>
+            <button type="button" onClick={resetTool} className="inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-red-200 hover:text-[#FF2D2D]" aria-label="Clear all"><Trash2 className="h-4 w-4" aria-hidden="true" /><span className="hidden sm:inline">Clear All</span></button>
           </div>
         </div>
-
-        {isActionBarVisible && (
-          <div ref={actionBarRef} data-passport-photo-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:bg-slate-100/95 sm:px-6">
-            <div className="mx-auto flex max-w-[1600px] flex-col gap-3 sm:hidden">
-              <div className="flex min-w-0 items-center justify-between gap-3">
-                <p className="truncate text-sm font-black text-slate-950">1 image ready</p>
-                <button type="button" ref={mobileSettingsButtonRef} onClick={openSettingsDrawer} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800 shadow-sm transition active:scale-95" aria-expanded={isSettingsDrawerOpen} aria-controls="passport-photo-mobile-settings-drawer">
-                  <SlidersHorizontal className="h-4 w-4 text-[#FF2D2D]" aria-hidden="true" />
-                  Settings
-                </button>
-              </div>
-              <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2">
-                {renderChangePhotoButton()}
-                <button type="button" disabled={isCreatingSheet} onClick={() => void createPassportSheet()} className="inline-flex min-h-12 w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-3 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:pointer-events-none disabled:opacity-70">
-                  {isCreatingSheet ? "Creating..." : "Create Sheet"}
-                  {isCreatingSheet ? <RefreshCw className="h-5 w-5 animate-spin" aria-hidden="true" /> : <IdCard className="h-5 w-5" aria-hidden="true" />}
-                </button>
-                <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
-                  Clear all
-                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-
-            <div className="mx-auto hidden max-w-[1600px] items-end gap-2 sm:flex sm:flex-wrap">
-                <label htmlFor="passport-photo-width-mm" className="text-xs font-black text-slate-700">
-                  Width mm
-                  <input id="passport-photo-width-mm" name="passport-photo-width-mm" type="number" min={10} max={100} value={photoWidthMm} onChange={(event) => updateSettings(() => setPhotoWidthMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                </label>
-                <label htmlFor="passport-photo-height-mm" className="text-xs font-black text-slate-700">
-                  Height mm
-                  <input id="passport-photo-height-mm" name="passport-photo-height-mm" type="number" min={10} max={100} value={photoHeightMm} onChange={(event) => updateSettings(() => setPhotoHeightMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                </label>
-                <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                  {sheetPresets.map((preset) => (
-                    <button key={preset.key} type="button" onClick={() => updateSettings(() => setSheetKey(preset.key))} className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black transition ${sheetKey === preset.key ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-                <label htmlFor="passport-photo-gap-mm" className="text-xs font-black text-slate-700">
-                  Gap mm
-                  <input id="passport-photo-gap-mm" name="passport-photo-gap-mm" type="number" min={0} max={20} step={0.5} value={gapMm} onChange={(event) => updateSettings(() => setGapMm(Number(event.target.value)))} className="mt-1 h-11 w-20 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100" />
-                </label>
-                <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                  {([
-                    ["white", "White"],
-                    ["blue", "Light blue"],
-                    ["custom", "Custom"],
-                  ] as Array<[BackgroundMode, string]>).map(([mode, label]) => (
-                    <button key={mode} type="button" onClick={() => updateSettings(() => setBackgroundMode(mode))} className={`h-10 rounded-lg px-3 text-xs font-black transition ${backgroundMode === mode ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                {backgroundMode === "custom" && (
-                  <input id="passport-photo-custom-background-desktop" name="passport-photo-custom-background-desktop" type="color" value={customBackground} onChange={(event) => updateSettings(() => setCustomBackground(event.target.value))} className="h-11 w-14 cursor-pointer rounded-xl border border-slate-200 bg-white p-1" aria-label="Custom background color" />
-                )}
-                <div className="flex shrink-0 items-center rounded-xl bg-slate-100 p-1">
-                  {(["jpg", "png", "pdf"] as OutputFormat[]).map((format) => (
-                    <button key={format} type="button" onClick={() => updateSettings(() => setOutputFormat(format))} className={`h-10 min-w-14 rounded-lg px-3 text-xs font-black uppercase transition ${outputFormat === format ? "bg-[#FF2D2D] text-white shadow-sm" : "text-slate-600 hover:bg-white"}`}>
-                      {format}
-                    </button>
-                  ))}
-                </div>
-                <button type="button" disabled={isCreatingSheet} onClick={() => void createPassportSheet()} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-5 py-3 text-base font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 disabled:pointer-events-none disabled:opacity-70 sm:min-w-[16rem] lg:flex-none">
-                  {isCreatingSheet ? "Creating Sheet..." : "Create Passport Photo Sheet"}
-                  {isCreatingSheet ? <RefreshCw className="h-5 w-5 animate-spin" aria-hidden="true" /> : <IdCard className="h-5 w-5" aria-hidden="true" />}
-                </button>
-                <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D]">
-                  Clear
-                  <RotateCcw className="h-5 w-5" aria-hidden="true" />
-                </button>
-            </div>
-          </div>
-        )}
-        {renderMobileSettingsDrawer()}
       </div>
     </section>
   );

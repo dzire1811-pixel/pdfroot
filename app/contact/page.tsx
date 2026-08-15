@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "../route-styles.css";
 import { Mail, MessageSquare, ShieldCheck, Timer } from "lucide-react";
 import { BrandText } from "@/components/Brand";
 import { InfoBulletGrid, InfoCard, InfoPageLayout } from "@/components/InfoPageLayout";

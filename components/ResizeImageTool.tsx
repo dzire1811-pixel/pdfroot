@@ -1,10 +1,11 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+import styles from "./ResizeImageTool.module.css";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
 
@@ -605,6 +606,51 @@ export function ResizeImageTool() {
     };
   }, [selectedImages.length, stage]);
 
+  useLayoutEffect(() => {
+    if (stage !== "workspace") return;
+
+    const workspaceSection = toolSectionRef.current;
+    const workspace = workspaceRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !workspace || !previewWorkspace || !actionBar) return;
+
+    const desktopMedia = window.matchMedia("(min-width: 768px)");
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      if (!desktopMedia.matches) {
+        workspaceSection.style.removeProperty("--resize-image-workspace-height");
+        return;
+      }
+
+      previewWorkspace.style.setProperty("--resize-image-preview-padding", window.getComputedStyle(previewWorkspace).paddingTop);
+      const availableHeight = Math.max(0, actionBar.getBoundingClientRect().top - workspace.getBoundingClientRect().top);
+      workspaceSection.style.setProperty("--resize-image-workspace-height", `${availableHeight}px`);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--resize-image-workspace-height");
+      previewWorkspace.style.removeProperty("--resize-image-preview-padding");
+    };
+  }, [stage]);
+
   useEffect(() => {
     const toolSection = toolSectionRef.current;
     if (!toolSection || (stage !== "processing" && stage !== "success")) return;
@@ -1019,10 +1065,16 @@ export function ResizeImageTool() {
   }
 
   function renderWorkspacePreview() {
+    const hasSingleImage = selectedImages.length === 1;
+
     return (
-      <div ref={workAreaRef} data-resize-image-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
+      <div
+        ref={workAreaRef}
+        data-resize-image-preview-area="true"
+        className={`relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 ${styles.previewWorkspace} ${hasSingleImage ? styles.singleImageWorkspace : ""}`}
+      >
         <input id="resize-image-add-more" name="resize-image-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple onChange={onAddMoreInputChange} />
-        <div data-resize-image-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+        <div data-resize-image-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28 ${hasSingleImage ? styles.singleImageGrid : ""}`}>
           {selectedImages.map((image, index) => {
             const completedResult = resizedFiles.find((result) => result.id === image.id);
 
@@ -1157,8 +1209,8 @@ export function ResizeImageTool() {
 
   if (stage === "workspace" && selectedImages.length) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-resize-image-workspace="true" id="resize-image-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-resize-image-workspace="true" id="resize-image-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none ${styles.workspaceSection}`}>
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${styles.workspaceShell} ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
           {(isActionBarVisible || selectedImages.length > 0) && (

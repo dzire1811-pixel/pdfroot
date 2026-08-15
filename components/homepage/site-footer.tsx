@@ -3,9 +3,13 @@ import { BrandText } from "@/components/Brand";
 import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 import { SocialLinks } from "@/components/SocialLinks";
 import { Logo } from "@/components/homepage/logo";
+import { filterVisibleTools } from "@/lib/toolVisibility";
 import type { Tool } from "@/lib/tools";
 
 export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { pdfTools: Tool[]; imageTools: Tool[]; governmentTools: Tool[] }) {
+  const visiblePdfTools = filterVisibleTools(pdfTools);
+  const visibleImageTools = filterVisibleTools(imageTools);
+  const visibleGovernmentTools = filterVisibleTools(governmentTools);
   const columns = [
     {
       title: "Company",
@@ -18,11 +22,11 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
     },
     {
       title: "Tools",
-      links: [...pdfTools.slice(0, 2), ...imageTools.slice(0, 2)].map((tool) => ({ label: tool.name, href: `/${tool.slug}` })),
+      links: [...visiblePdfTools.slice(0, 2), ...visibleImageTools.slice(0, 2)].map((tool) => ({ label: tool.name, href: `/${tool.slug}` })),
     },
     {
       title: "Government",
-      links: governmentTools.slice(0, 4).map((tool) => ({ label: tool.name, href: `/${tool.slug}` })),
+      links: visibleGovernmentTools.slice(0, 4).map((tool) => ({ label: tool.name, href: `/${tool.slug}` })),
     },
     {
       title: "Legal",
@@ -52,7 +56,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
               <ul className="mt-4 space-y-3">
                 {column.links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    <Link prefetch={false} href={link.href} className="text-sm text-muted-foreground transition-colors hover:text-foreground">
                       {link.label}
                     </Link>
                   </li>

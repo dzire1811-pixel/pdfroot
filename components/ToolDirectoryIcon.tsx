@@ -1,9 +1,9 @@
 import Image from "next/image";
 import type { Tool } from "@/lib/tools";
 
-export function ToolDirectoryIcon({ tool }: { tool: Tool }) {
+export function ToolDirectoryIcon({ tool, className = "h-5 w-5" }: { tool: Tool; className?: string }) {
   return (
-    <span data-original-tool-icon="true" aria-hidden="true" className="relative block h-5 w-5 shrink-0">
+    <span data-original-tool-icon="true" aria-hidden="true" className={`relative block shrink-0 ${className}`}>
       <Image
         src={`/icons/tools/${tool.slug}.svg`}
         alt=""

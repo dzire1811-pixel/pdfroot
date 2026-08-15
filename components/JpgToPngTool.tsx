@@ -1,10 +1,11 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, Trash2, UploadCloud } from "lucide-react";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
+import styles from "./JpgToPngTool.module.css";
 
 type Stage = "upload" | "workspace" | "processing" | "success";
 
@@ -85,6 +86,7 @@ export function JpgToPngTool() {
   const [isDragging, setIsDragging] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [isActionBarVisible, setIsActionBarVisible] = useState(false);
+  const [isConstrainedWorkspace, setIsConstrainedWorkspace] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addMoreInputRef = useRef<HTMLInputElement>(null);
   const toolSectionRef = useRef<HTMLElement | null>(null);
@@ -432,6 +434,53 @@ export function JpgToPngTool() {
     };
   }, [selectedImages.length, stage]);
 
+  useLayoutEffect(() => {
+    if (!selectedImages.length || stage !== "workspace") return;
+
+    const workspaceSection = toolSectionRef.current;
+    const previewWorkspace = workAreaRef.current;
+    const actionBar = actionBarRef.current;
+    if (!workspaceSection || !previewWorkspace || !actionBar) return;
+
+    let frame = 0;
+
+    const updateWorkspaceHeight = () => {
+      const previewPaddingTop = Number.parseFloat(window.getComputedStyle(previewWorkspace).paddingTop) || 0;
+      const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-jpg-to-png-preview-grid='true']");
+      const requiredPreviewHeight = previewGrid?.scrollHeight ?? 0;
+      const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+      const workspaceTop = workspaceSection.getBoundingClientRect().top + window.scrollY;
+      const availableHeight = Math.max(0, viewportHeight - workspaceTop - actionBar.offsetHeight);
+
+      previewWorkspace.style.setProperty("--jpg-to-png-preview-padding", `${previewPaddingTop}px`);
+      workspaceSection.style.setProperty("--jpg-to-png-workspace-height", `${availableHeight}px`);
+      setIsConstrainedWorkspace(requiredPreviewHeight > availableHeight + 1);
+    };
+
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateWorkspaceHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+    resizeObserver.observe(actionBar);
+    const previewGrid = previewWorkspace.querySelector<HTMLElement>("[data-jpg-to-png-preview-grid='true']");
+    if (previewGrid) resizeObserver.observe(previewGrid);
+    resizeObserver.observe(workspaceSection.closest<HTMLElement>("[data-tool-workspace-hero]") ?? workspaceSection);
+    window.addEventListener("resize", scheduleUpdate);
+    window.visualViewport?.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", scheduleUpdate);
+      window.visualViewport?.removeEventListener("resize", scheduleUpdate);
+      workspaceSection.style.removeProperty("--jpg-to-png-workspace-height");
+      previewWorkspace.style.removeProperty("--jpg-to-png-preview-padding");
+    };
+  }, [selectedImages.length, stage]);
+
   useEffect(() => {
     const toolSection = toolSectionRef.current;
     if (!toolSection || (stage !== "processing" && stage !== "success")) return;
@@ -537,10 +586,12 @@ export function JpgToPngTool() {
   }
 
   function renderWorkspacePreview() {
+    const hasSingleImage = selectedImages.length === 1;
+
     return (
-      <div ref={workAreaRef} data-jpg-to-png-preview-area="true" className="relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6">
+      <div ref={workAreaRef} data-jpg-to-png-preview-area="true" className={`relative min-h-[calc(100vh-9rem)] min-w-0 overflow-visible bg-slate-100 p-4 text-left sm:p-6 ${styles.previewWorkspace} ${hasSingleImage ? styles.singleImageWorkspace : ""}`}>
         <input id="jpg-to-png-add-more" name="jpg-to-png-add-more" ref={addMoreInputRef} className="sr-only" type="file" accept="image/jpeg,.jpg,.jpeg" multiple onChange={onAddMoreInputChange} />
-        <div data-jpg-to-png-preview-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28">
+        <div data-jpg-to-png-preview-grid="true" className={`grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-[28rem] sm:gap-5 sm:pb-56 lg:pb-40 xl:pb-28 ${hasSingleImage ? styles.singleImageGrid : ""}`}>
           {selectedImages.map((image, index) => {
             const completedResult = convertedFiles.find((result) => result.id === image.id);
 
@@ -677,20 +728,20 @@ export function JpgToPngTool() {
 
   if (stage === "workspace" && selectedImages.length) {
     return (
-      <section ref={toolSectionRef} data-v0-managed-flow="true" data-jpg-to-png-workspace="true" id="jpg-to-png-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className="mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none">
-        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${isDragging ? "ring-4 ring-red-100" : ""}`}>
+      <section ref={toolSectionRef} data-v0-managed-flow="true" data-jpg-to-png-workspace="true" id="jpg-to-png-tool" onDragOver={onFileDragOver} onDragLeave={onFileDragLeave} onDrop={onUploadDrop} className={`mx-auto mt-6 w-full max-w-full scroll-mt-32 overflow-visible border-0 bg-transparent p-0 text-left shadow-none ${styles.workspaceSection} ${isConstrainedWorkspace ? styles.constrainedWorkspaceSection : ""}`}>
+        <div ref={workspaceRef} className={`relative min-w-0 overflow-visible bg-slate-100 transition ${styles.workspaceShell} ${isDragging ? "ring-4 ring-red-100" : ""}`}>
           {renderWorkspacePreview()}
           {error && <p className="mx-4 mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 sm:mx-6">{error}</p>}
           {(isActionBarVisible || selectedImages.length > 0) && (
-            <div ref={actionBarRef} data-jpg-to-png-action-bar="true" className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6">
-              <div className="mx-auto flex max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={actionBarRef} data-jpg-to-png-action-bar="true" className={`fixed bottom-0 left-0 right-0 z-50 box-border w-full max-w-full border-t border-slate-200 bg-white/95 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 shadow-[0_-16px_40px_rgba(15,23,42,0.08)] backdrop-blur sm:px-6 ${isConstrainedWorkspace ? styles.flowActionBar : ""}`}>
+              <div className="mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center">
                   <p className="truncate text-sm font-black text-slate-950">
                     {selectedImages.length} {selectedImages.length === 1 ? "image" : "images"} ready
                   </p>
                 </div>
-                <div className="min-w-0 lg:ml-auto">
-                  <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
+                <div className="w-full min-w-0 max-w-full lg:ml-auto lg:w-auto">
+                  <div className="grid w-full min-w-0 max-w-full grid-cols-[3rem_minmax(0,1fr)_auto] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
                     {renderAddMoreButton()}
                     <button type="button" onClick={() => void convertToPng()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
                       Convert to PNG

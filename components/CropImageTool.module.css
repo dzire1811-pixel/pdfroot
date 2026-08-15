@@ -1,5 +1,9 @@
 /* Crop Image Online owns every rule in this module. The scope class is attached only while its workspace is active. */
 
+.scope {
+  --crop-image-accent: #b91c1c;
+}
+
 .scope section[id$="-tool"].v0-upload-workflow:not(.v0-upload-ready) [data-v0-upload-screen="true"] label[data-crop-image-upload-zone="true"][class*="border-dashed"]::after,
 .scope section[data-v0-managed-flow="true"] label[data-crop-image-upload-zone="true"][data-exact-kb-upload="true"]::after {
   content: none !important;
@@ -253,7 +257,7 @@
 .scope[data-crop-image-active-workspace="true"] section[data-crop-image-workspace="true"] [data-crop-image-thumbnail-list="true"] [data-crop-image-desktop-preview-actions="true"] > button:last-child {
     border-color: rgb(254, 202, 202) !important;
     border-color: rgb(254 202 202) !important;
-    color: #ff2d2d !important;
+    color: var(--crop-image-accent) !important;
   }
 }
 
@@ -911,7 +915,7 @@
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-card="true"][data-active="true"] {
-              border-color: #ff2d2d !important;
+              border-color: var(--crop-image-accent) !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-upload-card="true"][data-completed="true"]:not([data-active="true"]) {
@@ -1011,16 +1015,16 @@
 .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"][data-action="crop"][aria-pressed="true"] {
               border-color: rgb(254 202 202) !important;
               background: rgb(254 242 242) !important;
-              color: #ff2d2d !important;
+              color: var(--crop-image-accent) !important;
               box-shadow:
-                0 5px 10px rgb(255 45 45 / 0.13),
+                0 5px 10px rgb(185 28 28 / 0.13),
                 0 1px 2px rgb(15 23 42 / 0.08),
                 inset 0 1px 0 rgb(255 255 255) !important;
               transform: translateY(-1px);
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"]:focus-visible {
-              outline: 2px solid rgb(255 45 45 / 0.48) !important;
+              outline: 2px solid rgb(185 28 28 / 0.48) !important;
               outline-offset: 2px !important;
             }
 
@@ -1112,7 +1116,7 @@
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-flip="true"] svg {
-              color: #ff2d2d !important;
+              color: var(--crop-image-accent) !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-delete="true"] {
@@ -1120,7 +1124,7 @@
               margin-top: 0 !important;
               border-color: rgb(254 202 202) !important;
               background: white !important;
-              color: #ff2d2d !important;
+              color: var(--crop-image-accent) !important;
             }
 
             .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-file-actions="true"] {
@@ -1350,7 +1354,7 @@
   height: 9rem;
   margin: 0;
   cursor: pointer;
-  accent-color: #ff2d2d;
+  accent-color: var(--crop-image-accent);
   writing-mode: vertical-lr;
   direction: rtl;
 }
@@ -1430,14 +1434,14 @@
 :global(html) .scope.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"]:focus-visible {
   border-color: #fecaca !important;
   background: #fef2f2 !important;
-  color: #ff2d2d !important;
+  color: var(--crop-image-accent) !important;
 }
 
 :global(html) .scope.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"][data-action="crop"][aria-pressed="true"],
 :global(html) .scope.scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"][data-action="crop"][aria-pressed="true"]:hover {
   border-color: #fecaca !important;
   background: #fef2f2 !important;
-  color: #ff2d2d !important;
+  color: var(--crop-image-accent) !important;
 }
 
 /* Keep Crop Image Online's approved palette explicit and route-scoped. */
@@ -1454,7 +1458,7 @@
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
   --accent: #fef2f2;
-  --accent-foreground: #ff2d2d;
+  --accent-foreground: var(--crop-image-accent);
   --border: #e2e8f0;
   --input: #e2e8f0;
 }
@@ -1581,7 +1585,7 @@
     display: block !important;
     width: 100% !important;
     height: 0.875rem !important;
-    accent-color: #ff2d2d !important;
+    accent-color: var(--crop-image-accent) !important;
   }
 
   .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-straighten="true"] {
@@ -1609,7 +1613,7 @@
   }
 
   .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-slider="true"] {
-    accent-color: #ff2d2d !important;
+    accent-color: var(--crop-image-accent) !important;
   }
 
   .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-flip-grid="true"],
@@ -1650,18 +1654,18 @@
   }
 
   :global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-thumbnail-list="true"] svg {
-    color: #ff2d2d !important;
+    color: var(--crop-image-accent) !important;
   }
 
   :global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-quick-tooltip="true"] {
-    border: 1px solid #ff2d2d !important;
+    border: 1px solid var(--crop-image-accent) !important;
     background: #ffffff !important;
     color: #000000 !important;
     font-weight: 400 !important;
   }
 
   :global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-quick-tooltip="true"]::after {
-    border-top-color: #ff2d2d !important;
+    border-top-color: var(--crop-image-accent) !important;
   }
 
   :global(html:not(.dark)) .scope[data-crop-image-active-workspace="true"] [data-crop-image-panel-quick-action="true"]:hover,
@@ -1999,7 +2003,7 @@
     display: block !important;
     width: max-content !important;
     max-width: 10rem !important;
-    border: 1px solid #ff2d2d !important;
+    border: 1px solid var(--crop-image-accent) !important;
     border-radius: 0.5rem !important;
     background: #ffffff !important;
     padding: 0.3125rem 0.5rem !important;

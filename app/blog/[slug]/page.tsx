@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CalendarDays } from "lucide-react";
+import "../../route-styles.css";
+import { ArrowLeft, ArrowRight, CalendarDays, Clock3 } from "lucide-react";
 import { BrandText } from "@/components/Brand";
 import { BlogArticleLayout } from "@/components/blog/BlogArticleLayout";
 import { BlogListingLayout } from "@/components/blog/BlogListingLayout";
+import { CropImageToolArticle } from "@/components/blog/CropImageToolArticle";
 import { ResizeImageExactKbArticle } from "@/components/blog/ResizeImageExactKbArticle";
 import { InfoPageLayout } from "@/components/InfoPageLayout";
 import { blogPosts, getBlogPost, resizeImageExactKbFaq } from "@/lib/blog";
@@ -31,8 +33,9 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   }
 
   const canonicalUrl = post.canonicalUrl ?? `https://www.pdfroot.com/blog/${post.slug}`;
-  const imageUrl = post.image ? `https://pdfroot.com${post.image.src}` : "https://www.pdfroot.com/branding/open-graph-image.png";
+  const imageUrl = post.image ? `https://www.pdfroot.com${post.image.src}` : "https://www.pdfroot.com/branding/open-graph-image.png";
   const socialTitle = post.seoTitle ?? `${post.title} | PDFRoot`;
+  const isCropImagePost = post.slug === "pdfroot-smart-crop-image-tool";
 
   return {
     title: post.seoTitle ? { absolute: post.seoTitle } : post.title,
@@ -45,7 +48,9 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
       description: post.description,
       url: canonicalUrl,
       type: "article",
-      images: [{ url: imageUrl, width: 1200, height: 630, alt: post.image?.alt ?? post.title }],
+      ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
+      ...(post.modifiedAt ? { modifiedTime: post.modifiedAt } : {}),
+      images: [{ url: imageUrl, width: post.image?.width ?? 1200, height: post.image?.height ?? 630, alt: post.image?.alt ?? post.title }],
     },
     twitter: {
       card: "summary_large_image",
@@ -53,6 +58,17 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
       description: post.description,
       images: [imageUrl],
     },
+    ...(isCropImagePost ? {
+      authors: [{ name: "Anand Joshi", url: "https://www.pdfroot.com/about" }],
+      robots: {
+        index: true,
+        follow: true,
+        googleBot: {
+          index: true,
+          follow: true,
+        },
+      },
+    } : {}),
   };
 }
 
@@ -62,9 +78,78 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   if (!post) notFound();
 
+  if (post.slug === "pdfroot-smart-crop-image-tool") {
+    const canonicalUrl = "https://www.pdfroot.com/blog/pdfroot-smart-crop-image-tool";
+    const imageUrl = "https://www.pdfroot.com/blog/pdfroot-crop-image-tool-a4-document.webp";
+    const articleSchema = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: "PDFRoot Crop Image Tool: A Smart Solution for Online Form Photos and Documents",
+      description: "Crop multiple photos, signatures and documents from one A4 page. Set dimensions, KB, rotate, flip, rename and save images with PDFRoot.",
+      image: {
+        "@type": "ImageObject",
+        url: imageUrl,
+        width: 1724,
+        height: 816,
+      },
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": canonicalUrl,
+      },
+      author: {
+        "@type": "Person",
+        name: "Anand Joshi",
+        jobTitle: "Founder of PDFRoot",
+      },
+      publisher: {
+        "@type": "Organization",
+        name: "PDFRoot",
+        logo: {
+          "@type": "ImageObject",
+          url: "https://www.pdfroot.com/branding/logo.png",
+        },
+      },
+      datePublished: "2026-07-25",
+      dateModified: "2026-07-25",
+      url: canonicalUrl,
+    };
+
+    return (
+      <BlogArticleLayout
+        breadcrumb={(
+          <div className="flex flex-col items-center gap-4">
+            <nav aria-label="Breadcrumb" className="inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+              <Link href="/" className="hover:text-foreground">Home</Link>
+              <span aria-hidden="true">›</span>
+              <Link href="/blog" className="hover:text-foreground">Blog</Link>
+              <span aria-hidden="true">›</span>
+              <span aria-current="page">Smart Crop Image Tool</span>
+            </nav>
+            <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-medium text-muted-foreground sm:text-sm">
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-primary">Image Tools</span>
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                <time dateTime="2026-07-25">25 July 2026</time>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-4 w-4" aria-hidden="true" />
+                {post.readTime}
+              </span>
+            </div>
+          </div>
+        )}
+        title={post.title}
+        subtitle={post.listingDescription}
+      >
+        <CropImageToolArticle />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+      </BlogArticleLayout>
+    );
+  }
+
   if (post.slug === "resize-image-to-exact-kb") {
-    const canonicalUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb";
-    const imageUrl = "https://pdfroot.com/blog/resize-image-to-exact-kb-online-pdfroot.webp";
+    const canonicalUrl = "https://www.pdfroot.com/blog/resize-image-to-exact-kb";
+    const imageUrl = "https://www.pdfroot.com/blog/resize-image-to-exact-kb-online-pdfroot.webp";
     const articleSchema = {
       "@context": "https://schema.org",
       "@type": "BlogPosting",
@@ -80,7 +165,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         name: "PDFRoot",
         logo: {
           "@type": "ImageObject",
-          url: "https://pdfroot.com/branding/logo.png",
+          url: "https://www.pdfroot.com/branding/logo.png",
         },
       },
       datePublished: "2026-07-19",
@@ -142,7 +227,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       name: "PDFRoot",
     },
     mainEntityOfPage: `https://www.pdfroot.com/blog/${post.slug}`,
-    image: post.image ? `https://pdfroot.com${post.image.src}` : undefined,
+    image: post.image ? `https://www.pdfroot.com${post.image.src}` : undefined,
   };
   const ArticlePageLayout = post.slug === "resize-image-exact-kb-government-forms" ? BlogListingLayout : InfoPageLayout;
 

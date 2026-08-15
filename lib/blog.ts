@@ -1,15 +1,25 @@
+import { cropImageBlogReadTime } from "@/lib/cropImageBlog";
+
 export type BlogPost = {
   slug: string;
   title: string;
+  listingTitle?: string;
   description: string;
+  listingDescription?: string;
   category: string;
   date: string;
   readTime: string;
   seoTitle?: string;
   canonicalUrl?: string;
+  author?: string;
+  authorTitle?: string;
+  publishedAt?: string;
+  modifiedAt?: string;
   image?: {
     src: string;
     alt: string;
+    width?: number;
+    height?: number;
   };
   relatedTool?: {
     label: string;
@@ -61,6 +71,36 @@ export const resizeImageExactKbFaq = [
 
 export const blogPosts: BlogPost[] = [
   {
+    slug: "pdfroot-smart-crop-image-tool",
+    title: "PDFRoot Crop Image Tool: A Smart Solution for Online Form Photos and Documents",
+    listingTitle: "PDFRoot Crop Image Tool – A Smart Solution for Online Form Photos and Documents",
+    seoTitle: "Smart Crop Image Tool for Online Forms | PDFRoot",
+    description: "Crop multiple photos, signatures and documents from one A4 page. Set dimensions, KB, rotate, flip, rename and save images with PDFRoot.",
+    listingDescription: "Crop multiple photos, signatures and documents from one A4 page without uploading the same file repeatedly. Set dimensions, KB, rotate, flip, rename and save images easily.",
+    category: "Image Tools",
+    date: "25 July 2026",
+    readTime: cropImageBlogReadTime,
+    canonicalUrl: "https://www.pdfroot.com/blog/pdfroot-smart-crop-image-tool",
+    author: "Anand Joshi",
+    authorTitle: "Founder of PDFRoot",
+    publishedAt: "2026-07-25",
+    modifiedAt: "2026-07-25",
+    image: {
+      src: "/blog/pdfroot-crop-image-tool-a4-document.webp",
+      alt: "PDFRoot Crop Image Tool showing an A4 document ready for cropping and image preparation",
+      width: 1724,
+      height: 816,
+    },
+    relatedTool: {
+      label: "Try Crop Image Tool",
+      href: "/crop-image",
+    },
+    content: {
+      intro: "Crop multiple photos, signatures and documents from one A4 page without uploading the same file repeatedly.",
+      sections: [],
+    },
+  },
+  {
     slug: "resize-image-to-exact-kb",
     title: "Resize Image to Exact KB – A Useful Tool for Students and Job Applicants",
     seoTitle: "Resize Image to Exact KB Online for Forms | PDFRoot",
@@ -68,7 +108,7 @@ export const blogPosts: BlogPost[] = [
     category: "Image Tools",
     date: "July 2026",
     readTime: "9 min read",
-    canonicalUrl: "https://pdfroot.com/blog/resize-image-to-exact-kb",
+    canonicalUrl: "https://www.pdfroot.com/blog/resize-image-to-exact-kb",
     image: {
       src: "/blog/resize-image-to-exact-kb-online-pdfroot.webp",
       alt: "PDFRoot Resize Image to Exact KB tool for online application forms",

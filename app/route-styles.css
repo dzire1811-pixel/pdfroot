@@ -1,0 +1,92 @@
+@config "../tailwind.route.config.ts";
+@tailwind utilities;
+
+.v0-info-page main,
+.v0-info-page main section {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.v0-info-page main > section:first-child {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--border) !important;
+  background: var(--background) !important;
+}
+
+.v0-info-page main > section:first-child::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(228, 228, 228, 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(228, 228, 228, 0.5) 1px, transparent 1px);
+  background-image:
+    linear-gradient(to right, oklch(0.92 0 0 / 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.92 0 0 / 0.5) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
+          mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
+}
+
+.v0-info-page main > section:first-child > div {
+  position: relative;
+}
+
+.v0-info-page main [class*="border-slate-200"],
+.v0-info-page main [class*="border-red-100"],
+.v0-info-page main [class*="border-red-200"] {
+  border-color: var(--border) !important;
+}
+
+.v0-info-page main [class*="bg-white"] {
+  background-color: var(--card) !important;
+}
+
+.v0-info-page main [class*="bg-slate-50"],
+.v0-info-page main [class*="via-red-50"] {
+  background-color: color-mix(in oklch, var(--muted) 40%, transparent) !important;
+}
+
+.v0-info-page main [class*="bg-red-50"] {
+  background-color: color-mix(in oklch, var(--primary) 8%, transparent) !important;
+}
+
+.v0-info-page main [class*="bg-[#FF2D2D]"] {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+.v0-info-page main [class*="text-slate-950"],
+.v0-info-page main [class*="text-slate-900"],
+.v0-info-page main [class*="text-slate-800"],
+.v0-info-page main [class*="text-slate-700"] {
+  color: var(--foreground) !important;
+}
+
+.v0-info-page main [class*="text-slate-600"],
+.v0-info-page main [class*="text-slate-500"],
+.v0-info-page main [class*="text-slate-400"] {
+  color: var(--muted-foreground) !important;
+}
+
+.v0-info-page main [class*="text-[#FF2D2D]"],
+.v0-info-page main [class*="text-red-"] {
+  color: var(--primary) !important;
+}
+
+.v0-info-page main [class*="rounded-3xl"] {
+  border-radius: 1rem !important;
+}
+
+.v0-info-page main [class*="shadow-"] {
+  box-shadow: none !important;
+}
+
+.v0-info-page main input,
+.v0-info-page main textarea {
+  border-color: var(--border) !important;
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}

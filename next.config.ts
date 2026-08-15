@@ -7,6 +7,37 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/branding/favicon.ico",
+        destination: "https://www.pdfroot.com/favicon.ico",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [
+          {
+            type: "host",
+            value: "pdfroot.com",
+          },
+        ],
+        destination: "https://www.pdfroot.com/:path*",
+        permanent: true,
+      },
+      {
+        source: "/login",
+        destination: "/tools",
+        permanent: true,
+      },
+      {
+        source: "/signup",
+        destination: "/tools",
+        permanent: true,
+      },
+      {
+        source: "/dashboard",
+        destination: "/tools",
+        permanent: true,
+      },
+      {
         source: "/rrb-photo-resize",
         destination: "/rrb-signature-resize",
         permanent: true,
