@@ -566,7 +566,13 @@ function GpscOjasStyleTool() {
 
   useEffect(() => {
     const updateViewportSize = () => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setViewportSize((current) => {
+        if (width < 640 && current.width === width) return current;
+        if (current.width === width && current.height === height) return current;
+        return { width, height };
+      });
     };
 
     updateViewportSize();
@@ -601,8 +607,15 @@ function GpscOjasStyleTool() {
 
     let frame = 0;
     const updatePreviewBounds = () => {
-      const host = previewHostRef.current;
       const bar = actionBarRef.current;
+      if (window.innerWidth < 640) {
+        if (bar) {
+          const nextHeight = Math.max(1, bar.offsetHeight);
+          setActionBarHeight((current) => current === nextHeight ? current : nextHeight);
+        }
+        return;
+      }
+      const host = previewHostRef.current;
       const hostTop = host?.getBoundingClientRect().top ?? (window.innerWidth < 768 ? 260 : 320);
       setPreviewTop(Math.max(0, hostTop));
       if (bar) setActionBarHeight(Math.max(1, bar.offsetHeight));
@@ -625,15 +638,16 @@ function GpscOjasStyleTool() {
       observer.observe(actionBarRef.current);
       observers.push(observer);
     }
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    const tracksScrollPosition = window.innerWidth >= 640;
+    if (tracksScrollPosition) window.addEventListener("scroll", scheduleUpdate, { passive: true });
     window.addEventListener("resize", scheduleUpdate);
     return () => {
       window.cancelAnimationFrame(frame);
       observers.forEach((observer) => observer.disconnect());
-      window.removeEventListener("scroll", scheduleUpdate);
+      if (tracksScrollPosition) window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [GpscStage, selectedType, isActionBarVisible]);
+  }, [GpscStage, selectedType, isActionBarVisible, viewportSize.width]);
 
   useEffect(() => {
     if (!GpscSelectedImage || GpscStage !== "workspace") {
@@ -645,6 +659,11 @@ function GpscOjasStyleTool() {
       drawerDragStartYRef.current = null;
       drawerDragOffsetRef.current = 0;
       settingsDrawerClosingRef.current = false;
+      return;
+    }
+
+    if (window.innerWidth < 640) {
+      setIsActionBarVisible(true);
       return;
     }
 
@@ -679,7 +698,7 @@ function GpscOjasStyleTool() {
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [GpscSelectedImage, GpscStage]);
+  }, [GpscSelectedImage, GpscStage, viewportSize.width]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -713,7 +732,7 @@ function GpscOjasStyleTool() {
       settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
-        mobileSettingsButtonRef.current?.focus();
+        mobileSettingsButtonRef.current?.focus({ preventScroll: true });
       });
     }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
@@ -975,13 +994,6 @@ function GpscOjasStyleTool() {
   }
 
   function openSettingsDrawer() {
-    if (window.innerWidth < 640) {
-      const workArea = workAreaRef.current;
-      if (workArea) {
-        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
-      }
-    }
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);

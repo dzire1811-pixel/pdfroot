@@ -531,7 +531,13 @@ export function OjasPhotoSignatureTool() {
 
   useEffect(() => {
     const updateViewportSize = () => {
-      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setViewportSize((current) => {
+        if (width < 640 && current.width === width) return current;
+        if (current.width === width && current.height === height) return current;
+        return { width, height };
+      });
     };
 
     updateViewportSize();
@@ -566,8 +572,15 @@ export function OjasPhotoSignatureTool() {
 
     let frame = 0;
     const updatePreviewBounds = () => {
-      const host = previewHostRef.current;
       const bar = actionBarRef.current;
+      if (window.innerWidth < 640) {
+        if (bar) {
+          const nextHeight = Math.max(1, bar.offsetHeight);
+          setActionBarHeight((current) => current === nextHeight ? current : nextHeight);
+        }
+        return;
+      }
+      const host = previewHostRef.current;
       const hostTop = host?.getBoundingClientRect().top ?? (window.innerWidth < 768 ? 260 : 320);
       setPreviewTop(Math.max(0, hostTop));
       if (bar) setActionBarHeight(Math.max(1, bar.offsetHeight));
@@ -590,15 +603,16 @@ export function OjasPhotoSignatureTool() {
       observer.observe(actionBarRef.current);
       observers.push(observer);
     }
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    const tracksScrollPosition = window.innerWidth >= 640;
+    if (tracksScrollPosition) window.addEventListener("scroll", scheduleUpdate, { passive: true });
     window.addEventListener("resize", scheduleUpdate);
     return () => {
       window.cancelAnimationFrame(frame);
       observers.forEach((observer) => observer.disconnect());
-      window.removeEventListener("scroll", scheduleUpdate);
+      if (tracksScrollPosition) window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [stage, selectedType, isActionBarVisible]);
+  }, [stage, selectedType, isActionBarVisible, viewportSize.width]);
 
   useEffect(() => {
     if (!selectedImage || stage !== "workspace") {
@@ -610,6 +624,11 @@ export function OjasPhotoSignatureTool() {
       drawerDragStartYRef.current = null;
       drawerDragOffsetRef.current = 0;
       settingsDrawerClosingRef.current = false;
+      return;
+    }
+
+    if (window.innerWidth < 640) {
+      setIsActionBarVisible(true);
       return;
     }
 
@@ -644,7 +663,7 @@ export function OjasPhotoSignatureTool() {
       window.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [selectedImage, stage]);
+  }, [selectedImage, stage, viewportSize.width]);
 
   useEffect(() => {
     const page = toolSectionRef.current?.closest<HTMLElement>(".v0-tool-page");
@@ -678,7 +697,7 @@ export function OjasPhotoSignatureTool() {
       settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
-        mobileSettingsButtonRef.current?.focus();
+        mobileSettingsButtonRef.current?.focus({ preventScroll: true });
       });
     }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
@@ -916,13 +935,6 @@ export function OjasPhotoSignatureTool() {
   }
 
   function openSettingsDrawer() {
-    if (window.innerWidth < 640) {
-      const workArea = workAreaRef.current;
-      if (workArea) {
-        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
-      }
-    }
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);

@@ -569,7 +569,7 @@ export function SscPhotoSignatureHelperTool() {
       settingsDrawerClosingRef.current = false;
       drawerDragOffsetRef.current = 0;
       window.requestAnimationFrame(() => {
-        mobileSettingsButtonRef.current?.focus();
+        mobileSettingsButtonRef.current?.focus({ preventScroll: true });
       });
     }, 240);
   }, [isSettingsDrawerClosing, isSettingsDrawerOpen]);
@@ -760,13 +760,6 @@ export function SscPhotoSignatureHelperTool() {
   }
 
   function openSettingsDrawer() {
-    if (window.innerWidth < 640) {
-      const workArea = workAreaRef.current;
-      if (workArea) {
-        const y = workArea.getBoundingClientRect().top + window.scrollY - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "auto" });
-      }
-    }
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
     setSettingsDrawerDragOffset(0);
@@ -833,7 +826,8 @@ export function SscPhotoSignatureHelperTool() {
       <div className="grid grid-cols-[3rem_minmax(7.5rem,1fr)_minmax(5.5rem,0.75fr)] gap-2 sm:grid-cols-[3.5rem_minmax(12rem,1fr)_auto] lg:w-auto lg:min-w-[30rem]">
         {renderAddMoreButton()}
         <button type="button" onClick={() => void processSignatures()} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_16px_35px_rgba(255,45,45,0.24)] transition hover:-translate-y-0.5 hover:bg-red-600 sm:min-h-14 sm:px-5 sm:text-base">
-          Resize Signature Now
+          <span className="sm:hidden">Resize Now</span>
+          <span className="hidden sm:inline">Resize Signature Now</span>
           <RefreshCw className="h-5 w-5" aria-hidden="true" />
         </button>
         <button type="button" onClick={resetTool} className="inline-flex min-h-12 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-800 transition hover:border-red-200 hover:text-[#FF2D2D] sm:min-h-14 sm:gap-2 sm:px-4 sm:text-sm">
