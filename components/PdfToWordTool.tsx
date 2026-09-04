@@ -20,9 +20,13 @@ import {
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
 import { analyzePdfPage, PdfPageAnalysis } from "@/lib/pdfToWord/pageAnalyzer";
+import { classifyDocumentRegions, LayoutLine } from "@/lib/pdfToWord/layoutAnalyzer";
 import { createLocalOcrEngine, LocalOcrResult, OcrWord } from "@/lib/pdfToWord/localOcr";
-import { createReflowContent } from "@/lib/pdfToWord/reflowRenderer";
-import { validateConvertedPages } from "@/lib/pdfToWord/validator";
+import { selectPdfToWordEngine } from "@/lib/pdfToWord/engine";
+import { correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver } from "@/lib/pdfToWord/pdfGlyphUnicode";
+import { createReflowContent, createStructuredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
+import { validateConvertedPages, validateGeneratedDocumentXml } from "@/lib/pdfToWord/validator";
+import { compatibleWordFont, hasReliableUnicodeMapping, reconstructGujaratiFragments, validateGujaratiText } from "@/lib/pdfToWord/unicode";
 
 type WordResult = {
   blob: Blob;
@@ -32,6 +36,7 @@ type WordResult = {
   wordCount: number;
   fileCount: number;
   isZip: boolean;
+  warning?: string;
 };
 
 type ConversionMode = "fixed" | "reflow" | "preserve";
@@ -43,6 +48,7 @@ type PdfTextItem = {
   height: number;
   fontName: string;
   transform: number[];
+  unicodeReliable?: boolean;
 };
 
 type PdfTextStyle = {
@@ -51,6 +57,8 @@ type PdfTextStyle = {
   descent?: number;
   fontWeight?: string;
   italicAngle?: number;
+  sourceFontFamily?: string;
+  sourceIsSystemFont?: boolean;
 };
 
 type PositionedTextItem = {
@@ -64,11 +72,15 @@ type PositionedTextItem = {
   fontAscent: number;
   fontDescent: number;
   fontFamily: string;
+  sourceFontFamily: string;
+  sourceIsSystemFont: boolean;
   fontName: string;
   bold: boolean;
   italic: boolean;
   rotation: number;
   horizontalScale: number;
+  sourceOrder: number;
+  unicodeReliable: boolean;
 };
 
 type PositionedLine = {
@@ -104,6 +116,7 @@ type ConvertedPage = {
   height: number;
   image: Uint8Array;
   lines: PositionedLine[];
+  tableLayoutLines?: PositionedLine[];
   images: Array<{
     data: Uint8Array;
     x: number;
@@ -184,23 +197,32 @@ function toHex(value: number) {
   return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0");
 }
 
-function escapeXml(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
-
 function normalizePdfFontName(fontName: string) {
   return fontName
-    .replace(/^[A-Z]{6}\+/, "")
+    .replace(/^[A-Z0-9]{6}\+/i, "")
     .replace(/[-_,](?:BoldItalic|BoldOblique|Bold|Semibold|Demi|Italic|Oblique|Regular|Roman)$/i, "")
     .trim();
 }
 
-function metricCompatibleFont(fontFamily: string, fontName: string) {
-  const source = normalizePdfFontName(fontFamily && !/^(sans-serif|serif|monospace)$/i.test(fontFamily) ? fontFamily : fontName);
-  if (source && !/^g_d\d+_f\d+$/i.test(source)) return source;
-  if (/courier|mono/i.test(fontFamily)) return "Courier New";
-  if (/times|serif/i.test(fontFamily)) return "Times New Roman";
-  return "Arial";
+const fontAvailabilityCache = new Map<string, boolean>();
+
+function browserHasFont(fontName: string) {
+  if (!fontName || typeof document === "undefined") return false;
+  const cached = fontAvailabilityCache.get(fontName);
+  if (cached !== undefined) return cached;
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) return false;
+  const sample = "mmmmmmmmmmlli ગુજરાતી हिंदी";
+  const cleanName = fontName.replace(/["\\]/g, "");
+  const available = ["monospace", "serif", "sans-serif"].some((fallback) => {
+    context.font = `72px ${fallback}`;
+    const baseline = context.measureText(sample).width;
+    context.font = `72px "${cleanName}", ${fallback}`;
+    return Math.abs(context.measureText(sample).width - baseline) > 0.1;
+  });
+  fontAvailabilityCache.set(fontName, available);
+  return available;
 }
 
 function detectTextColor(context: CanvasRenderingContext2D, line: PositionedLine, scale: number) {
@@ -231,14 +253,16 @@ function buildPositionedLines(
 ) {
   const positioned = items
     .filter((item) => item.str.trim() && item.height > 0 && item.transform.length >= 6)
-    .map<PositionedTextItem>((item) => {
+    .map<PositionedTextItem>((item, sourceOrder) => {
       const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
       const verticalScale = Math.max(0.01, Math.hypot(transform[2], transform[3]));
       const horizontalScale = Math.max(0.01, Math.hypot(transform[0], transform[1]));
       const fontSize = verticalScale;
       const style = styles[item.fontName] ?? {};
       const ascent = style.ascent ?? 0.8;
-      const fontFamily = metricCompatibleFont(style.fontFamily ?? "", item.fontName);
+      const sourceFontFamily = normalizePdfFontName(style.sourceFontFamily ?? style.fontFamily ?? "");
+      const sourceIsSystemFont = Boolean(style.sourceIsSystemFont);
+      const fontFamily = compatibleWordFont(sourceFontFamily, item.fontName, item.str, sourceIsSystemFont);
       const fontDescriptor = `${style.fontFamily ?? ""} ${item.fontName}`;
       return {
         text: item.str,
@@ -251,14 +275,22 @@ function buildPositionedLines(
         fontAscent: ascent,
         fontDescent: Math.abs(style.descent ?? 0.2),
         fontFamily,
+        sourceFontFamily,
+        sourceIsSystemFont,
         fontName: item.fontName,
-        bold: /bold|semibold|demi|black/i.test(fontDescriptor),
+        bold: style.fontWeight === "bold" || /bold|semibold|demi|black/i.test(fontDescriptor),
         italic: /italic|oblique/i.test(fontDescriptor) || Math.abs(style.italicAngle ?? 0) > 0.1,
         rotation: Math.atan2(transform[1], transform[0]) * (180 / Math.PI),
         horizontalScale: horizontalScale / verticalScale,
+        sourceOrder,
+        unicodeReliable: item.unicodeReliable !== false,
       };
     })
-    .sort((a, b) => a.baseline - b.baseline || a.x - b.x);
+    .sort((a, b) => {
+      const baselineDifference = a.baseline - b.baseline;
+      if (Math.abs(baselineDifference) > Math.max(1.5, Math.max(a.height, b.height) * 0.22)) return baselineDifference;
+      return Math.abs(a.x - b.x) <= 0.5 ? a.sourceOrder - b.sourceOrder : a.x - b.x;
+    });
 
   const rows: PositionedTextItem[][] = [];
   for (const item of positioned) {
@@ -269,7 +301,8 @@ function buildPositionedLines(
 
   const lines: PositionedLine[] = [];
   for (const row of rows) {
-    row.sort((a, b) => a.x - b.x);
+    row.sort((a, b) => Math.abs(a.x - b.x) <= 0.5 ? a.sourceOrder - b.sourceOrder : a.x - b.x);
+    const reconstructedRow = reconstructGujaratiFragments(row);
     let cluster: PositionedTextItem[] = [];
     const pushCluster = () => {
       if (!cluster.length) return;
@@ -284,7 +317,7 @@ function buildPositionedLines(
       cluster = [];
     };
 
-    for (const item of row) {
+    for (const item of reconstructedRow) {
       const previous = cluster.at(-1);
       const gap = previous ? item.x - (previous.x + previous.width) : 0;
       if (previous && gap > Math.max(28, Math.max(previous.height, item.height) * 3.25)) pushCluster();
@@ -305,8 +338,10 @@ function buildOcrLines(words: OcrWord[], sourceScale: number, pageWidth: number)
     return {
       text: `${word.text} `, x, top, width, height, fontSize,
       baseline: top + height * 0.82, fontAscent: 0.8, fontDescent: 0.2,
-      fontFamily: "Arial", fontName: "OCR-Arial", bold: false, italic: false,
+      fontFamily: compatibleWordFont("Arial", "OCR-Arial", word.text, true), fontName: "OCR-Arial", sourceFontFamily: "Arial", sourceIsSystemFont: true, bold: false, italic: false,
       rotation: 0, horizontalScale: 1,
+      sourceOrder: 0,
+      unicodeReliable: true,
     };
   }).sort((a, b) => a.baseline - b.baseline || a.x - b.x);
   const rows: PositionedTextItem[][] = [];
@@ -354,25 +389,30 @@ async function resolvePageFontStyles(
   items: PdfTextItem[],
   styles: Record<string, PdfTextStyle>,
 ) {
-  const commonObjects = (page as { commonObjs?: { get: (id: string, callback?: (value: { name?: string; fallbackName?: string }) => void) => { name?: string; fallbackName?: string } } }).commonObjs;
+  type PdfFontObject = { name?: string; fallbackName?: string; data?: Uint8Array; missingFile?: boolean; systemFontInfo?: unknown };
+  const commonObjects = (page as { commonObjs?: { get: (id: string, callback?: (value: PdfFontObject) => void) => PdfFontObject } }).commonObjs;
   if (!commonObjects) return styles;
-  const mappings: Array<{ source: string; family: string; fallback: string }> = [];
+  const mappings: Array<{ source: string; family: string; fallback: string; embedded: boolean; system: boolean }> = [];
   for (const fontName of [...new Set(items.map((item) => item.fontName))]) {
-    let fontObject: { name?: string; fallbackName?: string } | undefined;
+    let fontObject: PdfFontObject | undefined;
     try {
       fontObject = commonObjects.get(fontName);
     } catch {
       fontObject = await new Promise((resolve) => commonObjects.get(fontName, resolve));
     }
     const sourceName = normalizePdfFontName(fontObject?.name ?? fontName);
-    const family = metricCompatibleFont(sourceName, sourceName);
+    const installedFont = browserHasFont(sourceName);
+    const sourceIsSystemFont = installedFont || Boolean(fontObject?.systemFontInfo) && !fontObject?.missingFile && !fontObject?.data?.byteLength;
+    const family = compatibleWordFont(sourceName, fontObject?.fallbackName ?? fontName, "", sourceIsSystemFont);
     styles[fontName] = {
       ...(styles[fontName] ?? {}),
       fontFamily: family,
+      sourceFontFamily: sourceName,
+      sourceIsSystemFont,
       fontWeight: /bold|semibold|demi|black/i.test(fontObject?.name ?? "") ? "bold" : "normal",
       italicAngle: /italic|oblique/i.test(fontObject?.name ?? "") ? -12 : 0,
     };
-    mappings.push({ source: fontObject?.name ?? fontName, family, fallback: fontObject?.fallbackName ?? family });
+    mappings.push({ source: fontObject?.name ?? fontName, family, fallback: fontObject?.fallbackName ?? family, embedded: Boolean(fontObject?.data?.byteLength), system: sourceIsSystemFont });
   }
   console.info("[PDFRoot Editable Word] PDF font mappings", mappings);
   return styles;
@@ -440,38 +480,48 @@ async function pdfImageObjectToPng(image: PdfImageObject) {
 async function extractEmbeddedImages(
   pdfjsLib: Awaited<ReturnType<typeof loadPdfJs>>,
   page: unknown,
+  viewport: { transform: number[] },
 ) {
   const typedPage = page as {
     getOperatorList: () => Promise<{ fnArray: number[]; argsArray: unknown[][] }>;
     objs: { get: (id: string, callback?: (value: PdfImageObject) => void) => PdfImageObject };
   };
   const operators = await typedPage.getOperatorList();
-  const placements = new Map<string, { x: number; top: number; width: number; height: number }>();
-  let imageTransform: number[] | undefined;
+  const placements: Array<{ id: string; x: number; top: number; width: number; height: number }> = [];
+  let ctm = viewport.transform.slice(0, 6) as Matrix;
+  const stack: Matrix[] = [];
   operators.fnArray.forEach((operation, index) => {
-    if (operation === pdfjsLib.OPS.transform) {
+    if (operation === pdfjsLib.OPS.save) {
+      stack.push([...ctm] as Matrix);
+    } else if (operation === pdfjsLib.OPS.restore) {
+      ctm = stack.pop() ?? ctm;
+    } else if (operation === pdfjsLib.OPS.transform) {
       const values = operators.argsArray[index] as number[];
-      if (values.length >= 6) imageTransform = values;
-    }
-    if (operation === pdfjsLib.OPS.paintImageXObject && imageTransform) {
+      if (values.length >= 6) ctm = multiplyMatrix(ctm, values.slice(0, 6).map(Number) as Matrix);
+    } else if (operation === pdfjsLib.OPS.paintImageXObject) {
       const id = String(operators.argsArray[index]?.[0] ?? "");
-      const [a, b, c, d, e, f] = imageTransform;
-      const points = [[e, f], [a + e, b + f], [c + e, d + f], [a + c + e, b + d + f]];
-      const xs = points.map(([x]) => x);
-      const ys = points.map(([, y]) => y);
-      placements.set(id, { x: Math.min(...xs), top: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
+      if (!id) return;
+      const corners = [transformPoint(ctm, 0, 0), transformPoint(ctm, 1, 0), transformPoint(ctm, 0, 1), transformPoint(ctm, 1, 1)];
+      const xs = corners.map((point) => point.x);
+      const ys = corners.map((point) => point.y);
+      placements.push({ id, x: Math.min(...xs), top: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) });
     }
   });
   const images: Array<{ data: Uint8Array; width: number; height: number; x?: number; top?: number; displayWidth?: number; displayHeight?: number }> = [];
-  for (const id of [...placements.keys()]) {
-    let imageObject: PdfImageObject;
-    try {
-      imageObject = typedPage.objs.get(id);
-    } catch {
-      imageObject = await new Promise((resolve) => typedPage.objs.get(id, resolve));
+  const decoded = new Map<string, { object: PdfImageObject; data?: Uint8Array }>();
+  for (const placement of placements) {
+    let cached = decoded.get(placement.id);
+    if (!cached) {
+      let imageObject: PdfImageObject;
+      try {
+        imageObject = typedPage.objs.get(placement.id);
+      } catch {
+        imageObject = await new Promise((resolve) => typedPage.objs.get(placement.id, resolve));
+      }
+      cached = { object: imageObject, data: await pdfImageObjectToPng(imageObject) };
+      decoded.set(placement.id, cached);
     }
-    const data = await pdfImageObjectToPng(imageObject);
-    const placement = placements.get(id)!;
+    const { object: imageObject, data } = cached;
     if (data) images.push({ data, width: imageObject.width, height: imageObject.height, x: placement.x, top: placement.top, displayWidth: placement.width, displayHeight: placement.height });
   }
   return images;
@@ -961,6 +1011,7 @@ async function renderPdfPage(
   mode: ConversionMode,
   analysis: PdfPageAnalysis,
   ocr?: { result: LocalOcrResult; scale: number },
+  extractedText?: { items: PdfTextItem[]; styles: Record<string, PdfTextStyle> },
 ) {
   const layoutViewport = page.getViewport({ scale: 1 });
   const renderScale = mode === "preserve" ? 2.5 : analysis.kinds.includes("simple-flowing-text") && !analysis.imageCount && analysis.vectorCount === 0 ? 1.5 : 2.25;
@@ -977,19 +1028,26 @@ async function renderPdfPage(
     await page.render({ canvas, canvasContext: context, viewport: renderViewport }).promise;
 
     let lines: PositionedLine[] = [];
+    let tableLayoutLines: PositionedLine[] | undefined;
     let images: ConvertedPage["images"] = [];
     let shapes: PdfVectorShape[] = [];
     let shapeFallbacks: ConvertedPage["images"] = [];
     if (mode !== "preserve") {
-      const content = await page.getTextContent();
+      // ToUnicode is the primary mapping. When it conflicts with the embedded
+      // TrueType cmap, extracted glyphs are repaired before layout grouping.
+      const rawContent = extractedText ?? await page.getTextContent({ disableNormalization: true });
+      const content = {
+        items: rawContent.items as PdfTextItem[],
+        styles: rawContent.styles as Record<string, PdfTextStyle>,
+      };
       const resolvedStyles = await resolvePageFontStyles(
         page,
-        content.items as PdfTextItem[],
-        content.styles as Record<string, PdfTextStyle>,
+        content.items,
+        content.styles,
       );
       lines = buildPositionedLines(
         pdfjsLib,
-        content.items as PdfTextItem[],
+        content.items,
         resolvedStyles,
         layoutViewport,
       );
@@ -997,7 +1055,40 @@ async function renderPdfPage(
       for (const line of lines) {
         line.color = detectTextColor(context, line, renderScale);
       }
-      if (ocr?.result.words.length && mode === "fixed") {
+      const safeEditableText = (item: PositionedTextItem) => item.unicodeReliable
+        && hasReliableUnicodeMapping(item.text) && validateGujaratiText(item.text).length === 0;
+      const unreliableMapping = !ocr && lines.some((line) => line.items.some((item) => !safeEditableText(item)));
+      if (unreliableMapping) {
+        tableLayoutLines = lines;
+        analysis.unicodeConfidence = Math.min(analysis.unicodeConfidence, 0.5);
+        analysis.strategy = "visual-safe-fallback";
+        const safeLines = lines.map((line) => {
+          const items = line.items.filter((item) => safeEditableText(item));
+          if (!items.length) return undefined;
+          const x = Math.min(...items.map((item) => item.x));
+          const top = Math.min(...items.map((item) => item.top));
+          const right = Math.max(...items.map((item) => item.x + item.width));
+          const bottom = Math.max(...items.map((item) => item.top + item.height));
+          return { ...line, items, x, top, width: right - x, height: bottom - top };
+        }).filter((line): line is PositionedLine => Boolean(line));
+        context.fillStyle = "#ffffff";
+        for (const line of safeLines) {
+          for (const item of line.items) {
+            context.fillRect(
+              Math.max(0, item.x * renderScale - 2),
+              Math.max(0, item.top * renderScale - 2),
+              item.width * renderScale + 4,
+              item.height * renderScale + 4,
+            );
+          }
+        }
+        lines = safeLines;
+        images = [{
+          data: new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()),
+          x: 0, top: 0, width: layoutViewport.width, height: layoutViewport.height,
+          background: mode === "fixed",
+        }];
+      } else if (ocr?.result.words.length && mode === "fixed") {
         context.fillStyle = "#ffffff";
         for (const word of ocr.result.words) {
           const x = word.bbox.x0 / ocr.scale * renderScale;
@@ -1020,7 +1111,7 @@ async function renderPdfPage(
         const vectorGraphics = await extractVectorShapes(pdfjsLib, page, layoutViewport);
         shapes = vectorGraphics.shapes;
         shapeFallbacks = vectorGraphics.fallbacks;
-        const embeddedImages = await extractEmbeddedImages(pdfjsLib, page);
+        const embeddedImages = await extractEmbeddedImages(pdfjsLib, page, layoutViewport);
         const availableEmbedded = [...embeddedImages];
         images = images.map((detected) => {
         if (!availableEmbedded.length) return detected;
@@ -1077,6 +1168,7 @@ async function renderPdfPage(
       height: layoutViewport.height,
       image: mode === "preserve" ? new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()) : new Uint8Array(),
       lines,
+      tableLayoutLines,
       images,
       shapes,
       contentBounds,
@@ -1113,27 +1205,6 @@ function createVisualLayer(page: ConvertedPage, description: string) {
   });
 }
 
-function detectBoldFontNames(page: ConvertedPage) {
-  const usage = new Map<string, { uppercase: number; total: number; heights: number[] }>();
-  const allHeights: number[] = [];
-  for (const line of page.lines) {
-    for (const item of line.items) {
-      const record = usage.get(item.fontName) ?? { uppercase: 0, total: 0, heights: [] };
-      const letters = item.text.replace(/[^A-Za-z]/g, "");
-      record.total += Math.max(1, letters.length);
-      if (letters && letters === letters.toUpperCase()) record.uppercase += letters.length;
-      record.heights.push(item.height);
-      usage.set(item.fontName, record);
-      allHeights.push(item.height);
-    }
-  }
-  const sortedHeights = allHeights.sort((a, b) => a - b);
-  const median = sortedHeights[Math.floor(sortedHeights.length / 2)] ?? 10;
-  return new Set([...usage.entries()]
-    .filter(([name, record]) => name.toLowerCase().includes("bold") || record.uppercase / Math.max(1, record.total) > 0.62 || Math.max(...record.heights) > median * 1.22)
-    .map(([name]) => name));
-}
-
 function anchoredImages(page: ConvertedPage) {
   if (!page.images.length) return undefined;
   return new Paragraph({
@@ -1146,11 +1217,13 @@ function anchoredImages(page: ConvertedPage) {
       floating: {
         horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: Math.round(image.x * 12700) },
         verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: Math.round(image.top * 12700) },
-        wrap: image.background
-          ? { type: TextWrappingType.NONE, side: TextWrappingSide.BOTH_SIDES }
-          : { type: TextWrappingType.SQUARE, side: TextWrappingSide.BOTH_SIDES },
+        // Page-relative source coordinates already keep text outside the image
+        // region. Word/WPS square wrapping can push unrelated semantic rows
+        // down by the full image height, so fixed-layout images never
+        // participate in paragraph flow.
+        wrap: { type: TextWrappingType.NONE, side: TextWrappingSide.BOTH_SIDES },
         behindDocument: Boolean(image.background),
-        allowOverlap: Boolean(image.background),
+        allowOverlap: true,
         lockAnchor: true,
         margins: { top: 0, right: 0, bottom: 0, left: 0 },
       },
@@ -1179,25 +1252,6 @@ function fixedShapeStyle(x: number, top: number, width: number, height: number, 
   ].filter(Boolean).join(";");
 }
 
-function editableTextShape(item: PositionedTextItem, color: string, bold: boolean, id: number) {
-  const halfPoints = Math.max(2, Math.round(item.fontSize * 2));
-  const lineTwips = Math.max(1, Math.round(item.fontSize * 20));
-  const font = escapeXml(item.fontFamily);
-  const shapeHeight = item.fontSize * (item.fontAscent + item.fontDescent);
-  // PDF text matrices expose the em-box top; Word text boxes paint glyphs from
-  // the ascent line. Advancing by the source font descent aligns baselines.
-  const shapeTop = item.top + item.fontSize * item.fontDescent;
-  const runProperties = [
-    `<w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:eastAsia="${font}" w:cs="${font}"/>`,
-    bold || item.bold ? "<w:b/><w:bCs/>" : "",
-    item.italic ? "<w:i/><w:iCs/>" : "",
-    `<w:color w:val="${color}"/>`,
-    `<w:sz w:val="${halfPoints}"/><w:szCs w:val="${halfPoints}"/>`,
-    `<w:w w:val="${Math.max(1, Math.round(item.horizontalScale * 100))}"/>`,
-  ].join("");
-  return `<w:r><w:pict><v:shape id="pdfroot_text_${id}" type="#_x0000_t202" style="${fixedShapeStyle(item.x, shapeTop, item.width, shapeHeight, 1000 + id, item.rotation)}" stroked="f" filled="f" o:allowoverlap="t"><v:textbox inset="0,0,0,0" o:insetmode="custom" style="mso-fit-shape-to-text:f"><w:txbxContent><w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="${lineTwips}" w:lineRule="exact"/><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${runProperties}</w:rPr><w:t xml:space="preserve">${escapeXml(item.text)}</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape></w:pict></w:r>`;
-}
-
 function vmlDashStyle(dash: number[]) {
   if (!dash.length) return "solid";
   if (dash.length === 2 && dash[0] <= dash[1] * 0.35) return "dot";
@@ -1214,19 +1268,48 @@ function editableVectorShape(shape: PdfVectorShape, id: number) {
     : "";
   const fill = filled ? `<v:fill color="#${shape.fillColor}" opacity="${point(shape.fillOpacity)}"/>` : "";
   const common = `id="pdfroot_vector_${id}" style="${fixedShapeStyle(shape.x, shape.top, shape.width, shape.height, 10 + id)}" filled="${filled ? "t" : "f"}" stroked="${stroked ? "t" : "f"}"${stroked ? ` strokecolor="#${shape.strokeColor}" strokeweight="${point(shape.strokeWidth)}pt"` : ""}${filled ? ` fillcolor="#${shape.fillColor}"` : ""} o:allowoverlap="t"`;
-  if (shape.kind === "rectangle") return `<w:r><w:pict><v:rect ${common}>${stroke}${fill}</v:rect></w:pict></w:r>`;
-  return `<w:r><w:pict><v:shape ${common} coordorigin="0,0" coordsize="10000,10000" path="${shape.path}">${stroke}${fill}<v:path fillok="${filled ? "t" : "f"}" strokeok="${stroked ? "t" : "f"}"/></v:shape></w:pict></w:r>`;
+  const noWrap = `<w10:wrap type="none"/>`;
+  if (shape.kind === "rectangle") return `<w:r><w:pict><v:rect ${common}>${stroke}${fill}${noWrap}</v:rect></w:pict></w:r>`;
+  return `<w:r><w:pict><v:shape ${common} coordorigin="0,0" coordsize="10000,10000" path="${shape.path}">${stroke}${fill}${noWrap}<v:path fillok="${filled ? "t" : "f"}" strokeok="${stroked ? "t" : "f"}"/></v:shape></w:pict></w:r>`;
 }
 
-function editablePageXml(page: ConvertedPage) {
-  const boldFonts = detectBoldFontNames(page);
-  const shapes: string[] = [];
-  page.shapes.forEach((shape) => shapes.push(editableVectorShape(shape, shapes.length)));
-  const items = page.lines
-    .flatMap((line) => line.items.map((item) => ({ item, color: line.color })))
-    .sort((a, b) => a.item.top - b.item.top || a.item.x - b.item.x);
-  items.forEach(({ item, color }) => shapes.push(editableTextShape(item, color, boldFonts.has(item.fontName), shapes.length)));
-  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${shapes.join("")}</w:p>`;
+function shapeInsideTable(shape: PdfVectorShape, table: ReturnType<typeof detectReliableTables>[number]) {
+  const right = table.xs.at(-1)!;
+  const bottom = table.ys.at(-1)!;
+  const centerX = shape.x + shape.width / 2;
+  const centerY = shape.top + shape.height / 2;
+  return centerX >= table.x - 3 && centerX <= right + 3 && centerY >= table.top - 3 && centerY <= bottom + 3;
+}
+
+function whiteBackgroundBehindText(shape: PdfVectorShape, lines: PositionedLine[]) {
+  if (shape.strokeColor || shape.fillColor !== "FFFFFF" || shape.fillOpacity <= 0 || shape.width <= 2 || shape.height <= 2) return false;
+  return lines.some((line) => {
+    const centerX = line.x + line.width / 2;
+    const centerY = line.top + line.height / 2;
+    return centerX >= shape.x && centerX <= shape.x + shape.width && centerY >= shape.top && centerY <= shape.top + shape.height;
+  });
+}
+
+function editableVectorPageXml(page: ConvertedPage) {
+  const tables = detectReliableTables(page.tableLayoutLines ?? page.lines, page.shapes);
+  const layout = classifyDocumentRegions({
+    lines: page.lines as LayoutLine[],
+    shapes: page.shapes,
+    images: page.images,
+    pageWidth: page.width,
+    pageHeight: page.height,
+    tables: tables.map((table) => ({ x: table.x, top: table.top, right: table.xs.at(-1)!, bottom: table.ys.at(-1)! })),
+  });
+  const semanticShapeIndexes = new Set(layout.regions
+    .filter((region) => region.kind === "section-heading")
+    .flatMap((region) => region.relatedShapeIndexes ?? []));
+  const shapes = page.shapes
+    .filter((shape, index) => !semanticShapeIndexes.has(index)
+      && !tables.some((table) => shapeInsideTable(shape, table))
+      && !whiteBackgroundBehindText(shape, page.lines))
+    .map((shape, index) => editableVectorShape(shape, index))
+    .join("");
+  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${shapes}</w:p>`;
 }
 
 function createDocx(pages: ConvertedPage[], sourceName: string, mode: ConversionMode) {
@@ -1257,6 +1340,24 @@ function createDocx(pages: ConvertedPage[], sourceName: string, mode: Conversion
     sections: pages.map((page, pageIndex) => {
       const landscape = page.width > page.height;
       const imageLayer = mode === "fixed" ? anchoredImages(page) : undefined;
+      const margins = mode === "fixed" ? {
+        // Fixed-layout objects share one page-relative coordinate system.
+        // Source x/y offsets are represented by paragraph/table indents and
+        // vertical spacers; section margins would apply that origin a second
+        // time and shrink the usable body in Word/WPS.
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        header: 0,
+        footer: 0,
+        gutter: 0,
+      } : { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 };
+      const structuredContent = mode === "fixed" ? createStructuredPageContent(page, {
+        fixedLayout: true,
+        left: 0,
+        top: 0,
+      }) : [];
       return {
         properties: {
           type: mode === "fixed" ? SectionType.NEXT_PAGE : pageIndex === pages.length - 1 ? SectionType.CONTINUOUS : SectionType.NEXT_PAGE,
@@ -1266,11 +1367,11 @@ function createDocx(pages: ConvertedPage[], sourceName: string, mode: Conversion
               height: Math.round((landscape ? page.width : page.height) * 20),
               orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
             },
-            margin: { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 },
+            margin: margins,
           },
         },
         children: mode === "fixed"
-          ? [new Paragraph({ children: [new TextRun(`PDFROOT_EDITABLE_PAGE_${pageIndex}`)] }), ...(imageLayer ? [imageLayer] : [])]
+          ? [new Paragraph({ children: [new TextRun(`PDFROOT_VECTOR_PAGE_${pageIndex}`)] }), ...(imageLayer ? [imageLayer] : []), ...structuredContent]
           : [createVisualLayer(page, `Original PDF page ${pageIndex + 1}`)],
       };
     }),
@@ -1293,23 +1394,42 @@ async function finalizeDocx(documentFile: Document, pages: ConvertedPage[], mode
       documentXml = documentXml.replace("<w:document ", '<w:document xmlns:o="urn:schemas-microsoft-com:office:office" ');
     }
     pages.map((page, pageIndex) => ({ page, pageIndex })).reverse().forEach(({ page, pageIndex }) => {
-      const token = `PDFROOT_EDITABLE_PAGE_${pageIndex}`;
+      const token = `PDFROOT_VECTOR_PAGE_${pageIndex}`;
       const paragraphPattern = new RegExp(`<w:p(?: [^>]*)?>(?:(?!<\\/w:p>)[\\s\\S])*?<w:t(?: [^>]*)?>${token}<\\/w:t>(?:(?!<\\/w:p>)[\\s\\S])*?<\\/w:p>`);
-      documentXml = documentXml.replace(paragraphPattern, editablePageXml(page));
+      documentXml = documentXml.replace(paragraphPattern, editableVectorPageXml(page));
     });
     const shapeType = '<v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>';
-    documentXml = documentXml.replace("<w:pict>", `<w:pict>${shapeType}`);
+    if (documentXml.includes("<w:pict>")) documentXml = documentXml.replace("<w:pict>", `<w:pict>${shapeType}`);
 
     const settingsFile = zip.file("word/settings.xml");
     if (settingsFile) {
       let settingsXml = await settingsFile.async("string");
       if (!settingsXml.includes("doNotUseHTMLParagraphAutoSpacing")) {
-        settingsXml = settingsXml.replace("</w:settings>", '<w:doNotUseHTMLParagraphAutoSpacing/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>');
+        settingsXml = settingsXml.replace("</w:settings>", '<w:doNotUseHTMLParagraphAutoSpacing/><w:doNotTrackFormatting/><w:doNotAutoCompressPictures/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>');
       }
       zip.file("word/settings.xml", settingsXml);
     }
   }
   zip.file("word/document.xml", documentXml);
+  validateGeneratedDocumentXml(documentXml, pages);
+
+  // WPS relies more heavily than Word on fontTable.xml when resolving complex
+  // scripts. Declare every deterministic run font; never declare PDF subset IDs.
+  const fontTableFile = zip.file("word/fontTable.xml");
+  if (fontTableFile) {
+    const declaredFonts = [...new Set([...documentXml.matchAll(/<w:rFonts\b[^>]*\bw:(?:ascii|hAnsi|eastAsia|cs)="([^"]+)"/g)].map((match) => match[1]))];
+    const declarations = declaredFonts.map((font) => {
+      const family = /times|serif/i.test(font) ? "roman" : /courier|mono/i.test(font) ? "modern" : "swiss";
+      return `<w:font w:name="${font}"><w:altName w:val="${font}"/><w:charset w:val="00"/><w:family w:val="${family}"/><w:pitch w:val="variable"/></w:font>`;
+    }).join("");
+    let fontTableXml = await fontTableFile.async("string");
+    if (declarations) {
+      fontTableXml = /<w:fonts\b[^>]*\/>/.test(fontTableXml)
+        ? fontTableXml.replace(/<w:fonts\b([^>]*)\/>/, `<w:fonts$1>${declarations}</w:fonts>`)
+        : fontTableXml.replace("</w:fonts>", `${declarations}</w:fonts>`);
+      zip.file("word/fontTable.xml", fontTableXml);
+    }
+  }
 
   const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
   if (blob.size < 1024) throw new Error("The generated Word file is empty or incomplete.");
@@ -1561,7 +1681,14 @@ export function PdfToWordTool() {
 
     let ocrEngine: Awaited<ReturnType<typeof createLocalOcrEngine>> | undefined;
     let lowConfidenceWords = 0;
+    let lowestQualityScore = 100;
+    let hasQualityWarning = false;
     try {
+      // The current product is browser-local. Official WPS cloud conversion is
+      // deliberately unavailable until a licensed server adapter and explicit
+      // remote-processing approval are configured.
+      const engine = selectPdfToWordEngine();
+      if (engine.engine !== "internal") throw new Error("The selected PDF-to-Word engine is not available in this client.");
       const pdfjsLib = await loadPdfJs();
       const convertedFiles: Array<{ fileName: string; blob: Blob }> = [];
       let totalPages = 0;
@@ -1570,7 +1697,9 @@ export function PdfToWordTool() {
       for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
         const currentFile = files[fileIndex];
         setStatus(`Reading ${currentFile.name}...`);
-        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(await currentFile.arrayBuffer()) });
+        const sourceBytes = new Uint8Array(await currentFile.arrayBuffer());
+        const glyphResolver = conversionMode === "preserve" ? undefined : await createPdfGlyphUnicodeResolver(sourceBytes);
+        const loadingTask = pdfjsLib.getDocument({ data: sourceBytes.slice(), fontExtraProperties: true });
         const pdf = await loadingTask.promise;
         const pages: ConvertedPage[] = [];
         let wordCount = 0;
@@ -1579,9 +1708,15 @@ export function PdfToWordTool() {
           for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
             setStatus(`${conversionMode === "preserve" ? "Rendering" : "Analyzing"} ${currentFile.name} page ${pageNumber} of ${pdf.numPages}...`);
             const page = await pdf.getPage(pageNumber);
-            const [content, operators] = await Promise.all([page.getTextContent(), page.getOperatorList()]);
+            const [content, operators] = await Promise.all([page.getTextContent({ disableNormalization: true }), page.getOperatorList()]);
+            const textItems = glyphResolver
+              ? correctTextItemsFromGlyphStreams(
+                content.items as PdfTextItem[],
+                glyphResolver.pageStreams(pageNumber - 1, operators, pdfjsLib.OPS),
+              )
+              : content.items as PdfTextItem[];
             const viewport = page.getViewport({ scale: 1 });
-            const analysis = analyzePdfPage(content.items as PdfTextItem[], operators, pdfjsLib.OPS, viewport.width);
+            const analysis = analyzePdfPage(textItems, operators, pdfjsLib.OPS, viewport.width);
             let ocr: { result: LocalOcrResult; scale: number } | undefined;
             if (analysis.needsOcr && conversionMode !== "preserve") {
               setStatus(`OCR is required because page ${pageNumber} of ${pdf.numPages} is scanned.`);
@@ -1592,7 +1727,10 @@ export function PdfToWordTool() {
               });
               lowConfidenceWords += ocr.result.lowConfidenceWords;
             }
-            const convertedPage = await renderPdfPage(pdfjsLib, page, conversionMode, analysis, ocr);
+            const convertedPage = await renderPdfPage(pdfjsLib, page, conversionMode, analysis, ocr, {
+              items: textItems,
+              styles: content.styles as Record<string, PdfTextStyle>,
+            });
             pages.push(convertedPage);
             wordCount += convertedPage.lines
               .flatMap((line) => line.items.map((item) => item.text))
@@ -1603,7 +1741,9 @@ export function PdfToWordTool() {
             if (pageNumber % analysis.batchSize === 0) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
           }
 
-          validateConvertedPages(pages, pdf.numPages, conversionMode !== "preserve");
+          const quality = validateConvertedPages(pages, pdf.numPages, conversionMode !== "preserve");
+          lowestQualityScore = Math.min(lowestQualityScore, quality.score);
+          hasQualityWarning ||= quality.warning;
 
           setStatus(`Creating Word file for ${currentFile.name}...`);
           const blob = await finalizeDocx(createDocx(pages, currentFile.name, conversionMode), pages, conversionMode);
@@ -1629,6 +1769,11 @@ export function PdfToWordTool() {
 
       if (blob.size < 1024) throw new Error("The generated download is empty or incomplete.");
 
+      const conversionWarning = lowConfidenceWords > 0
+        ? `Some scanned text may require review (${lowConfidenceWords} low-confidence words; quality score ${lowestQualityScore}/100).`
+        : hasQualityWarning
+          ? `Fidelity warning: uncertain source text mapping was preserved visually instead of being replaced with guessed characters (quality score ${lowestQualityScore}/100).`
+          : undefined;
       setResult({
         blob,
         url: URL.createObjectURL(blob),
@@ -1637,10 +1782,11 @@ export function PdfToWordTool() {
         wordCount: totalWords,
         fileCount: convertedFiles.length,
         isZip: convertedFiles.length > 1,
+        warning: conversionWarning,
       });
       setProgress(100);
-      setStatus(lowConfidenceWords > 0
-        ? `Some scanned text may require review (${lowConfidenceWords} low-confidence words).`
+      setStatus(conversionWarning
+        ? conversionWarning
         : conversionMode === "fixed" ? "Original pages preserved with editable text."
           : conversionMode === "reflow" ? "Easy-editing Word document generated. Page breaks and spacing may change."
             : "Original page appearance preserved in Word.");
@@ -1916,6 +2062,11 @@ export function PdfToWordTool() {
           <p className="mt-2 text-sm font-semibold text-slate-500">
             {result ? `${result.fileCount} ${result.fileCount === 1 ? "file" : "files"} - ${result.sizeKb.toFixed(1)} KB - ${result.wordCount} words` : "Ready"}
           </p>
+          {result?.warning && (
+            <p role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-sm font-semibold leading-6 text-amber-900">
+              {result.warning}
+            </p>
+          )}
           {result && (
             <a href={result.url} download={downloadName} className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-6 py-4 text-base font-black text-white shadow-[0_18px_40px_rgba(255,45,45,0.28)] transition hover:-translate-y-0.5 hover:bg-red-600">
               {result.isZip ? "Download ZIP" : "Download DOCX"}

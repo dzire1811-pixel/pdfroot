@@ -71,6 +71,31 @@ export const resizeImageExactKbFaq = [
 
 export const blogPosts: BlogPost[] = [
   {
+    slug: "ojas-photo-resize-student-problem",
+    title: "How the OJAS Photo Resize Tool Was Created to Solve a Real Student Problem",
+    seoTitle: "OJAS Photo Resize Tool – Solving a Real Student Problem | PDFRoot",
+    description: "Learn why PDFRoot created the OJAS Photo Resize Tool after discovering that many Gujarat government job candidates struggle to resize photos and signatures for OJAS recruitment forms.",
+    category: "Government Forms",
+    date: "September 4, 2026",
+    readTime: "5 min read",
+    canonicalUrl: "https://www.pdfroot.com/blog/ojas-photo-resize-student-problem",
+    author: "Anand Joshi",
+    authorTitle: "Founder of PDFRoot",
+    publishedAt: "2026-09-04",
+    modifiedAt: "2026-09-04",
+    image: {
+      src: "/blog/ojas-photo-signature-15kb-requirement.png",
+      alt: "OJAS Gujarat photo and signature upload requirements showing maximum 15 KB file size",
+      width: 780,
+      height: 496,
+    },
+    relatedTool: { label: "Resize OJAS Photo", href: "/ojas-photo-resize" },
+    content: {
+      intro: "In Gujarat, many government recruitment applications are submitted through the OJAS (Online Job Application System) website.",
+      sections: [],
+    },
+  },
+  {
     slug: "pdfroot-smart-crop-image-tool",
     title: "PDFRoot Crop Image Tool: A Smart Solution for Online Form Photos and Documents",
     listingTitle: "PDFRoot Crop Image Tool – A Smart Solution for Online Form Photos and Documents",

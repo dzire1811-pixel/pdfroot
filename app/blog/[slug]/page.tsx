@@ -8,6 +8,7 @@ import { BrandText } from "@/components/Brand";
 import { BlogArticleLayout } from "@/components/blog/BlogArticleLayout";
 import { BlogListingLayout } from "@/components/blog/BlogListingLayout";
 import { CropImageToolArticle } from "@/components/blog/CropImageToolArticle";
+import { OjasPhotoResizeArticle } from "@/components/blog/OjasPhotoResizeArticle";
 import { ResizeImageExactKbArticle } from "@/components/blog/ResizeImageExactKbArticle";
 import { InfoPageLayout } from "@/components/InfoPageLayout";
 import { blogPosts, getBlogPost, resizeImageExactKbFaq } from "@/lib/blog";
@@ -40,6 +41,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   return {
     title: post.seoTitle ? { absolute: post.seoTitle } : post.title,
     description: post.description,
+    ...(post.slug === "ojas-photo-resize-student-problem" ? { authors: [{ name: post.author!, url: "https://www.pdfroot.com/about" }] } : {}),
     alternates: {
       canonical: canonicalUrl,
     },
@@ -48,6 +50,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
       description: post.description,
       url: canonicalUrl,
       type: "article",
+      ...(post.slug === "ojas-photo-resize-student-problem" ? { authors: [post.author!] } : {}),
       ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
       ...(post.modifiedAt ? { modifiedTime: post.modifiedAt } : {}),
       images: [{ url: imageUrl, width: post.image?.width ?? 1200, height: post.image?.height ?? 630, alt: post.image?.alt ?? post.title }],
@@ -77,6 +80,49 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   const post = getBlogPost(slug);
 
   if (!post) notFound();
+
+  if (post.slug === "ojas-photo-resize-student-problem") {
+    const canonicalUrl = post.canonicalUrl!;
+    const articleSchema = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: post.title,
+      description: post.description,
+      inLanguage: "en",
+      author: { "@type": "Person", name: post.author, jobTitle: post.authorTitle },
+      publisher: { "@type": "Organization", name: "PDFRoot", logo: { "@type": "ImageObject", url: "https://www.pdfroot.com/branding/logo.png" } },
+      datePublished: post.publishedAt,
+      dateModified: post.modifiedAt,
+      mainEntityOfPage: { "@type": "WebPage", "@id": canonicalUrl },
+      url: canonicalUrl,
+      ...(post.image ? { image: `https://www.pdfroot.com${post.image.src}` } : {}),
+    };
+    const breadcrumbSchema = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: "https://www.pdfroot.com/" },
+        { "@type": "ListItem", position: 2, name: "Blog", item: "https://www.pdfroot.com/blog" },
+        { "@type": "ListItem", position: 3, name: post.title, item: canonicalUrl },
+      ],
+    };
+    return (
+      <BlogArticleLayout
+        title={post.title}
+        breadcrumb={(
+          <nav aria-label="Breadcrumb" className="inline-flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
+            <Link href="/" className="hover:text-foreground">Home</Link><span aria-hidden="true">›</span>
+            <Link href="/blog" className="hover:text-foreground">Blog</Link><span aria-hidden="true">›</span>
+            <span aria-current="page">OJAS Photo Resize</span>
+          </nav>
+        )}
+      >
+        <OjasPhotoResizeArticle post={post} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      </BlogArticleLayout>
+    );
+  }
 
   if (post.slug === "pdfroot-smart-crop-image-tool") {
     const canonicalUrl = "https://www.pdfroot.com/blog/pdfroot-smart-crop-image-tool";
