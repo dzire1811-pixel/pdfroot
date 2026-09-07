@@ -131,6 +131,7 @@ export default async function RootLayout({
       className={inter.variable}
     >
       <head>
+        <meta name="google-adsense-account" content="ca-pub-2590741830798378" />
         <Script
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2590741830798378"
           strategy="beforeInteractive"
