@@ -130,6 +130,13 @@ export default async function RootLayout({
       data-analytics-consent={initialConsent ?? "pending"}
       className={inter.variable}
     >
+      <head>
+        <Script
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2590741830798378"
+          strategy="beforeInteractive"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="font-sans">
         {children}
         <Script
