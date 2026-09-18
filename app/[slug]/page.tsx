@@ -6,12 +6,14 @@ import "../tool-pages.css";
 import { Check, ClipboardList, Download, FileLock2, FileText, MonitorSmartphone, ShieldCheck, UploadCloud, Zap } from "lucide-react";
 import { BrandPhrase, BrandText, SectionHeading } from "@/components/Brand";
 import { CropImageArticle } from "@/components/CropImageArticle";
+import { EditPdfPage } from "@/components/editPdf/EditPdfPage";
 import { HomepageSiteFooter } from "@/components/homepage/site-footer";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 import { MergeResultExploreButton } from "@/components/MergeResultExploreButton";
 import { ToolCard } from "@/components/ToolCard";
 import { ToolDirectoryIcon } from "@/components/ToolDirectoryIcon";
 import { ToolFeedback } from "@/components/ToolFeedback";
+import { hasToolGuide, ToolGuideContent } from "@/components/ToolGuideContent";
 import { ImageToolsMobileGuard } from "@/components/ImageToolsMobileGuard";
 import { ToolRenderer } from "@/components/ToolRenderer";
 import { ToolUploadFlowEnhancer } from "@/components/ToolUploadFlowEnhancer";
@@ -47,25 +49,27 @@ export async function generateMetadata({ params }: ToolPageProps): Promise<Metad
     return {};
   }
 
-  const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
+  const pageTitle = tool.slug === "edit-pdf" ? "Edit PDF Online - Add Text, Images & Signatures" : withUniqueTitleSuffix(tool.name, "Online");
   const isRrbSignatureResize = tool.slug === "rrb-signature-resize";
-  const metadataDescription = isRrbSignatureResize
+  const isHiddenFromListings = !filterVisibleTools([tool]).length;
+  const metadataDescription = tool.slug === "edit-pdf" ? "Edit PDF online for free. Add text, images, signatures, drawings, highlights, whiteout and more directly in your browser." : isRrbSignatureResize
     ? "Resize your RRB signature online to the required dimensions and file size. Create a clear JPG or JPEG signature for Railway recruitment forms."
-    : `${tool.description} Use PDFRoot ${tool.name} online with fast processing, secure files, instant download, and a clean mobile-friendly upload workflow.`;
-  const socialDescription = isRrbSignatureResize ? metadataDescription : tool.description;
-  const canonicalUrl = isRrbSignatureResize ? "https://www.pdfroot.com/rrb-signature-resize" : `/${tool.slug}`;
+    : `${tool.description} Learn supported inputs, practical steps, limitations, and related PDFRoot tools.`;
+  const socialDescription = isRrbSignatureResize || tool.slug === "edit-pdf" ? metadataDescription : tool.description;
+  const canonicalUrl = tool.slug === "edit-pdf" ? "https://www.pdfroot.com/edit-pdf" : isRrbSignatureResize ? "https://www.pdfroot.com/rrb-signature-resize" : `/${tool.slug}`;
 
   return {
-    title: pageTitle,
+    title: tool.slug === "edit-pdf" ? { absolute: `${pageTitle} | PDFRoot` } : pageTitle,
     description: metadataDescription,
     keywords: tool.keywords,
     alternates: {
       canonical: canonicalUrl,
     },
+    robots: isHiddenFromListings ? { index: false, follow: true } : undefined,
     openGraph: {
       title: `${pageTitle} | PDFRoot`,
       description: socialDescription,
-      url: `https://www.pdfroot.com/${tool.slug}`,
+      url: tool.slug === "edit-pdf" ? canonicalUrl : `https://www.pdfroot.com/${tool.slug}`,
       images: ["https://www.pdfroot.com/branding/open-graph-image.png"],
     },
     twitter: {
@@ -106,6 +110,7 @@ function toolIntro(slug: string, name: string) {
 
 export default async function ToolPage({ params }: ToolPageProps) {
   const { slug } = await params;
+  if (slug === "edit-pdf") return <EditPdfPage />;
   const tool = getToolBySlug(slug);
 
   if (!tool) {
@@ -113,6 +118,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
   }
 
   const pageTitle = withUniqueTitleSuffix(tool.name, "Online");
+  const hasGuide = hasToolGuide(tool.slug);
   const displayHeading = tool.slug === "image-compressor-for-government-forms" ? "Govt. Form Image Compressor" : pageTitle;
   const supportsStickyToolPanel = tool.category === "Image Tools";
   const related = filterVisibleTools(tools).filter((item) => item.category === tool.category && item.slug !== tool.slug).slice(0, 6);
@@ -248,13 +254,12 @@ export default async function ToolPage({ params }: ToolPageProps) {
         ["split-pdf", "Split PDF", "Extract or separate PDF pages."],
         ["pdf-to-word", "Convert PDF", "Turn your PDF into another format."],
       ];
-  const categoryTools = tool.category === "PDF Tools" ? pdfTools : imageTools;
   const mergeResultTrustCards = [
-    ["Files Processed Locally", FileLock2],
-    ["Fast & Free PDF & Image Tools", Zap],
+    ["Browser-based core tools", FileLock2],
+    ["Focused PDF & Image Tools", Zap],
     ["Works on Mobile & Desktop", MonitorSmartphone],
-    ["Perfect for Government Forms & Document Uploads", ClipboardList],
-    ["Secure File Processing", ShieldCheck],
+    ["Prepare files for forms and uploads", ClipboardList],
+    ["Review output before submission", ShieldCheck],
   ] as const;
   const pageSchema = {
     "@context": "https://schema.org",
@@ -543,7 +548,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
 
         <section data-tool-page-extra="trust" className="border-b border-border bg-background px-6 py-5 lg:px-8">
           <div className="mx-auto flex max-w-[1800px] flex-wrap justify-center gap-3">
-            {["Secure Files", "Fast Processing", "Instant Download"].map((item) => (
+            {["Review your output", "Browser-based core workflow", "Download when ready"].map((item) => (
               <div key={item} className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-foreground">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
                   <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -554,18 +559,18 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </div>
         </section>
 
-        <section data-tool-page-extra="how-to" className="bg-background px-6 py-14 sm:py-16 lg:px-8">
+        {!hasGuide && <section data-tool-page-extra="how-to" className="bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
             <SectionHeading
               eyebrow="How It Works"
               title={`Use ${tool.name} in three steps`}
-              description="PDFRoot keeps every tool simple: upload files, process instantly, and download the result."
+              description={`Use the ${tool.name} workspace above, then inspect the output before sharing or submitting it.`}
             />
             <div className="mt-10 grid gap-5 md:grid-cols-3">
               {[
-                ["Upload File", "Choose a PDF, image, photo, signature, or supported document file.", UploadCloud],
-                ["Process Instantly", "Use optimized PDFRoot processing for fast online results.", Zap],
-                ["Download Result", "Save the converted, compressed, merged, resized, or edited file.", Download],
+                [`Choose ${tool.name} input`, `Select a supported file for the ${tool.name} workspace.`, UploadCloud],
+                [`Adjust ${tool.name}`, `Use the controls that apply to this ${tool.category === "PDF Tools" ? "document" : "image"} workflow.`, Zap],
+                [`Review ${tool.name} output`, "Open or preview the generated file before you use it elsewhere.", Download],
               ].map(([title, description, StepIcon], index) => {
                 const Step = StepIcon as typeof FileText;
                 return (
@@ -585,15 +590,15 @@ export default async function ToolPage({ params }: ToolPageProps) {
               })}
             </div>
           </div>
-        </section>
+        </section>}
 
-        {tool.government && (
+        {!hasGuide && tool.government && (
           <section data-tool-page-extra="government" className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
             <div className="mx-auto max-w-[1800px]">
               <SectionHeading
                 eyebrow="Government Recruitment Support"
-                title={`${tool.name} for SSC, RRB, IBPS, OJAS, UPSC and GPSC`}
-                description="Prepare photos, signatures, and compressed images for recruitment portals, banking exams, railway applications, police recruitment, scholarship forms, and government job applications."
+                title={`${tool.name} for form image preparation`}
+                description="Use this workspace to prepare a photo, signature or image before upload. Always compare the downloaded file with the latest instructions on the official portal."
               />
               <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {recruitmentPlatforms.map((platform) => (
@@ -606,13 +611,13 @@ export default async function ToolPage({ params }: ToolPageProps) {
           </section>
         )}
 
-        <section data-tool-page-extra="seo" className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
+        {hasGuide ? <ToolGuideContent slug={tool.slug} name={tool.name} /> : <section data-tool-page-extra="seo" className="border-y border-border bg-muted/40 px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto grid max-w-[1800px] gap-8 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-2xl border border-border bg-card p-7">
-              <p className="text-sm font-semibold uppercase tracking-wider text-primary">SEO Tool Page</p>
+              <p className="text-sm font-semibold uppercase tracking-wider text-primary">About this tool</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">Why use <BrandText styled /> {tool.name}?</h2>
               <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-                {tool.description} <BrandText styled /> gives this workflow its own dedicated page so users can find the exact PDF or image tool they need from search and navigation.
+                {tool.description} Check the supported input, review the downloaded result, and use the related tools below when your workflow needs another step.
               </p>
               <div className="mt-6 flex flex-wrap gap-2">
                 {tool.keywords.map((keyword) => (
@@ -624,10 +629,10 @@ export default async function ToolPage({ params }: ToolPageProps) {
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               {[
-                ["Professional workflow", "Clear upload, processing, and download stages for real users."],
-                ["Mobile-first design", "Designed to work smoothly across phones, tablets, and desktops."],
-                ["Secure experience", "Trust-focused UI for document and image handling."],
-                ["Complete platform", `Part of ${categoryTools.length} ${tool.category.toLowerCase()} inside PDFRoot.`],
+                ["Check the output", "Open the generated file before sharing or submitting it."],
+                ["Use the right format", "Confirm the format, dimensions and file size requested by the destination."],
+                ["Know the limits", "Some file types and layouts need manual review after processing."],
+                ["Continue your workflow", "Use the related tools below for the next document or image step."],
               ].map(([title, description]) => (
                 <div key={title} className="flex flex-col rounded-2xl border border-border bg-card p-6">
                   <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -641,7 +646,7 @@ export default async function ToolPage({ params }: ToolPageProps) {
               ))}
             </div>
           </div>
-        </section>
+        </section>}
 
         <section data-tool-page-extra="related" className="bg-background px-6 py-14 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-[1800px]">
@@ -657,9 +662,9 @@ export default async function ToolPage({ params }: ToolPageProps) {
             </div>
           </div>
         </section>
-        <div data-tool-page-extra="why-choose">
+        {!hasGuide && <div data-tool-page-extra="why-choose">
           <WhyChoosePdfRoot />
-        </div>
+        </div>}
         {tool.slug === "crop-image" && <CropImageArticle />}
       </main>
       {usesApprovedPdfResultPage && (

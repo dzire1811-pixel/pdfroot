@@ -14,7 +14,7 @@ export function Hero() {
           </h1>
 
           <p className="mx-auto mt-6 max-w-[550px] text-lg leading-relaxed text-muted-foreground sm:text-xl lg:mx-0">
-            Convert, edit and prepare PDFs and images in just a few clicks.
+            PDFRoot brings together practical PDF conversion, compression and page tools, plus image resize, crop and exact-KB preparation for everyday uploads and forms.
           </p>
 
           <div className="mt-9 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center lg:justify-start">
@@ -36,13 +36,13 @@ export function Hero() {
 
           <p className="mt-3.5 text-center text-xs leading-relaxed text-zinc-600 sm:hidden">
             <span className="block whitespace-nowrap">
-              Files Processed Locally <span className="text-zinc-500">|</span> Fast &amp; Free
+              Core tools run in your browser <span className="text-zinc-500">|</span> Free to use
             </span>
             <span className="block whitespace-nowrap">Works on Mobile &amp; Desktop</span>
           </p>
 
           <p className="mt-4 hidden max-w-[550px] text-left text-sm leading-relaxed text-zinc-600 sm:block">
-            Files Processed Locally <span className="text-zinc-500">|</span> Fast &amp; Free <span className="text-zinc-500">|</span> Works on Mobile &amp; Desktop
+            Core PDF and image workflows run in your browser <span className="text-zinc-500">|</span> Review before upload <span className="text-zinc-500">|</span> Works on Mobile &amp; Desktop
           </p>
         </div>
 

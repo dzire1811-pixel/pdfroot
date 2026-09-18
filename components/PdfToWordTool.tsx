@@ -24,7 +24,7 @@ import { classifyDocumentRegions, LayoutLine } from "@/lib/pdfToWord/layoutAnaly
 import { createLocalOcrEngine, LocalOcrResult, OcrWord } from "@/lib/pdfToWord/localOcr";
 import { selectPdfToWordEngine } from "@/lib/pdfToWord/engine";
 import { correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver } from "@/lib/pdfToWord/pdfGlyphUnicode";
-import { createReflowContent, createStructuredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
+import { createReflowContent, createAnchoredPageContent, createStructuredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
 import { validateConvertedPages, validateGeneratedDocumentXml } from "@/lib/pdfToWord/validator";
 import { compatibleWordFont, hasReliableUnicodeMapping, reconstructGujaratiFragments, validateGujaratiText } from "@/lib/pdfToWord/unicode";
 
@@ -81,6 +81,7 @@ type PositionedTextItem = {
   horizontalScale: number;
   sourceOrder: number;
   unicodeReliable: boolean;
+  color?: string;
 };
 
 type PositionedLine = {
@@ -115,6 +116,7 @@ type ConvertedPage = {
   width: number;
   height: number;
   image: Uint8Array;
+  warnings: string[];
   lines: PositionedLine[];
   tableLayoutLines?: PositionedLine[];
   images: Array<{
@@ -1012,6 +1014,7 @@ async function renderPdfPage(
   analysis: PdfPageAnalysis,
   ocr?: { result: LocalOcrResult; scale: number },
   extractedText?: { items: PdfTextItem[]; styles: Record<string, PdfTextStyle> },
+  getOcrEngine?: () => Promise<Awaited<ReturnType<typeof createLocalOcrEngine>>>,
 ) {
   const layoutViewport = page.getViewport({ scale: 1 });
   const renderScale = mode === "preserve" ? 2.5 : analysis.kinds.includes("simple-flowing-text") && !analysis.imageCount && analysis.vectorCount === 0 ? 1.5 : 2.25;
@@ -1027,9 +1030,10 @@ async function renderPdfPage(
     context.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvas, canvasContext: context, viewport: renderViewport }).promise;
 
+    const warnings: string[] = [];
     let lines: PositionedLine[] = [];
     let tableLayoutLines: PositionedLine[] | undefined;
-    let images: ConvertedPage["images"] = [];
+    const images: ConvertedPage["images"] = [];
     let shapes: PdfVectorShape[] = [];
     let shapeFallbacks: ConvertedPage["images"] = [];
     if (mode !== "preserve") {
@@ -1055,95 +1059,75 @@ async function renderPdfPage(
       for (const line of lines) {
         line.color = detectTextColor(context, line, renderScale);
       }
-      const safeEditableText = (item: PositionedTextItem) => item.unicodeReliable
-        && hasReliableUnicodeMapping(item.text) && validateGujaratiText(item.text).length === 0;
-      const unreliableMapping = !ocr && lines.some((line) => line.items.some((item) => !safeEditableText(item)));
-      if (unreliableMapping) {
-        tableLayoutLines = lines;
-        analysis.unicodeConfidence = Math.min(analysis.unicodeConfidence, 0.5);
-        analysis.strategy = "visual-safe-fallback";
-        const safeLines = lines.map((line) => {
-          const items = line.items.filter((item) => safeEditableText(item));
-          if (!items.length) return undefined;
-          const x = Math.min(...items.map((item) => item.x));
-          const top = Math.min(...items.map((item) => item.top));
-          const right = Math.max(...items.map((item) => item.x + item.width));
-          const bottom = Math.max(...items.map((item) => item.top + item.height));
-          return { ...line, items, x, top, width: right - x, height: bottom - top };
-        }).filter((line): line is PositionedLine => Boolean(line));
-        context.fillStyle = "#ffffff";
-        for (const line of safeLines) {
-          for (const item of line.items) {
-            context.fillRect(
-              Math.max(0, item.x * renderScale - 2),
-              Math.max(0, item.top * renderScale - 2),
-              item.width * renderScale + 4,
-              item.height * renderScale + 4,
-            );
-          }
+      for (const line of lines) for (const item of line.items) {
+        item.color = detectTextColor(context, { ...line, items: [item], x: item.x, top: item.top, width: item.width, height: item.height }, renderScale);
+        if (!item.sourceIsSystemFont || item.sourceFontFamily !== item.fontFamily) {
+          warnings.push(`Font ${item.sourceFontFamily || "unknown"} uses ${item.fontFamily}; original font metrics are not guaranteed. PDF subset fonts are not embedded without verified editable embedding rights.`);
         }
-        lines = safeLines;
-        images = [{
-          data: new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()),
-          x: 0, top: 0, width: layoutViewport.width, height: layoutViewport.height,
-          background: mode === "fixed",
-        }];
-      } else if (ocr?.result.words.length && mode === "fixed") {
-        context.fillStyle = "#ffffff";
-        for (const word of ocr.result.words) {
-          const x = word.bbox.x0 / ocr.scale * renderScale;
-          const top = word.bbox.y0 / ocr.scale * renderScale;
-          const width = (word.bbox.x1 - word.bbox.x0) / ocr.scale * renderScale;
-          const height = (word.bbox.y1 - word.bbox.y0) / ocr.scale * renderScale;
-          context.fillRect(Math.max(0, x - 2), Math.max(0, top - 2), width + 4, height + 4);
-        }
-        images = [{
-          data: new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()),
-          x: 0,
-          top: 0,
-          width: layoutViewport.width,
-          height: layoutViewport.height,
-          background: true,
-        }];
-      } else if (analysis.imageCount || analysis.vectorCount > 0) {
-        const graphics = await detectPageGraphics(canvas, lines, renderScale, layoutViewport.width, layoutViewport.height);
-        images = graphics.images;
-        const vectorGraphics = await extractVectorShapes(pdfjsLib, page, layoutViewport);
-        shapes = vectorGraphics.shapes;
-        shapeFallbacks = vectorGraphics.fallbacks;
-        const embeddedImages = await extractEmbeddedImages(pdfjsLib, page, layoutViewport);
-        const availableEmbedded = [...embeddedImages];
-        images = images.map((detected) => {
-        if (!availableEmbedded.length) return detected;
-        const detectedRatio = detected.width / Math.max(0.01, detected.height);
-        availableEmbedded.sort((a, b) => Math.abs(Math.log((a.width / a.height) / detectedRatio)) - Math.abs(Math.log((b.width / b.height) / detectedRatio)));
-        const embedded = availableEmbedded.shift()!;
-        const exactPlacement = embedded.x !== undefined && embedded.top !== undefined
-          && embedded.displayWidth !== undefined && embedded.displayHeight !== undefined
-          && embedded.displayWidth > 0 && embedded.displayHeight > 0
-          && embedded.x >= 0 && embedded.top >= 0
-          && embedded.x + embedded.displayWidth <= layoutViewport.width + 1
-          && embedded.top + embedded.displayHeight <= layoutViewport.height + 1;
-        if (exactPlacement) {
-          return { ...detected, data: embedded.data, x: embedded.x!, top: embedded.top!, width: embedded.displayWidth!, height: embedded.displayHeight! };
-        }
-        const inset = detected.border?.thickness ?? 0;
-        const availableWidth = Math.max(0.5, detected.width - inset * 2);
-        const availableHeight = Math.max(0.5, detected.height - inset * 2);
-        const embeddedRatio = embedded.width / embedded.height;
-        const width = Math.min(availableWidth, availableHeight * embeddedRatio);
-        const height = width / embeddedRatio;
-        return {
-          ...detected,
-          data: embedded.data,
-          x: detected.x + (detected.width - width) / 2,
-          top: detected.top + (detected.height - height) / 2,
-          width,
-          height,
-        };
-        });
-        images.push(...shapeFallbacks);
       }
+      const safeEditableText = (item: PositionedTextItem) => item.unicodeReliable && hasReliableUnicodeMapping(item.text);
+      const unsafeLines = lines.filter(line => line.items.some(item => !safeEditableText(item)));
+      // OCR is scoped to uncertain regions; reliable native neighbours are never
+      // passed to OCR and never repainted over a full-page screenshot.
+      for (const unsafe of unsafeLines) {
+        if (!getOcrEngine) throw new Error("An incomplete character mapping requires regional OCR.");
+        const region = document.createElement("canvas");
+        const left = Math.max(0, unsafe.x - 2), top = Math.max(0, unsafe.top - 3);
+        region.width = Math.ceil(Math.min(layoutViewport.width - left, unsafe.width + 4) * renderScale);
+        region.height = Math.ceil(Math.min(layoutViewport.height - top, unsafe.height + 6) * renderScale);
+        region.getContext("2d")!.drawImage(canvas, left * renderScale, top * renderScale, region.width, region.height, 0, 0, region.width, region.height);
+        const recognized = await (await getOcrEngine()).recognize(region);
+        region.width = region.height = 0;
+        if (!recognized.words.length) throw new Error("Text with an unusable Unicode mapping could not be recovered. No screenshot-based editable file was produced.");
+        const recovered = buildOcrLines(recognized.words, renderScale, layoutViewport.width);
+        recovered.forEach(line => { line.x += left; line.top += top; line.items.forEach(item => { item.x += left; item.top += top; item.baseline += top; }); });
+        // Keep safe native fragments of the same line and discard overlapping OCR.
+        const safeItems = unsafe.items.filter(safeEditableText);
+        const remaining = recovered.flatMap(line => line.items).filter(item => !safeItems.some(native => item.x < native.x + native.width && item.x + item.width > native.x));
+        lines = lines.filter(line => line !== unsafe);
+        if (safeItems.length) lines.push({ ...unsafe, items: safeItems });
+        for (const item of remaining) lines.push({ items: [item], x: item.x, top: item.top, width: item.width, height: item.height, centered: false, color: unsafe.color });
+        warnings.push(`Unusable Unicode mapping recovered with OCR (${Math.round(recognized.confidence)}% confidence); verify wording against the source.`);
+      }
+      const vectorGraphics = await extractVectorShapes(pdfjsLib, page, layoutViewport);
+      shapes = vectorGraphics.shapes;
+      shapeFallbacks = vectorGraphics.fallbacks;
+      if (ocr) {
+        warnings.push(`Scanned text is OCR-derived (${Math.round(ocr.result.confidence)}% confidence). Fonts, scan graphics, and unrecognized text require review.`);
+        if (!ocr.result.words.length) throw new Error("OCR found no editable text. The scan language may be unsupported; no image-only Word file was produced.");
+        // Do not retain the scan behind the recognized words. Vector objects
+        // remain separately owned; raster-only graphics cannot yet be separated reliably.
+      } else {
+        const embedded = await extractEmbeddedImages(pdfjsLib, page, layoutViewport);
+        for (const original of embedded) {
+          const x = original.x ?? 0, top = original.top ?? 0;
+          const width = original.displayWidth ?? 0, height = original.displayHeight ?? 0;
+          if (!(width > 0 && height > 0)) { warnings.push("An image has unsupported placement and was omitted."); continue; }
+          const nativeCoverage = lines.flatMap(line => line.items).reduce((area, item) => area + Math.max(0, Math.min(x + width, item.x + item.width) - Math.max(x, item.x)) * Math.max(0, Math.min(top + height, item.top + item.height) - Math.max(top, item.top)), 0) / (width * height);
+          // Inspect meaningful image regions for scan text, including mixed pages.
+          if (getOcrEngine && width > 60 && height > 24 && nativeCoverage < 0.08) {
+            const region = document.createElement("canvas");
+            region.width = Math.ceil(width * renderScale); region.height = Math.ceil(height * renderScale);
+            region.getContext("2d")!.drawImage(canvas, x * renderScale, top * renderScale, region.width, region.height, 0, 0, region.width, region.height);
+            const recognized = await (await getOcrEngine()).recognize(region);
+            region.width = region.height = 0;
+            if (recognized.words.length >= 2 && recognized.confidence >= 65) {
+              const recovered = buildOcrLines(recognized.words, renderScale, layoutViewport.width);
+              recovered.forEach(line => { line.x += x; line.top += top; line.items.forEach(item => { item.x += x; item.top += top; item.baseline += top; }); });
+              lines.push(...recovered);
+              warnings.push(`Image region converted with OCR (${Math.round(recognized.confidence)}% confidence). Non-text raster graphics in that region could not be separated; review the source.`);
+              continue;
+            }
+            warnings.push("An image region was retained as an image; OCR did not reliably identify editable text in it. Scan language coverage is limited to English, Hindi and Gujarati.");
+          }
+          images.push({ data: original.data, x, top, width, height });
+        }
+      }
+      images.push(...shapeFallbacks);
+      if (shapeFallbacks.length) warnings.push("Some vector artwork remains rasterized; its text content, if any, is not editable.");
+      if (analysis.kinds.includes("rotated-text")) warnings.push("Rotated or vertical text is not yet faithfully reconstructed.");
+      lines.sort((a, b) => a.top - b.top || a.x - b.x);
+
     }
 
     const horizontalElements = [
@@ -1166,6 +1150,7 @@ async function renderPdfPage(
     return {
       width: layoutViewport.width,
       height: layoutViewport.height,
+      warnings: [...new Set(warnings)],
       image: mode === "preserve" ? new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()) : new Uint8Array(),
       lines,
       tableLayoutLines,
@@ -1292,21 +1277,8 @@ function whiteBackgroundBehindText(shape: PdfVectorShape, lines: PositionedLine[
 
 function editableVectorPageXml(page: ConvertedPage) {
   const tables = detectReliableTables(page.tableLayoutLines ?? page.lines, page.shapes);
-  const layout = classifyDocumentRegions({
-    lines: page.lines as LayoutLine[],
-    shapes: page.shapes,
-    images: page.images,
-    pageWidth: page.width,
-    pageHeight: page.height,
-    tables: tables.map((table) => ({ x: table.x, top: table.top, right: table.xs.at(-1)!, bottom: table.ys.at(-1)! })),
-  });
-  const semanticShapeIndexes = new Set(layout.regions
-    .filter((region) => region.kind === "section-heading")
-    .flatMap((region) => region.relatedShapeIndexes ?? []));
   const shapes = page.shapes
-    .filter((shape, index) => !semanticShapeIndexes.has(index)
-      && !tables.some((table) => shapeInsideTable(shape, table))
-      && !whiteBackgroundBehindText(shape, page.lines))
+    .filter(shape => !tables.some(table => shapeInsideTable(shape, table)))
     .map((shape, index) => editableVectorShape(shape, index))
     .join("");
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${shapes}</w:p>`;
@@ -1353,11 +1325,7 @@ function createDocx(pages: ConvertedPage[], sourceName: string, mode: Conversion
         footer: 0,
         gutter: 0,
       } : { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 };
-      const structuredContent = mode === "fixed" ? createStructuredPageContent(page, {
-        fixedLayout: true,
-        left: 0,
-        top: 0,
-      }) : [];
+      const structuredContent = mode === "fixed" ? createAnchoredPageContent(page) : [];
       return {
         properties: {
           type: mode === "fixed" ? SectionType.NEXT_PAGE : pageIndex === pages.length - 1 ? SectionType.CONTINUOUS : SectionType.NEXT_PAGE,
@@ -1680,6 +1648,7 @@ export function PdfToWordTool() {
     scrollToolStageIntoView();
 
     let ocrEngine: Awaited<ReturnType<typeof createLocalOcrEngine>> | undefined;
+    const conversionIssues = new Set<string>();
     let lowConfidenceWords = 0;
     let lowestQualityScore = 100;
     let hasQualityWarning = false;
@@ -1730,7 +1699,7 @@ export function PdfToWordTool() {
             const convertedPage = await renderPdfPage(pdfjsLib, page, conversionMode, analysis, ocr, {
               items: textItems,
               styles: content.styles as Record<string, PdfTextStyle>,
-            });
+            }, async () => ocrEngine ??= await createLocalOcrEngine());
             pages.push(convertedPage);
             wordCount += convertedPage.lines
               .flatMap((line) => line.items.map((item) => item.text))
@@ -1742,6 +1711,7 @@ export function PdfToWordTool() {
           }
 
           const quality = validateConvertedPages(pages, pdf.numPages, conversionMode !== "preserve");
+          quality.issues.forEach(issue => conversionIssues.add(issue));
           lowestQualityScore = Math.min(lowestQualityScore, quality.score);
           hasQualityWarning ||= quality.warning;
 
@@ -1769,11 +1739,9 @@ export function PdfToWordTool() {
 
       if (blob.size < 1024) throw new Error("The generated download is empty or incomplete.");
 
-      const conversionWarning = lowConfidenceWords > 0
-        ? `Some scanned text may require review (${lowConfidenceWords} low-confidence words; quality score ${lowestQualityScore}/100).`
-        : hasQualityWarning
-          ? `Fidelity warning: uncertain source text mapping was preserved visually instead of being replaced with guessed characters (quality score ${lowestQualityScore}/100).`
-          : undefined;
+      const conversionWarning = conversionMode === "preserve" ? "Page content is image-only and is not editable."
+        : [...conversionIssues, ...(lowConfidenceWords ? [`${lowConfidenceWords} OCR words have low confidence.`] : []),
+          "Layout and editability are reconstructed estimates. Review the Word file against the PDF; rendering and fonts vary by application."].join(" ");
       setResult({
         blob,
         url: URL.createObjectURL(blob),

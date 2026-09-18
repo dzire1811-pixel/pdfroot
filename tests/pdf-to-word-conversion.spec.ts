@@ -182,6 +182,18 @@ function vectorBlocks(xml: string) {
   return [...xml.matchAll(/<v:(?:rect|shape) id="pdfroot_vector_[^>]+>/g)].map((match) => match[0]);
 }
 
+function positionedParagraphs(xml: string) {
+  return [...xml.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)].flatMap(([paragraph]) => {
+    const frame = paragraph.match(/<w:framePr\b[^>]*\/>/)?.[0];
+    if (!frame) return [];
+    const attribute = (name: string) => Number(frame.match(new RegExp(`w:${name}="([^"]+)"`))?.[1]);
+    return [{
+      text: [...paragraph.matchAll(/<w:t\b[^>]*>(.*?)<\/w:t>/g)].map(match => match[1]).join(""),
+      x: attribute("x"), y: attribute("y"), width: attribute("w"), height: attribute("h"), frame,
+    }];
+  });
+}
+
 function hasVector(blocks: string[], x: number, top: number, width: number, height: number, color: string, strokeWidth: number) {
   return blocks.some((block) => block.includes(`margin-left:${x}pt;margin-top:${top}pt;width:${Math.max(0.5, width)}pt;height:${Math.max(0.5, height)}pt`)
     && block.includes(`strokecolor="#${color}"`)
@@ -257,7 +269,18 @@ test("desktop editable Word conversion preserves filename and creates a valid do
   expect(orderedMarkers.map((marker) => xml.indexOf(marker))).toEqual([...orderedMarkers.map((marker) => xml.indexOf(marker))].sort((a, b) => a - b));
   expect(xml).not.toContain("<w:txbxContent");
   expect(xml).not.toContain("pdfroot_text_");
-  expect(xml).toContain("<w:ind w:left=");
+  const frames = positionedParagraphs(xml);
+  expect(frames.length).toBeGreaterThan(0);
+  for (const frame of frames) {
+    expect(frame.frame).toContain('w:hAnchor="page"');
+    expect(frame.frame).toContain('w:vAnchor="page"');
+    expect(frame.x).toBeGreaterThanOrEqual(0);
+    expect(frame.y).toBeGreaterThanOrEqual(0);
+    expect(frame.width).toBeGreaterThan(0);
+    expect(frame.height).toBeGreaterThan(0);
+    expect(frame.x + frame.width).toBeLessThanOrEqual(sourcePage.getWidth() * 20 + 40);
+    expect(frame.y + frame.height).toBeLessThanOrEqual(sourcePage.getHeight() * 20 + 40);
+  }
 
   const mediaName = Object.keys(archive.files).find((name) => /^word\/media\/.*\.png$/i.test(name));
   expect(mediaName, "Editable DOCX must retain the portrait image").toBeTruthy();
@@ -273,17 +296,14 @@ test("desktop editable Word conversion preserves filename and creates a valid do
   expect(xml).toContain("<wp:posOffset>374904</wp:posOffset>");
   expect(xml).toContain('<wp:extent cx="1143000" cy="1539240"/>');
 
-  // Structured sections and form fields are now editable tables rather than
-  // independent paragraphs over duplicate vector frames.
-  const structuredTables = [...xml.matchAll(/<w:tbl>[\s\S]*?<\/w:tbl>/g)].map((match) => match[0]);
+  // Non-grid headings and form fields remain editable positioned paragraphs.
+  // Genuine table reconstruction is covered by the populated-grid regressions.
   for (const heading of ["PERSONAL PROFILE", "EDUCATION", "SSC", "HSC", "B.Com.", "RELEVANT SKILLS", "Experience"]) {
-    const headingTables = structuredTables.filter((table) => table.includes(`>${heading}</w:t>`));
-    expect(headingTables).toHaveLength(1);
-    expect(headingTables[0]).toContain('<w:tblBorders>');
-    expect(headingTables[0]).toContain('w:color="8064A2"');
-    expect(headingTables[0]).toContain('<w:tblLayout w:type="fixed"/>');
+    expect(frames.filter(frame => frame.text === heading)).toHaveLength(1);
   }
-  expect(structuredTables.some((table) => table.includes('Name') && table.includes('Date of Birth'))).toBeTruthy();
+  for (const field of ["Name", "Date of Birth"]) {
+    expect(frames.some(frame => frame.text.includes(field))).toBe(true);
+  }
   expect(xml).not.toMatch(/w:val="(?:dotted|nil)"/);
   const fontSizes = [...xml.matchAll(/<w:sz w:val="(\d+)"/g)].map((match) => Number(match[1]));
   expect(new Set(fontSizes).size).toBeGreaterThan(2);
@@ -295,7 +315,7 @@ test("desktop editable Word conversion preserves filename and creates a valid do
   expect(xml).not.toContain("<w:pBdr>");
   const vectorShapes = vectorBlocks(xml);
   expect(vectorShapes.filter((shape) => shape.includes('strokecolor="#000000"') && shape.includes("width:546.86pt;height:793.46pt"))).toHaveLength(1);
-  expect(vectorShapes.filter((shape) => shape.includes('strokecolor="#8064A2"'))).toHaveLength(0);
+  expect(vectorShapes.filter((shape) => shape.includes('strokecolor="#8064A2"')).length).toBeGreaterThan(0);
   const fixedShapes = [...xml.matchAll(/style="[^"]*margin-left:([\d.-]+)pt;margin-top:([\d.-]+)pt;width:([\d.-]+)pt;height:([\d.-]+)pt[^"]*"/g)];
   expect(fixedShapes.length).toBeGreaterThan(0);
   fixedShapes.forEach((shape) => {
@@ -419,17 +439,22 @@ test("generic editable conversion preserves simple, column, and multi-page struc
   expect(columnsXml.match(/LEFT_COLUMN_MARKER/g)).toHaveLength(1);
   expect(columnsXml.match(/RIGHT_COLUMN_MARKER/g)).toHaveLength(1);
   expect(columnsXml).not.toContain("<w:txbxContent");
-  const columnTables = [...columnsXml.matchAll(/<w:tbl>[\s\S]*?<\/w:tbl>/g)].map((match) => match[0]);
-  expect(columnTables).toHaveLength(1);
-  expect(columnTables[0]).toContain('<w:gridCol w:w="5520"/>');
-  expect(columnTables[0]).toContain('<w:tblLayout w:type="fixed"/>');
-  const columnRows = [...columnTables[0].matchAll(/<w:tr>[\s\S]*?<\/w:tr>/g)].map((match) => match[0]);
-  expect(columnRows).toHaveLength(2);
-  for (const [index, markers] of [["LEFT_COLUMN_MARKER", "RIGHT_COLUMN_MARKER"], ["Left second row", "Right second row"]].entries()) {
-    const cells = [...columnRows[index].matchAll(/<w:tc>[\s\S]*?<\/w:tc>/g)].map((match) => match[0]);
-    expect(cells).toHaveLength(2);
-    markers.forEach((marker, column) => expect(cells[column]).toContain(marker));
+  const columnFrames = positionedParagraphs(columnsXml);
+  expect(columnFrames).toHaveLength(4);
+  const rowTops: number[] = [];
+  for (const markers of [["LEFT_COLUMN_MARKER", "RIGHT_COLUMN_MARKER"], ["Left second row", "Right second row"]]) {
+    const row = markers.map(marker => {
+      const matches = columnFrames.filter(frame => frame.text === marker);
+      expect(matches).toHaveLength(1);
+      return matches[0];
+    });
+    expect(row[0].x).toBe(54 * 20);
+    expect(row[1].x).toBe(330 * 20);
+    expect(row[0].y).toBe(row[1].y);
+    expect(row[0].x + row[0].width).toBeLessThan(row[1].x);
+    rowTops.push(row[0].y);
   }
+  expect(rowTops[1]).toBeGreaterThan(rowTops[0]);
 
   const multipagePath = await downloadEditable(page, path.join(fixtureDir, "two-page-mixed-orientation.pdf"), "two-page-mixed-orientation.docx");
   const multipageXml = await documentXml(multipagePath);

@@ -1,18 +1,14 @@
-.git/
-.vercel/
-.agents/
-.next/
-node_modules/
-.npm-cache/
-.env*
-*.pid
-coverage/
-test-results/
-playwright-report/
-blob-report/
-playwright/
-homepage-inspection-screenshots/
-homepage-inspection-artifacts/
-cwv-audit/
+# Local-only audit, test, cache and workspace artifacts. These are not needed
+# by the Next.js runtime and can make production uploads unnecessarily large.
+.git
+.next
+.agents
+.npm-cache
+node_modules
+tmp
+test-results
+playwright-report
+cwv-audit
+homepage-inspection-artifacts
+homepage-inspection-screenshots
 *.log
-*.tsbuildinfo

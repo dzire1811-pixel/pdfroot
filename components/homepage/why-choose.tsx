@@ -8,18 +8,18 @@ const reasons = [
     icon: Zap,
   },
   {
-    title: "Privacy First",
-    desc: "Files are processed securely over SSL and automatically deleted within one hour.",
+    title: "Clear privacy information",
+    desc: "Core PDF and image workflows run in the browser. Features that use an external service are identified before you use them.",
     icon: Lock,
   },
   {
-    title: "Mobile Friendly",
-    desc: "Every tool is built mobile-first, so it works perfectly from any phone or tablet.",
+    title: "Mobile-friendly workflows",
+    desc: "Use the main PDF and image tools on current mobile and desktop browsers.",
     icon: Smartphone,
   },
   {
-    title: "Government Form Ready",
-    desc: "Exact KB sizing and photo presets tuned for SSC, RRB, UPSC, IBPS and more.",
+    title: "Form preparation tools",
+    desc: "Prepare file size and dimensions, then compare the result with the current official portal instructions.",
     icon: FileCheck2,
   },
 ];

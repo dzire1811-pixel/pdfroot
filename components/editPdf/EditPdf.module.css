@@ -1,0 +1,106 @@
+.root { color: #17202e; background: #f8fafc; }
+.root * { box-sizing: border-box; }
+.root button, .root a, .root input, .root select, .root textarea { outline-offset: 3px; }
+.root button:focus-visible, .root a:focus-visible, .root input:focus-visible, .root select:focus-visible, .root textarea:focus-visible { outline: 2px solid #ef2929; }
+.root button { cursor: pointer; }
+.root button:disabled { opacity: .4; cursor: default; }
+.uploadStage { background: var(--background); }
+/* Merge's result heading resolves to these utilities through tool-pages.css.
+   Scope them here: opting the whole card into that stylesheet would also restyle its buttons. */
+.root .resultSuccessHeading { @apply text-base font-semibold leading-6 tracking-normal !important; }
+/* Same result-to-feedback spacing as Merge/Compress in tool-pages.css. */
+.resultHero { padding-bottom: 26px; }
+/* Reuse the managed PDF upload styles; only the singular drop wording differs. */
+.uploadScope section[data-v0-managed-flow="true"] label[data-primary-upload="true"]::after { content: "or drop file here"; }
+.uploadScope [role="button"]:focus-visible { outline: 2px solid var(--foreground); outline-offset: 4px; }
+.workspace { height: calc(100dvh - 86px); min-height: 540px; max-height: 1100px; display: flex; flex-direction: column; border: 1px solid #dce2e9; background: white; margin: 10px 12px; border-radius: 12px; overflow: hidden; scroll-margin-top: 80px; }
+.filebar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+.filename { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.toolbar { padding: 6px 8px; display: flex; flex-wrap: wrap; gap: 5px; border-bottom: 1px solid #e2e8f0; align-items: center; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; font-size: 12px; line-height: 18px; white-space: nowrap; }
+.button:hover { background: #f1f5f9; }
+.button[aria-pressed="true"] { background: #fff0f0; color: #c92222; border-color: #ffb2b2; }
+.primary { background: #ff2d2d; color: white; border-color: #ff2d2d; font-weight: 600; }
+.primary:hover { background: #dc2020; }
+.divider { height: 24px; width: 1px; background: #e2e8f0; margin: 0 3px; }
+.controls { display: flex; align-items: center; gap: 5px; padding: 5px 8px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; font-size: 12px; }
+.controls .apply { margin-left: auto; }
+.body { display: grid; grid-template-columns: 152px minmax(0, 1fr) 214px; flex: 1; min-height: 0; }
+.sidebar, .properties { padding: 12px; overflow: auto; background: white; min-width: 0; }
+.sidebar { border-right: 1px solid #e2e8f0; }
+.properties { border-left: 1px solid #e2e8f0; }
+.panelTitle { font-size: 13px; font-weight: 650; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
+/* Shared tool-page heading rules use !important. Keep editor card headings compact. */
+.root .panelTitle, .dialog .panelTitle { font-size: 13px !important; line-height: 20px !important; letter-spacing: normal !important; margin: 0 0 12px !important; }
+.pageCard { border: 1px solid #e2e8f0; border-radius: 7px; padding: 7px; margin-bottom: 10px; background: #f8fafc; }
+.pageCard[data-active="true"] { border: 2px solid #ff2d2d; padding: 6px; background: #fff5f5; }
+.pageSelect { width: 100%; font-size: 11px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.thumb { width: 88px; height: 112px; display: grid; place-items: center; background: #e9edf2; overflow: hidden; }
+.thumb canvas { max-width: 100%; max-height: 100%; background: white; }
+.pageActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; margin-top: 5px; }
+.pageActions .button { padding: 5px; }
+.sidebar > .button { width: 100%; margin-top: 6px; white-space: normal; }
+.viewport { overflow: auto; background: #e9edf2; min-width: 0; min-height: 0; padding: 20px; position: relative; overscroll-behavior: contain; }
+.paper { position: relative; margin: 0 auto; background: white; box-shadow: 0 3px 16px #0f172a24; flex-shrink: 0; }
+.paper > canvas, .paper > svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.paper > svg { touch-action: none; user-select: none; }
+.renderStatus { position: absolute; inset: 0; display: grid; place-items: center; background: #ffffffeb; font-size: 13px; padding: 15px; text-align: center; pointer-events: none; }
+.field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; margin-bottom: 12px; }
+.field input:not([type="checkbox"]), .field select, .field textarea { width: 100%; min-width: 0; padding: 6px 8px; border-radius: 5px; border: 1px solid #dce2e9; background: white; color: #17202e; }
+.field input[type="color"] { height: 32px; padding: 3px; }
+.field textarea { min-height: 80px; resize: vertical; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.row > .field { flex: 1; min-width: 64px; }
+.hint { font-size: 11px; color: #64748b; line-height: 1.6; margin: 10px 0; }
+.error { color: #b91c1c; background: #fff1f2; border: 1px solid #fecdd3; padding: 10px 14px; font-size: 13px; border-radius: 6px; margin: 8px 12px; }
+.status { font-size: 11px; color: #64748b; padding: 6px 12px; border-top: 1px solid #e2e8f0; }
+.mobileNav, .mobileApply, .mobileClose, .more { display: none; }
+.dialog { border: 1px solid #e2e8f0; border-radius: 16px; padding: 22px; max-width: min(540px, calc(100vw - 24px)); width: 100%; color: #17202e; background: white; }
+.dialog::backdrop { background: #0f172a80; }
+.signatureCanvas { width: 100%; height: 170px; border: 1px dashed #cbd5e1; border-radius: 6px; touch-action: none; margin: 14px 0; background: white; }
+.result { max-width: 850px; margin: 32px auto; padding: 32px 22px; text-align: center; background: white; border: 1px solid #e2e8f0; border-radius: 16px; }
+.result h1 { font-size: 32px; font-weight: 750; margin: 12px 0; }
+.result p { margin: 12px 0; font-size: 14px; overflow-wrap: anywhere; }
+.next { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
+@media (max-width: 1100px) { .body { grid-template-columns: 124px minmax(0, 1fr) 188px; } .sidebar, .properties { padding: 8px; } .toolbar .button { padding: 6px 7px; } }
+@media (max-width: 800px) {
+  .workspace { margin: 6px; height: calc(100dvh - 76px); min-height: 530px; border-radius: 8px; }
+  .body { display: flex; flex-direction: column; }
+  .viewport { flex: 1; padding: 14px; order: 0; }
+  .sidebar, .properties { display: none; border: 0; border-top: 1px solid #e2e8f0; order: 1; }
+  .sidebar[data-open="true"], .properties[data-open="true"] { display: block; flex: 0 0 210px; max-height: 40%; }
+  .sidebar[data-open="true"] { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+  .sidebar .panelTitle { width: 100%; margin: 0; }
+  .pageCard { width: 108px; margin: 0; }
+  .sidebar > .button { width: auto; }
+  .mobileClose { display: inline-flex; }
+  .properties .field { margin-bottom: 8px; }
+  .properties { padding: 10px 16px; }
+  .mobileNav { display: flex; justify-content: center; gap: 8px; border-top: 1px solid #e2e8f0; padding: 5px; }
+  .mobileApply { display: flex; padding: 6px 10px max(6px, env(safe-area-inset-bottom)); }
+  .mobileApply .button { width: 100%; }
+  .controls .apply { display: none; }
+  .toolbar { flex-wrap: nowrap; justify-content: space-between; padding: 5px; gap: 1px; }
+  .toolbar .button { flex-direction: column; gap: 2px; border: 0; font-size: 10px; padding: 5px 7px; }
+  .toolbar [data-secondary="true"] { display: none; }
+  .toolbar[data-expanded="true"] { flex-wrap: wrap; justify-content: flex-start; }
+  .toolbar[data-expanded="true"] [data-secondary="true"] { display: flex; }
+  .more { display: inline-flex; }
+  .controls { gap: 3px; justify-content: center; font-size: 11px; }
+  .controls .button { padding: 5px; }
+  .controls .divider { margin: 0; }
+  .filebar { padding: 7px 9px; }
+  .filebar > span:not(.filename) { display: none; }
+  .status { display: none; }
+  .next { grid-template-columns: repeat(2, 1fr); }
+  .result { margin: 16px 10px; }
+}
+.nativeHit { fill: transparent; stroke: transparent; cursor: text; }
+.nativeHit:hover, .nativeHit[data-selected="true"], .nativeHit:focus-visible { fill: #3b82f60a; stroke: #3b82f680; stroke-width: .6; outline: none; }
+.nativeInput { display: block; width: 100%; height: 100%; min-height: 0; padding: 0; margin: 0; border: 0; border-radius: 0; outline: 1px solid #3b82f6; background: transparent; resize: none; overflow: hidden; white-space: pre; box-shadow: none; }
+.nativeProperties { display: grid; gap: 12px; padding-top: 12px; }
+.nativeProperties label { display: grid; gap: 4px; font-size: 12px; }
+.nativeProperties input, .nativeProperties select, .nativeProperties textarea { min-width: 0; width: 100%; border: 1px solid #cbd5e1; border-radius: 5px; padding: 6px; }
+.nativeProperties textarea { min-height: 70px; }
+.nativeMessage { background: #fff7ed; color: #9a3412; padding: 5px; font-size: 11px; }
+.nativeNotice { padding: 6px 12px; font-size: 12px; background: #f1f5f9; color: #475569; }

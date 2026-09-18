@@ -1,5 +1,5 @@
 import { BorderStyle, HeightRule, HeadingLevel, ImageRun, Paragraph, Table, TableCell, TableLayoutType, TableRow, TabStopType, TextRun, VerticalAlign, WidthType } from "docx";
-import { compatibleWordFont, splitTextByScript, wordFontSlots, wordLanguageForText } from "./unicode";
+import { compatibleWordFont, isRtlText, splitTextByScript, wordFontSlots, wordLanguageForText } from "./unicode";
 import { classifyDocumentRegions, LayoutLine, StructuredRegion, VisualRow } from "./layoutAnalyzer";
 
 type ReflowItem = {
@@ -13,6 +13,7 @@ type ReflowItem = {
   fontName?: string;
   bold: boolean;
   italic: boolean;
+  color?: string;
 };
 
 type ReflowLine = { items: ReflowItem[]; x: number; top: number; width: number; height: number; centered: boolean; color: string };
@@ -33,7 +34,8 @@ function textRuns(item: ReflowItem, color: string) {
       boldComplexScript: item.bold,
       italics: item.italic,
       italicsComplexScript: item.italic,
-      color,
+      color: item.color ?? color,
+      rightToLeft: isRtlText(segment.text),
       language: { value: wordLanguageForText(segment.text), eastAsia: wordLanguageForText(segment.text), bidirectional: wordLanguageForText(segment.text) },
       noProof: true,
     });
@@ -145,10 +147,12 @@ export function detectReliableTables(lines: ReflowLine[], shapes: ReflowShape[])
     .sort((a, b) => a.top - b.top || a.x - b.x);
 }
 
-function createEditableTable(table: ReliableTable, lines: ReflowLine[], leftBoundary = table.x) {
+function createEditableTable(table: ReliableTable, lines: ReflowLine[], leftBoundary = table.x, anchored = false) {
   const border = { style: BorderStyle.SINGLE, color: table.color, size: Math.max(1, Math.round(table.strokeWidth * 8)) };
   const columnWidths = table.xs.slice(1).map((x, index) => Math.max(1, Math.round((x - table.xs[index]) * 20)));
   return new Table({
+    layout: TableLayoutType.FIXED,
+    float: anchored ? { horizontalAnchor: "page", verticalAnchor: "page", absoluteHorizontalPosition: Math.round(table.x * 20), absoluteVerticalPosition: Math.round(table.top * 20), overlap: "overlap", leftFromText: 0, rightFromText: 0, topFromText: 0, bottomFromText: 0 } : undefined,
     width: { size: columnWidths.reduce((sum, width) => sum + width, 0), type: WidthType.DXA },
     indent: { size: Math.max(0, Math.round((table.x - leftBoundary) * 20)), type: WidthType.DXA },
     columnWidths,
@@ -166,17 +170,63 @@ function createEditableTable(table: ReliableTable, lines: ReflowLine[], leftBoun
         }).sort((a, b) => a.top - b.top || a.x - b.x);
         return new TableCell({
           width: { size: columnWidths[columnIndex], type: WidthType.DXA },
-          verticalAlign: VerticalAlign.CENTER,
-          margins: { top: 0, right: 40, bottom: 0, left: 40 },
-          children: cellLines.length ? cellLines.map((line) => new Paragraph({
-            alignment: line.centered ? "center" : "left",
-            spacing: { before: 0, after: 0, line: Math.max(1, Math.round(line.height * 20)), lineRule: "exact" },
+          verticalAlign: VerticalAlign.TOP,
+          margins: { top: 0, right: 0, bottom: 0, left: 0 },
+          children: cellLines.length ? cellLines.map((line, index) => new Paragraph({
+            bidirectional: isRtlText(line.items.map(item => item.text).join("")),
+            alignment: isRtlText(line.items.map(item => item.text).join("")) ? "right" : "left",
+            indent: { left: Math.max(0, Math.round((line.x - left) * 20)), right: Math.max(0, Math.round((right - line.x - line.width) * 20)) },
+            spacing: { before: Math.max(0, Math.round((line.top - (index ? cellLines[index - 1].top + cellLines[index - 1].height : top)) * 20)), after: 0, line: Math.max(1, Math.round(line.height * 20)), lineRule: "atLeast" },
             children: line.items.flatMap((item) => textRuns(item, line.color)),
           })) : [new Paragraph({ spacing: { before: 0, after: 0 } })],
         });
       }),
     })),
   });
+}
+
+/** Partition at cell boundaries BEFORE assigning ownership. A PDF text line
+ * can span multiple cells; assigning its midpoint loses or merges cell text. */
+function partitionTableLines(lines: ReflowLine[], tables: ReliableTable[]) {
+  return lines.flatMap(line => {
+    const groups = new Map<string, ReflowItem[]>();
+    for (const item of line.items) {
+      const x = (item.x ?? line.x) + (item.width ?? line.width) / 2;
+      const y = line.top + line.height / 2;
+      const tableIndex = tables.findIndex(table => x > table.x && x < table.xs.at(-1)! && y > table.top && y < table.ys.at(-1)!);
+      const table = tables[tableIndex];
+      const column = table ? table.xs.findIndex((right, index) => index > 0 && x < right) : -1;
+      const key = `${tableIndex}:${column}`;
+      groups.set(key, [...(groups.get(key) ?? []), item]);
+    }
+    return [...groups.values()].map(items => {
+      const x = Math.min(...items.map(item => item.x ?? line.x));
+      const right = Math.max(...items.map(item => (item.x ?? line.x) + (item.width ?? line.width)));
+      return { ...line, items, x, width: right - x };
+    });
+  });
+}
+
+/** Independent page frames avoid cumulative paragraph/table metric drift.
+ * Each non-table line owns one editable frame; each grid owns one Word table. */
+export function createAnchoredPageContent(page: StructuredPage) {
+  const tables = detectReliableTables(page.lines, page.shapes);
+  const lines = partitionTableLines(page.lines, tables);
+  const children: Array<Paragraph | Table> = tables.map(table => createEditableTable(table, lines, table.x, true));
+  for (const line of lines.filter(line => !tables.some(table => lineInsideTable(line, table)))) {
+    const rtl = isRtlText(line.items.map(item => item.text).join(""));
+    const items = [...line.items].sort((a, b) => rtl ? (b.x ?? line.x) - (a.x ?? line.x) : (a.x ?? line.x) - (b.x ?? line.x));
+    children.push(new Paragraph({
+      frame: { type: "absolute", position: { x: Math.round(line.x * 20), y: Math.round(line.top * 20) },
+        width: Math.max(1, Math.round((line.width + 2) * 20)), height: Math.max(1, Math.round(line.height * 20)),
+        anchor: { horizontal: "page", vertical: "page" }, wrap: "none", rule: HeightRule.ATLEAST },
+      bidirectional: rtl,
+      alignment: rtl ? "right" : "left",
+      spacing: { before: 0, after: 0, line: Math.max(1, Math.round(line.height * 20)), lineRule: "atLeast" },
+      children: items.flatMap(item => textRuns(item, line.color)),
+    }));
+  }
+  return children;
 }
 
 const noBorder = { style: BorderStyle.NONE, color: "FFFFFF", size: 0 };

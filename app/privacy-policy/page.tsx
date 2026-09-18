@@ -71,10 +71,10 @@ export default function PrivacyPolicyPage() {
         <p>If you contact us through a contact form or email, we may collect your name, email address, subject, and message.</p>
       </InfoCard>
 
-      <InfoCard title="Files Uploaded to PDFRoot">
-        <p><BrandText styled /> tools are created to process PDF and image files for user convenience. Uploaded files may be used only for the purpose of completing the selected tool action, such as converting, compressing, resizing, cropping, merging, or editing files.</p>
-        <p>We do not ask users to upload unnecessary personal documents. Users should avoid uploading highly sensitive personal information unless required for their own task.</p>
-        <p>If file processing is handled directly in the browser, your files may not be uploaded to our server. If any tool requires server-side processing, files should be used only for processing and should not be stored permanently.</p>
+      <InfoCard title="How file processing works">
+        <p>The core PDF and image tools currently process selected files in your browser. For those workflows, the selected file is not uploaded to a PDFRoot server for processing. This includes the standard merge, split, compress, conversion, crop, resize and signature-preparation tools.</p>
+        <p>The optional AI outfit feature in Passport Photo Maker is different: when that option is available and you choose it, the selected photo and edit mask are sent through PDFRoot&apos;s server to OpenAI&apos;s image editing API to create the requested image. The feature is labelled as an AI option before it is used.</p>
+        <p>PDFRoot does not make a claim that files are automatically deleted after a set period. Avoid uploading highly sensitive documents unless the task genuinely requires it, and do not use the AI feature for photos you do not want sent to its third-party processor.</p>
       </InfoCard>
 
       <InfoCard title="How We Use Information">
@@ -122,7 +122,7 @@ export default function PrivacyPolicyPage() {
       </InfoCard>
 
       <InfoCard title="Advertising">
-        <p><BrandText styled /> may display advertisements in the future. Advertising partners may use cookies or similar technologies to show relevant ads and measure ad performance.</p>
+        <p><BrandText styled /> loads the Google AdSense script in preparation for advertising. Ads may be displayed after the site is approved. Advertising partners may use cookies or similar technologies to show relevant ads and measure ad performance.</p>
         <p><BrandText styled /> does not control how third-party advertisers collect or use data. Users should review the privacy policies of those advertising partners for more information.</p>
       </InfoCard>
 

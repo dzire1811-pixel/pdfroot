@@ -22,6 +22,9 @@ test("reconstructs Gujarati by grapheme and geometry without artificial word spa
   expect(unicodeGraphemeClusters("પ્રકારમાં", "gu")).toEqual(["પ્ર", "કા", "ર", "માં"]);
   expect(repairIndicText("મ ાં")).toBe("માં");
   expect(repairIndicText("સ ા ર ાં શ")).toBe("સારાંશ");
+  expect(repairIndicText("સ ર ક")).toBe("સ ર ક");
+  expect(repairIndicText("ગુજરાતી લખાણ")).toBe("ગુજરાતી લખાણ");
+  expect(repairIndicText("English text 123")).toBe("English text 123");
 
   const fragments = ["પ્ર", "કા", "ર", "માં", "સા", "રાં", "શ"].map((text, index) => ({
     text,

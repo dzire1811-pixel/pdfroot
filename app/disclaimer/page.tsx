@@ -35,7 +35,7 @@ const sections = [
   {
     title: "File Processing Disclaimer",
     content:
-      "Users are responsible for the files they upload and the final output they download. PDFRoot may process files in the browser or through available processing tools. Do not upload illegal, harmful, sensitive, private, or confidential files unless it is necessary for your own task.",
+      "Users are responsible for the files they select and the final output they download. Core PDF and image workflows process files in the browser. The optional Passport Photo Maker AI outfit feature uses an external image-processing service when selected. Do not use any online tool for illegal, harmful, sensitive, private or confidential files unless necessary.",
   },
   {
     title: "Government Form Disclaimer",

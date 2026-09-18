@@ -29,6 +29,7 @@ const ResizeImageTool = dynamic(() => import("@/components/ResizeImageTool").the
 const JpgToPdfTool = dynamic(() => import("@/components/JpgToPdfTool").then((module) => module.JpgToPdfTool), { loading: ToolLoadingFallback });
 const PdfToJpgTool = dynamic(() => import("@/components/PdfToJpgTool").then((module) => module.PdfToJpgTool), { loading: ToolLoadingFallback });
 const MergePdfTool = dynamic(() => import("@/components/MergePdfTool").then((module) => module.MergePdfTool), { loading: ToolLoadingFallback });
+const EditPdfTool = dynamic(() => import("@/components/editPdf/EditPdfTool").then((module) => module.EditPdfTool), { loading: ToolLoadingFallback, ssr: false });
 const CompressPdfTool = dynamic(() => import("@/components/CompressPdfTool").then((module) => module.CompressPdfTool), { loading: ToolLoadingFallback });
 const SplitPdfTool = dynamic(() => import("@/components/SplitPdfTool").then((module) => module.SplitPdfTool), { loading: ToolLoadingFallback });
 const RotatePdfTool = dynamic(() => import("@/components/RotatePdfTool").then((module) => module.RotatePdfTool), { loading: ToolLoadingFallback });
@@ -79,7 +80,7 @@ function isImageToolResetLabel(label: string) {
   return label === "clear" || label === "clear all" || label === "start over" || /\banother\b/.test(label);
 }
 
-export function ToolRenderer({ slug, name, description }: { slug: string; name: string; description: string }) {
+export function ToolRenderer({ slug, name, description, onEditPdfEditorActiveChange, onEditPdfResultActiveChange }: { slug: string; name: string; description: string; onEditPdfEditorActiveChange?: (active: boolean) => void; onEditPdfResultActiveChange?: (active: boolean) => void }) {
   const [resetVersion, setResetVersion] = useState(0);
   const [isInteractiveToolReady, setIsInteractiveToolReady] = useState(
     () => !INTERACTION_DEFERRED_SLUGS.has(slug),
@@ -134,6 +135,7 @@ export function ToolRenderer({ slug, name, description }: { slug: string; name: 
   if (slug === "png-to-pdf") return <JpgToPdfTool pngOnly />;
   if (slug === "pdf-to-jpg") return <PdfToJpgTool />;
   if (slug === "merge-pdf") return <MergePdfTool />;
+  if (slug === "edit-pdf") return <EditPdfTool onEditorActiveChange={onEditPdfEditorActiveChange} onResultActiveChange={onEditPdfResultActiveChange} />;
   if (slug === "compress-pdf") return <CompressPdfTool />;
   if (slug === "split-pdf") return <SplitPdfTool />;
   if (slug === "rotate-pdf") return <RotatePdfTool />;

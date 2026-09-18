@@ -131,6 +131,11 @@ export default function AboutPage() {
         </p>
       </InfoCard>
 
+      <InfoCard title="Founder">
+        <p><BrandText styled /> was founded by Anand Joshi. The project focuses on making practical PDF and image preparation easier to understand, especially when a user needs to check a file&apos;s format, dimensions or size before an upload.</p>
+        <p>PDFRoot is an independent tool website. It is not an official government portal and does not replace the instructions published by an application or recruitment authority.</p>
+      </InfoCard>
+
       <InfoCard title="Who Can Use PDFRoot?">
         <p><BrandText styled /> is designed for people who need quick, clean, mobile-friendly PDF and image tools without technical complexity.</p>
         <InfoBulletGrid items={users} />

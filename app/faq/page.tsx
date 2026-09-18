@@ -70,12 +70,12 @@ const faqs = [
   {
     question: "Are uploaded files safe?",
     answer:
-      "PDFRoot is designed with user privacy and safe file handling in mind. Many tools process files in the browser where possible. Users should still avoid uploading highly sensitive or confidential files unless necessary.",
+      "Core PDF and image workflows process selected files in the browser. The optional AI outfit feature in Passport Photo Maker uses a third-party image service when you choose it. Avoid using any online tool for highly sensitive files unless necessary.",
   },
   {
     question: "Does PDFRoot store my uploaded files?",
     answer:
-      "PDFRoot tools are designed for processing files for the selected action. Browser-based tools may not upload files to a server. If any tool requires server-side processing in the future, files should be used only for processing and should not be stored permanently.",
+      "For the core browser-based tools, selected files are not uploaded to a PDFRoot server for processing. The optional Passport Photo Maker AI outfit feature sends the selected image to OpenAI's image API when you choose that feature. PDFRoot does not claim automatic deletion after a fixed period.",
   },
   {
     question: "Is PDFRoot an official government website?",

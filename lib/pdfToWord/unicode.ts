@@ -1,5 +1,5 @@
-export type WordTextLanguage = "en-US" | "gu-IN" | "hi-IN";
-export type WordScript = "latin" | "devanagari" | "gujarati" | "common";
+export type WordTextLanguage = "en-US" | "gu-IN" | "hi-IN" | "ar-SA" | "he-IL" | "zh-CN" | "ja-JP" | "ko-KR";
+export type WordScript = "latin" | "devanagari" | "gujarati" | "arabic" | "hebrew" | "han" | "kana" | "hangul" | "common";
 
 const GUJARATI = /[\u0A80-\u0AFF]/u;
 const DEVANAGARI = /[\u0900-\u097F\uA8E0-\uA8FF]/u;
@@ -49,10 +49,12 @@ function collapseFragmentedGujaratiTokens(text: string) {
 
 /** Repairs only structurally impossible Indic spacing; it never transliterates text. */
 export function repairIndicText(text: string) {
-  const normalized = text.normalize("NFC")
-    .replace(/\s+(?=\p{Mark})/gu, "")
-    .replace(new RegExp(`([${GUJARATI_VIRAMA}${DEVANAGARI_VIRAMA}])\\s+(?=[\\p{Script=Gujarati}\\p{Script=Devanagari}])`, "gu"), "$1");
-  return collapseFragmentedGujaratiTokens(normalized).normalize("NFC");
+  const repaired = text
+    .replace(/([\p{Script=Gujarati}\p{Script=Devanagari}])[ \t]+(?=\p{Mark})/gu, "$1")
+    .replace(new RegExp(`([${GUJARATI_VIRAMA}${DEVANAGARI_VIRAMA}])[ \\t]+(?=[\\p{Script=Gujarati}\\p{Script=Devanagari}])`, "gu"), "$1");
+  // Single-letter words alone are not evidence of a damaged mapping.
+  if (repaired === text) return text;
+  return collapseFragmentedGujaratiTokens(repaired).normalize("NFC");
 }
 
 export type GujaratiTextIssue = "replacement-character" | "private-use-character" | "missing-glyph-box" | "isolated-combining-mark" | "space-before-combining-mark" | "excessive-single-grapheme-fragments";
@@ -149,12 +151,22 @@ export function reconstructGujaratiFragments<T extends PositionedGujaratiFragmen
 export function wordLanguageForText(text: string): WordTextLanguage {
   if (GUJARATI.test(text)) return "gu-IN";
   if (DEVANAGARI.test(text)) return "hi-IN";
+  if (/\p{Script=Arabic}/u.test(text)) return "ar-SA";
+  if (/\p{Script=Hebrew}/u.test(text)) return "he-IL";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text)) return "ja-JP";
+  if (/\p{Script=Hangul}/u.test(text)) return "ko-KR";
+  if (/\p{Script=Han}/u.test(text)) return "zh-CN";
   return "en-US";
 }
 
 export function wordScriptForCharacter(character: string): WordScript {
   if (GUJARATI.test(character)) return "gujarati";
   if (DEVANAGARI.test(character)) return "devanagari";
+  if (/\p{Script=Arabic}/u.test(character)) return "arabic";
+  if (/\p{Script=Hebrew}/u.test(character)) return "hebrew";
+  if (/\p{Script=Han}/u.test(character)) return "han";
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(character)) return "kana";
+  if (/\p{Script=Hangul}/u.test(character)) return "hangul";
   if (/\p{Script=Latin}/u.test(character)) return "latin";
   return "common";
 }
@@ -206,11 +218,14 @@ export function compatibleWordFont(sourceFont: string, pdfFontName: string, text
     .trim();
   const usableSource = source && !/^(?:sans-serif|serif|monospace|g_d\d+_f\d+)$/i.test(source);
   const script = wordScriptForCharacter([...text].find((character) => wordScriptForCharacter(character) !== "common") ?? "A");
-  if (usableSource && reliableForScript(source, script) && (script === "latin" || sourceIsSystemFont)) return source;
+  if (usableSource && (sourceIsSystemFont || reliableForScript(source, script) && script === "latin")) return source;
 
   // Nirmala UI is Word's broadly available Indic fallback on Windows. It is
   // selected only when PDF.js cannot expose a usable original family name.
   if (GUJARATI.test(text) || DEVANAGARI.test(text)) return "Nirmala UI";
+  if (script === "han") return "Microsoft YaHei";
+  if (script === "kana") return "Yu Gothic";
+  if (script === "hangul") return "Malgun Gothic";
   if (/courier|mono/i.test(sourceFont)) return "Courier New";
   if (/times/i.test(sourceFont) || /^serif$/i.test(sourceFont.trim())) return "Times New Roman";
   if (/courier|mono/i.test(pdfFontName)) return "Courier New";
@@ -225,8 +240,14 @@ export function wordFontSlots(font: string, text: string) {
     hAnsi: font,
     eastAsia: font,
     cs: font,
-    hint: language === "en-US" ? "default" : "cs",
+    hint: ["zh-CN", "ja-JP", "ko-KR"].includes(language) ? "eastAsia" : language === "en-US" ? "default" : "cs",
   } as const;
+}
+
+/** Unicode strings from PDF.js are logical; never reverse their characters. */
+export function isRtlText(text: string) {
+  const firstLetter = [...text].find(character => /\p{Letter}/u.test(character));
+  return Boolean(firstLetter && /[\p{Script=Arabic}\p{Script=Hebrew}]/u.test(firstLetter));
 }
 
 export function hasReliableUnicodeMapping(text: string) {

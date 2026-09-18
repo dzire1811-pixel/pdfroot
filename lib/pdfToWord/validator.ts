@@ -13,6 +13,7 @@ export type ValidatablePage = {
     unicodeConfidence: number;
   };
   ocr?: { confidence: number; lowConfidenceWords: number };
+  warnings?: string[];
 };
 
 export type ConversionQualityReport = {
@@ -30,12 +31,13 @@ export type ConversionQualityReport = {
   issues: string[];
 };
 
-const UNSAFE_CHARACTER = /[\uFFFD\u25A0\u25A1\u25AF\u2610\uE000-\uF8FF]/u;
+// Squares and checkboxes can be intentional source characters.
+const UNSAFE_CHARACTER = /[\uFFFD\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/u;
 const ORPHAN_MARK = /(?:^|\s)\p{Mark}/u;
 
 export function evaluateConversionQuality(pages: ValidatablePage[]): ConversionQualityReport {
   const text = pages.flatMap((page) => page.lines.flatMap((line) => line.items.map((item) => item.text))).join(" ");
-  const issues: string[] = [];
+  const issues: string[] = [...new Set(pages.flatMap(page => page.warnings ?? []))];
   const unsafe = UNSAFE_CHARACTER.test(text);
   const orphanMark = ORPHAN_MARK.test(text);
   if (unsafe) issues.push("Output contains replacement, private-use, or missing-glyph placeholder characters.");
@@ -58,7 +60,7 @@ export function evaluateConversionQuality(pages: ValidatablePage[]): ConversionQ
   const unicodeConfidence = pages.length
     ? pages.reduce((sum, page) => sum + (page.analysis?.unicodeConfidence ?? 1), 0) / pages.length
     : 0;
-  if (unicodeConfidence < 0.98) issues.push("The source contains incomplete or corrupt Unicode mappings; unsafe text was preserved visually.");
+  if (unicodeConfidence < 0.98) issues.push("The source contains incomplete Unicode mappings. Recovered text requires comparison with the PDF.");
   const signals = { textIntegrity, glyphCoverage, layoutPreservation, tablePreservation, imagePreservation, pageGeometry, ocrConfidence };
   const score = Math.round((textIntegrity * 0.25 + glyphCoverage * 0.2 + layoutPreservation * 0.15
     + tablePreservation * 0.1 + imagePreservation * 0.1 + pageGeometry * 0.1 + ocrConfidence * 0.1) * 100);
@@ -91,8 +93,12 @@ export function validateConvertedPages(pages: ValidatablePage[], expectedPages: 
 }
 
 function xmlText(xml: string) {
-  if (typeof DOMParser === "undefined") return xml.replace(/<[^>]+>/g, "");
-  return new DOMParser().parseFromString(xml, "application/xml").documentElement.textContent ?? "";
+  // Only visible Word text nodes, never document metadata, drawing paths or
+  // instructions. Entity decoding is also required in Node-based validation.
+  return [...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)].map(match => match[1]
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(Number(decimal)))
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&")).join("");
 }
 
 function semanticText(value: string) {
@@ -120,4 +126,10 @@ export function validateGeneratedDocumentXml(xml: string, pages: ValidatablePage
     .filter(Boolean);
   const missing = expectedSegments.find((segment) => !comparableOutput.includes(segment));
   if (missing) throw new Error("The generated Word file did not preserve the reconstructed source text exactly.");
+  const counts = (text: string) => [...text].reduce((map, character) => map.set(character, (map.get(character) ?? 0) + 1), new Map<string, number>());
+  const expectedCounts = counts(expectedSegments.join(""));
+  const outputCounts = counts(comparableOutput);
+  if (expectedCounts.size !== outputCounts.size || [...expectedCounts].some(([character, count]) => outputCounts.get(character) !== count)) {
+    throw new Error("The generated Word file contains missing, duplicated, or invented text.");
+  }
 }

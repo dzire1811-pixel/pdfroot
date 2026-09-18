@@ -3,24 +3,25 @@ import { SectionHeading } from "@/components/Brand";
 
 const features = [
   {
-    title: "Files Processed Locally",
+    title: "Browser-based core tools",
+    description: "Core PDF and image workflows process selected files in the browser.",
     icon: LockKeyhole,
   },
   {
-    title: "Fast & Free PDF & Image Tools",
+    title: "Focused PDF & Image Tools",
     icon: Zap,
   },
   {
-    title: "Works on Mobile & Desktop",
+    title: "Use on Mobile & Desktop",
     icon: Smartphone,
   },
   {
-    title: "Perfect for Government Forms & Document Uploads",
+    title: "Prepare files for forms and uploads",
     icon: FileCheck2,
   },
   {
-    title: "Secure File Processing",
-    description: "Your files are processed securely and are used only for the selected tool operation.",
+    title: "Check each tool's privacy note",
+    description: "Some optional features use a third-party service and say so before processing begins.",
     icon: ShieldCheck,
   },
 ];

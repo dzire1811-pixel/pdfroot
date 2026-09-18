@@ -2,9 +2,9 @@ import { FileCheck2, Lock, Smartphone, UserCheck } from "lucide-react";
 
 const points = [
   { icon: UserCheck, title: "No Registration", desc: "Start using any tool instantly" },
-  { icon: Lock, title: "Secure Processing", desc: "Encrypted SSL on every upload" },
+  { icon: Lock, title: "Browser-based core tools", desc: "Core PDF and image workflows process selected files in the browser" },
   { icon: FileCheck2, title: "Government-Form Ready", desc: "Exact KB sizing built in" },
-  { icon: Smartphone, title: "Works on Mobile", desc: "Built mobile-first for any device" },
+  { icon: Smartphone, title: "Works on Mobile", desc: "Designed for current mobile and desktop browsers" },
 ];
 
 export function Stats() {

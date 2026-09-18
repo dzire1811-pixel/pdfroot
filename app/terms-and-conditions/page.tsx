@@ -45,7 +45,7 @@ const sections = [
   {
     title: "File Upload and Processing",
     content:
-      "PDFRoot tools may require you to upload PDF, image, or document files. Uploaded files should be used only for the selected tool action. Some tools may process files directly in your browser, while other tools may require server-side processing if added in the future.",
+      "Core PDF and image workflows process selected files directly in your browser. The optional AI outfit feature in Passport Photo Maker sends the selected photo to an external image-processing service only when you choose that feature. Review the Privacy Policy before using that option.",
   },
   {
     title: "User Responsibility",

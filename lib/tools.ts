@@ -160,6 +160,13 @@ export const pdfTools: Tool[] = [
     description: "Remove supported PDF restrictions when you have permission.",
     keywords: ["unlock pdf", "remove pdf password"],
   },
+  {
+    name: "Edit PDF Online",
+    slug: "edit-pdf",
+    category: "PDF Tools",
+    description: "Add text, images, signatures, drawings, highlights and whiteout to your PDF in your browser.",
+    keywords: ["edit pdf online", "add text to pdf", "add signature to pdf", "pdf editor"],
+  },
 ];
 
 export const imageTools: Tool[] = [
