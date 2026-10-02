@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 
-const downloadUrl = process.env.NEXT_PUBLIC_PDFROOT_DESKTOP_INSTALLER_URL;
+const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.2/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.2-x64.exe";
 const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.2-x64.exe";
 const installerSha256 = "BA4E337514D9DBFC09F97733F3207D788EF06EF1616511B8E46E710DCBB45C95";
 
