@@ -7,7 +7,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const siteUrl = "https://www.pdfroot.com";
   const now = new Date();
 
-  const staticRoutes = ["", "/about", "/faq", "/blog", "/contact", "/privacy-policy", "/terms-and-conditions", "/disclaimer", "/tools"];
+  const staticRoutes = ["", "/about", "/faq", "/blog", "/contact", "/desktop-pro", "/privacy-policy", "/terms-and-conditions", "/disclaimer", "/tools"];
   // Hidden experimental/optional tools stay available at their URL but are not
   // promoted as indexable destination pages until they are ready for listings.
   const toolRoutes = filterVisibleTools(tools).map((tool) => `/${tool.slug}`);
