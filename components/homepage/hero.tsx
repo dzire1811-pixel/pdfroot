@@ -44,6 +44,9 @@ export function Hero() {
           <p className="mt-4 hidden max-w-[550px] text-left text-sm leading-relaxed text-zinc-600 sm:block">
             Core PDF and image workflows run in your browser <span className="text-zinc-500">|</span> Review before upload <span className="text-zinc-500">|</span> Works on Mobile &amp; Desktop
           </p>
+          <Link href="/desktop-pro" prefetch={false} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary underline decoration-primary/40 underline-offset-4 transition hover:decoration-primary">
+            Get PDFRoot Desktop Pro for Windows <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </div>
 
         <div className="pdfroot-hero-artwork relative mx-auto flex w-full max-w-[760px] items-center justify-center overflow-visible lg:translate-x-6" aria-hidden="true">
