@@ -18,6 +18,7 @@ export function HomepageSiteFooter({ pdfTools, imageTools, governmentTools }: { 
         { label: "Blog", href: "/blog" },
         { label: "Contact Us", href: "/contact" },
         { label: "FAQ", href: "/faq" },
+        { label: "Desktop Pro for Windows", href: "/desktop-pro" },
       ],
     },
     {
