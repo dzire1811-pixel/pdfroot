@@ -47,6 +47,7 @@
     "onnxruntime-web": "^1.21.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.0.227",
+    "pg": "^8.23.1",
     "pptxgenjs": "^4.0.1",
     "qpdf-wasm": "^0.1.0",
     "react": "^19.0.0",
@@ -58,6 +59,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.5",
+    "@types/pg": "^8.23.1",
     "@types/pngjs": "6.0.5",
     "@types/react": "^19.0.4",
     "@types/react-dom": "^19.0.2",
