@@ -3,6 +3,13 @@ import crypto from "node:crypto";
 export const DAY_MS = 86_400_000;
 export const DEVICE_RE = /^[0-9A-F]{32}$/;
 
+export function assertKeyMode(keyId: string, mode: string): void {
+  if (mode !== "test" && mode !== "live") throw new Error("PAYMENT_MODE must be test or live");
+  if (!keyId.startsWith(mode === "test" ? "rzp_test_" : "rzp_live_")) {
+    throw new Error("Razorpay key does not match PAYMENT_MODE");
+  }
+}
+
 export type Checkout = {
   id: string; device_hash: string; customer_name: string; amount: number;
   link_id: string | null; state: string;

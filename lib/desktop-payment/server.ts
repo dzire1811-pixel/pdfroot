@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { Pool } from "pg";
-import { capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
+import { assertKeyMode, capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
 
 type Config = { price: number; keyId: string; keySecret: string; webhookSecret: string; privateKey: string };
 let pool: Pool | undefined;
@@ -10,6 +10,8 @@ function config(): Config {
   for (const name of required) if (!process.env[name]) throw new Error(`${name} is not configured`);
   const price = Number(process.env.MONTHLY_PRICE_PAISE);
   if (!Number.isSafeInteger(price) || price < 100) throw new Error("MONTHLY_PRICE_PAISE is invalid");
+  // A missing mode means Test Mode; Live keys require an explicit release decision.
+  assertKeyMode(process.env.RAZORPAY_KEY_ID!, process.env.PAYMENT_MODE || "test");
   const privateKey = process.env.LICENSE_PRIVATE_KEY_PEM!.replace(/\\n/g, "\n");
   if (crypto.createPrivateKey(privateKey).asymmetricKeyType !== "ed25519") throw new Error("Expected an Ed25519 signing key");
   return { price, privateKey, keyId: process.env.RAZORPAY_KEY_ID!, keySecret: process.env.RAZORPAY_KEY_SECRET!, webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET! };

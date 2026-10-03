@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
-import { capturedPaymentId, DAY_MS, licenseForPayment, signedWebhook } from "../lib/desktop-payment/core.ts";
+import { assertKeyMode, capturedPaymentId, DAY_MS, licenseForPayment, signedWebhook } from "../lib/desktop-payment/core.ts";
+
+test("preview payment mode refuses accidental live keys", () => {
+  assert.doesNotThrow(() => assertKeyMode("rzp_test_example", "test"));
+  assert.throws(() => assertKeyMode("rzp_live_example", "test"));
+  assert.throws(() => assertKeyMode("rzp_test_example", "live"));
+});
 
 const row = { id: "PDR" + "a".repeat(30), link_id: "plink_test123", amount: 19900,
   device_hash: "A".repeat(32), customer_name: "Test Buyer", state: "pending" };
