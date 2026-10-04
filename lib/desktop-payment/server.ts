@@ -60,7 +60,8 @@ export async function checkout(request: Request): Promise<Response> {
     method: "POST", signal: AbortSignal.timeout(12000),
     headers: { Authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ amount: cfg.price, currency: "INR", accept_partial: false, reference_id: id,
-      description: "PDFRoot Desktop Pro — 30 days", notify: { sms: false, email: false } }),
+      description: "PDFRoot Desktop Pro — 30 days", customer: { name }, notify: { sms: false, email: false },
+      callback_url: "https://www.pdfroot.com/desktop-pro/payment/complete", callback_method: "get" }),
   });
   if (!provider.ok) throw new Error("Payment provider could not create a checkout link");
   const link = await provider.json();
@@ -82,6 +83,27 @@ export async function status(request: Request): Promise<Response> {
   const hash = crypto.createHash("sha256").update(token).digest();
   if (!row || !crypto.timingSafeEqual(hash, Buffer.from(row.token_hash, "hex"))) return json(401, { error: "Invalid checkout token." });
   return json(200, { state: row.state === "paid" ? "paid" : "pending", ...(row.state === "paid" ? { code: row.code } : {}) });
+}
+
+// The browser receives Razorpay's signed callback, never the desktop checkout
+// token. Only the webhook can activate a licence; this page reads its result.
+export async function paymentConfirmation(params: Record<string, string | string[] | undefined>): Promise<"invalid" | "pending" | "active"> {
+  const one = (key: string) => typeof params[key] === "string" ? params[key] as string : "";
+  const id = one("razorpay_payment_link_reference_id");
+  const linkId = one("razorpay_payment_link_id");
+  const paymentId = one("razorpay_payment_id");
+  const status = one("razorpay_payment_link_status");
+  const signature = one("razorpay_signature");
+  if (!/^PDR[a-f0-9]{30}$/.test(id) || !/^plink_[A-Za-z0-9]{8,40}$/.test(linkId) ||
+      !/^pay_[A-Za-z0-9]{8,40}$/.test(paymentId) || status !== "paid" || !/^[a-fA-F0-9]{64}$/.test(signature)) return "invalid";
+  const cfg = config();
+  const message = `${linkId}|${id}|${status}|${paymentId}`;
+  const expected = crypto.createHmac("sha256", cfg.keySecret).update(message).digest();
+  if (!crypto.timingSafeEqual(expected, Buffer.from(signature, "hex"))) return "invalid";
+  const result = await db().query("SELECT state,payment_id FROM desktop_checkout WHERE id=$1 AND link_id=$2", [id, linkId]);
+  const row = result.rows[0];
+  if (!row) return "invalid";
+  return row.state === "paid" && row.payment_id === paymentId ? "active" : "pending";
 }
 
 export async function webhook(request: Request): Promise<Response> {
