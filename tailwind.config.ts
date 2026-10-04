@@ -5,6 +5,8 @@ const config: Config = {
     "./app/layout.tsx",
     "./app/not-found.tsx",
     "./components/AnalyticsConsent.tsx",
+    "./app/desktop-pro/page.tsx",
+    "./components/homepage/site-header.tsx",
   ],
   theme: {
     extend: {
