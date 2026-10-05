@@ -17,6 +17,9 @@ CREATE INDEX IF NOT EXISTS desktop_checkout_device_created ON desktop_checkout (
 -- Apply these ALTER statements to existing databases before enabling Beta 7.
 ALTER TABLE desktop_checkout ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 ALTER TABLE desktop_checkout ADD COLUMN IF NOT EXISTS customer_email text;
+ALTER TABLE desktop_checkout ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
+CREATE INDEX IF NOT EXISTS desktop_checkout_expiry_pending ON desktop_checkout(expires_at)
+  WHERE state='pending' AND cancelled_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS desktop_device_license (
   device_hash text PRIMARY KEY,

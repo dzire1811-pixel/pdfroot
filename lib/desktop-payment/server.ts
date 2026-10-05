@@ -55,14 +55,17 @@ export async function checkout(request: Request): Promise<Response> {
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
 
-  const expiresAt = timedCheckout ? new Date(Date.now() + 5 * 60_000) : null;
+  const checkoutStartedAt = Date.now();
+  const expiresAt = timedCheckout ? new Date(checkoutStartedAt + 5 * 60_000) : null;
   const provider = await fetch("https://api.razorpay.com/v1/payment_links", {
     method: "POST", signal: AbortSignal.timeout(12000),
     headers: { Authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ amount: cfg.price, currency: "INR", accept_partial: false, reference_id: id,
       description: "PDFRoot Shortcut Pro — 30 days", notify: { sms: false, email: false },
-      ...(expiresAt ? { expire_by: Math.floor(expiresAt.getTime() / 1000) } : {}),
-      ...(customerEmail ? { customer: { email: customerEmail } } : {}) }),
+      // Razorpay requires at least 15 minutes. Our five-minute deadline is
+      // enforced by cancellation from status polling and the expiry worker.
+      ...(expiresAt ? { expire_by: Math.floor((checkoutStartedAt + 20 * 60_000) / 1000) } : {}),
+      ...(customerEmail ? { customer: { name, email: customerEmail } } : {}) }),
   });
   if (!provider.ok) throw new Error("Payment provider could not create a checkout link");
   const link = await provider.json();
@@ -76,17 +79,66 @@ export async function checkout(request: Request): Promise<Response> {
 }
 
 export async function status(request: Request): Promise<Response> {
-  config();
+  const cfg = config();
   const id = new URL(request.url).searchParams.get("checkoutId");
   const token = request.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{40,60})$/)?.[1];
   if (!id || !/^[A-Za-z0-9_-]{1,40}$/.test(id) || !token) return json(401, { error: "Checkout token is required." });
-  const result = await db().query("SELECT token_hash,state,code,expires_at FROM desktop_checkout WHERE id=$1", [id]);
-  const row = result.rows[0];
+  const result = await db().query("SELECT id,token_hash,state,code,expires_at,link_id,cancelled_at FROM desktop_checkout WHERE id=$1", [id]);
+  let row = result.rows[0];
   const hash = crypto.createHash("sha256").update(token).digest();
   if (!row || !crypto.timingSafeEqual(hash, Buffer.from(row.token_hash, "hex"))) return json(401, { error: "Invalid checkout token." });
+  const cancellation = await cancelExpiredCheckout(cfg, row);
+  // A captured-payment webhook may commit while the provider call is running.
+  if (cancellation !== "not_due") {
+    row = (await db().query("SELECT state,code,expires_at FROM desktop_checkout WHERE id=$1", [id])).rows[0];
+  }
   const state = row.state === "paid" ? "paid" : row.expires_at && Date.now() >= new Date(row.expires_at).getTime() ? "expired" : "pending";
   return json(200, { state, ...(state === "paid" ? { code: row.code } : {}),
-    ...(row.expires_at ? { expiresAt: row.expires_at } : {}) });
+    ...(row.expires_at ? { expiresAt: row.expires_at } : {}),
+    ...(state === "expired" && cancellation === "retry" ? { cancellationPending: true } : {}) });
+}
+
+type ExpiringCheckout = { id: string; state: string; link_id: string | null; expires_at: Date | string | null; cancelled_at: Date | null };
+
+async function cancelExpiredCheckout(cfg: Config, row: ExpiringCheckout): Promise<"not_due" | "closed" | "retry"> {
+  if (row.state !== "pending" || !row.expires_at || Date.now() < new Date(row.expires_at).getTime()) return "not_due";
+  if (row.cancelled_at) return "closed";
+  if (!row.link_id || !/^plink_[A-Za-z0-9]+$/.test(row.link_id)) return "retry";
+  const url = `https://api.razorpay.com/v1/payment_links/${row.link_id}`;
+  const headers = { Authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}` };
+  try {
+    let response = await fetch(url + "/cancel", { method: "POST", headers, signal: AbortSignal.timeout(12000) });
+    // Cancellation can race a payment or another worker. Read the actual
+    // provider state before marking anything closed; a payment still needs
+    // the normal captured-payment webhook to issue its license.
+    if (!response.ok) response = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
+    if (!response.ok) return "retry";
+    const link = await response.json();
+    if (link.id !== row.link_id || !["cancelled", "expired"].includes(link.status)) return "retry";
+    await db().query("UPDATE desktop_checkout SET cancelled_at=now() WHERE id=$1 AND state='pending' AND cancelled_at IS NULL", [row.id]);
+    return "closed";
+  } catch {
+    console.error("PDFRoot payment service: checkout cancellation will be retried.");
+    return "retry";
+  }
+}
+
+export async function expireCheckouts(request: Request): Promise<Response> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || secret.length < 32) return json(503, { error: "Expiry worker is not configured." });
+  const expected = crypto.createHash("sha256").update(`Bearer ${secret}`).digest();
+  const received = crypto.createHash("sha256").update(request.headers.get("authorization") || "").digest();
+  if (!crypto.timingSafeEqual(expected, received)) return json(401, { error: "Unauthorized." });
+  const cfg = config();
+  const result = await db().query("SELECT id,state,link_id,expires_at,cancelled_at FROM desktop_checkout WHERE state='pending' AND expires_at <= now() AND cancelled_at IS NULL ORDER BY expires_at LIMIT 10");
+  let closed = 0;
+  let retry = 0;
+  for (const row of result.rows) {
+    const outcome = await cancelExpiredCheckout(cfg, row);
+    if (outcome === "closed") closed++;
+    else if (outcome === "retry") retry++;
+  }
+  return json(retry ? 503 : 200, { examined: result.rows.length, closed, retry });
 }
 
 export async function webhook(request: Request): Promise<Response> {
