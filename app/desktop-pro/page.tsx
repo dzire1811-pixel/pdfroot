@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./desktop-pro.css";
 import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
@@ -23,10 +24,18 @@ const highlights = [
   { icon: Files, title: "PDF workspace", text: "Merge, compress and convert files. Preview page order for JPG to PDF and Merge PDF." },
   { icon: FileImage, title: "Image workspace", text: "Crop, rotate and adjust images, or prepare photos for government forms." },
 ];
+const catalogPreview = [
+  { name: "Merge PDF", icon: "merge-pdf.svg" },
+  { name: "JPG to PDF", icon: "jpg-to-pdf.svg" },
+  { name: "Compress PDF", icon: "compress-pdf.svg" },
+  { name: "PDF to JPG", icon: "pdf-to-jpg.svg" },
+  { name: "Exact KB", icon: "resize-image-to-exact-kb.svg" },
+  { name: "Crop Image", icon: "crop-image.svg" },
+];
 
 export default function DesktopProPage() {
   return (
-    <div className="min-h-screen bg-[#f6f8fc] text-[#142039]">
+    <div className="desktop-pro-page min-h-screen bg-[#f6f8fc] text-[#142039]">
       <HomepageSiteHeader />
       <main>
         <section className="relative overflow-hidden bg-[#081529] px-6 py-16 text-white sm:py-20 lg:px-8">
@@ -50,13 +59,13 @@ export default function DesktopProPage() {
             </div>
             <div className="rounded-[28px] border border-white/15 bg-white/10 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.25)] backdrop-blur sm:p-6">
               <div className="flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800">
-                <span className="inline-flex items-center gap-2"><span className="h-5 w-5 rounded-md bg-[#f02138]" /> PDFRoot Desktop Pro</span>
+                <span className="inline-flex items-center gap-2"><img src="/desktop-tool-icons/pdfroot-logo.svg" alt="" width={22} height={22} /> PDFRoot Desktop Pro</span>
                 <span className="rounded-full bg-green-50 px-3 py-1 text-xs text-green-700">Auto Mode</span>
               </div>
               <div className="grid grid-cols-2 gap-3 rounded-b-xl bg-[#f8fafc] p-4 sm:grid-cols-3">
-                {["Merge PDF", "JPG to PDF", "Compress PDF", "PDF to JPG", "Exact KB", "Crop Image"].map((name, index) => (
+                {catalogPreview.map(({ name, icon }) => (
                   <div key={name} className="min-h-24 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <div className={`mb-3 grid h-8 w-8 place-items-center rounded-lg text-white ${index % 3 === 0 ? "bg-violet-600" : index % 3 === 1 ? "bg-blue-600" : "bg-emerald-600"}`}><span className="text-sm font-bold">{name.slice(0, 1)}</span></div>
+                    <img className="catalog-preview-icon" src={`/desktop-tool-icons/${icon}`} alt="" width={32} height={32} />
                     <span className="text-xs font-semibold text-slate-800 sm:text-sm">{name}</span>
                   </div>
                 ))}
