@@ -1,10 +1,9 @@
 import crypto from "node:crypto";
-import { Pool } from "pg";
+import { db } from "./db";
 import { assertKeyMode, capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
 import { accountEmail } from "./auth";
 
 type Config = { price: number; keyId: string; keySecret: string; webhookSecret: string; privateKey: string };
-let pool: Pool | undefined;
 
 function config(): Config {
   const required = ["DATABASE_URL", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "LICENSE_PRIVATE_KEY_PEM"] as const;
@@ -16,10 +15,6 @@ function config(): Config {
   const privateKey = process.env.LICENSE_PRIVATE_KEY_PEM!.replace(/\\n/g, "\n");
   if (crypto.createPrivateKey(privateKey).asymmetricKeyType !== "ed25519") throw new Error("Expected an Ed25519 signing key");
   return { price, privateKey, keyId: process.env.RAZORPAY_KEY_ID!, keySecret: process.env.RAZORPAY_KEY_SECRET!, webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET! };
-}
-
-function db(): Pool {
-  return pool ??= new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
 }
 
 function json(status: number, data: unknown) {

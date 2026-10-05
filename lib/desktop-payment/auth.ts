@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
-import { Pool } from "pg";
+import { db } from "./db";
 import { DAY_MS, DEVICE_RE, signLicense } from "./core";
 
-let pool: Pool | undefined;
-const db = () => pool ??= new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000 });
 const json = (status: number, data: unknown) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 const hash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
 const EMAIL_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[^\s@<>]{2,}$/;
