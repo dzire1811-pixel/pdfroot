@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./desktop-pro.css";
 import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
@@ -26,7 +27,7 @@ const highlights = [
 
 export default function DesktopProPage() {
   return (
-    <div className="min-h-screen bg-[#f6f8fc] text-[#142039]">
+    <div className="desktop-pro-page min-h-screen bg-[#f6f8fc] text-[#142039]">
       <HomepageSiteHeader />
       <main>
         <section className="relative overflow-hidden bg-[#081529] px-6 py-16 text-white sm:py-20 lg:px-8">
