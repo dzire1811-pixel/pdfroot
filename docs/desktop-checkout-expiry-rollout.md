@@ -9,6 +9,9 @@ References:
 - https://razorpay.com/docs/api/payments/payment-links/create-standard/
 - https://razorpay.com/docs/api/payments/payment-links/cancel-standard/
 - https://vercel.com/docs/cron-jobs/usage-and-pricing
+- https://vercel.com/docs/queues/quickstart
+- https://vercel.com/docs/queues/concepts
+- https://vercel.com/docs/queues/pricing
 
 ## Prepared implementation
 
@@ -17,6 +20,14 @@ References:
 - An authenticated status poll at or after the app deadline cancels the unpaid
   link. Confirmed closure is persisted in `desktop_checkout.cancelled_at`.
 - Failed cancellation remains retryable and is not marked as successful.
+- Each Beta 7 link gets a delayed Vercel Queue message before its URL is returned.
+  Only the checkout ID is queued. The stored Postgres deadline controls closure.
+  A failed publish withholds the URL and attempts immediate provider cancellation.
+- The private queue consumer is wired by `vercel.json`; Vercel invokes it after
+  the deadline even if the desktop app is closed. Early deliveries are retried,
+  duplicate deliveries are safe, and failed cancellation retries after 15 seconds.
+  Messages are retained for one hour with at most 50 deliveries. Each deployment
+  consumes its own messages, using its own database and payment configuration.
 - A protected worker at `/v1/internal/expire-checkouts` closes due links even
   when the desktop app has stopped polling. It accepts GET with
   `Authorization: Bearer <CRON_SECRET>`; the secret must have at least 32 characters.
@@ -25,21 +36,21 @@ References:
   license. Late confirmed payment is honored; duplicates do not extend it twice.
 - Beta 6 checkouts without an expiry remain compatible.
 
-## Deployment blockers
+## Hosted validation gates
 
-This worker endpoint is code, not a configured scheduler. A durable delayed job
-or sufficiently frequent authenticated scheduler is required before making any
-five-minute gateway-closure promise. Network latency and job delays must be
-measured. Without a running worker or desktop polling, a link may remain payable
-until its 20-minute gateway fallback; the UI deadline alone does not close it.
+The primary scheduler is now a delayed Vercel Queue job per checkout. Vercel
+authenticates the producer automatically on deployment, and the configured
+consumer has no public URL. No external scheduler account, new credential or
+paid-plan change is required by this implementation. The existing protected
+batch worker is an optional operator recovery path, not a required cron job.
 
-The current Vercel project was shown on Hobby. Its built-in cron runs at most
-daily, so it cannot provide the five-minute requirement. Do not add a once-per-
-minute Vercel cron to this project: deployment would fail on Hobby. No paid plan,
-external scheduling account, or new secret has been configured by this change.
-Prefer a delayed job per checkout rather than continuously polling an idle Neon
-database. Verify cancellation with the app closed and retry handling before
-customer release.
+Build success and local tests do not prove hosted queue delivery. Verify a real
+Test Mode link with desktop polling stopped, measure provider closure relative
+to the stored five-minute deadline, and verify retries before customer release.
+Do not promise exact-to-the-second gateway closure: delivery and provider
+network latency can delay cancellation. The provider's 20-minute expiry remains
+a fallback during an outage. Honor signed captured payments even if cancellation
+and payment raced; an unpaid/expired status alone never issues a paid license.
 
 Apply the additive schema (`cancelled_at` and its partial index) in a separate
 Preview database before testing this branch's hosted API. Do not replace the

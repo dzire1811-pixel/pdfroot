@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 export const DAY_MS = 86_400_000;
+export const PAID_DAYS = 30;
 export const DEVICE_RE = /^[0-9A-F]{32}$/;
 
 export function assertKeyMode(keyId: string, mode: string): void {
@@ -54,7 +55,7 @@ export function capturedPaymentId(event: PaymentEvent, row: Checkout): string | 
 
 export function licenseForPayment(row: Checkout, priorExpiry: string | null, paidAt: Date, privateKeyPem: string) {
   const previous = priorExpiry ? Date.parse(priorExpiry) : 0;
-  const expiresAt = new Date(Math.max(paidAt.getTime(), Number.isFinite(previous) ? previous : 0) + 30 * DAY_MS).toISOString();
+  const expiresAt = new Date(Math.max(paidAt.getTime(), Number.isFinite(previous) ? previous : 0) + PAID_DAYS * DAY_MS).toISOString();
   const code = signLicense({ version: 1, issuer: "PDFRoot", plan: "monthly", source: "razorpay-payment",
     licenseId: `PDR-${crypto.randomBytes(7).toString("hex").toUpperCase()}`,
     customerName: row.customer_name, deviceHash: row.device_hash, issuedAt: paidAt.toISOString(),

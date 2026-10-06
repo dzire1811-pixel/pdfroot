@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { db } from "./db";
 import { DAY_MS, DEVICE_RE, signLicense } from "./core";
+import { TRIAL_DAYS, TRIAL_NAME, PAID_DAYS, PAID_NAME, monthlyPricePaise } from "./plan";
+import { enqueueTrialEmail, deliverEmailEvent } from "./lifecycle-email";
 
 const json = (status: number, data: unknown) => Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 const hash = (value: string) => crypto.createHash("sha256").update(value).digest("hex");
@@ -120,12 +122,15 @@ export async function startTrial(request: Request): Promise<Response> {
       return json(409, { error: "The 14-day trial has already been used for this email or computer." });
     }
     const issuedAt = new Date();
-    const expiresAt = new Date(issuedAt.getTime() + 14 * DAY_MS);
+    const expiresAt = new Date(issuedAt.getTime() + TRIAL_DAYS * DAY_MS);
     const code = signLicense({ version: 1, issuer: "PDFRoot", plan: "trial", source: "verified-email-trial",
       licenseId: `TRIAL-${crypto.randomBytes(7).toString("hex").toUpperCase()}`,
       deviceHash: device, issuedAt: issuedAt.toISOString(), expiresAt: expiresAt.toISOString(), features: ["all-tools"] }, cfg.privateKey);
-    await client.query("INSERT INTO desktop_trial(email,device_hash,code,expires_at) VALUES($1,$2,$3,$4)", [email, device, code, expiresAt]);
+    await client.query("INSERT INTO desktop_trial(email,device_hash,code,started_at,expires_at) VALUES($1,$2,$3,$4,$5)", [email, device, code, issuedAt, expiresAt]);
+    await enqueueTrialEmail(client, { email, device, startedAt: issuedAt, expiresAt });
     await client.query("COMMIT");
+    try { await deliverEmailEvent(`trial:${email}`); }
+    catch { console.error("PDFRoot lifecycle email: trial welcome pending retry."); }
     return json(201, { code, expiresAt: expiresAt.toISOString() });
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
@@ -139,4 +144,33 @@ export async function accountLicense(request: Request): Promise<Response> {
   if (!device || !DEVICE_RE.test(device)) return json(400, { error: "Invalid PDFRoot device ID." });
   const result = await db().query("SELECT d.code,d.expires_at FROM desktop_device_license d JOIN desktop_checkout c ON c.device_hash=d.device_hash AND c.state='paid' AND c.customer_email=$1 WHERE d.device_hash=$2 ORDER BY c.paid_at DESC LIMIT 1", [email, device]);
   return json(200, result.rows[0] ? { state: "active", code: result.rows[0].code, expiresAt: result.rows[0].expires_at } : { state: "none" });
+}
+
+export async function accountSummary(request: Request): Promise<Response> {
+  const email = await accountEmail(request);
+  if (!email) return json(401, { error: "Sign in again to continue." });
+  const device = new URL(request.url).searchParams.get("deviceId")?.toUpperCase();
+  if (!device || !DEVICE_RE.test(device)) return json(400, { error: "Invalid PDFRoot device ID." });
+  const paid = await db().query(
+    `SELECT d.expires_at,c.paid_at,c.amount FROM desktop_device_license d JOIN desktop_checkout c
+     ON c.device_hash=d.device_hash AND c.customer_email=$1 AND c.state='paid'
+     WHERE d.device_hash=$2 AND d.expires_at IS NOT NULL ORDER BY c.paid_at DESC LIMIT 1`,[email,device]);
+  const trial = await db().query("SELECT started_at,expires_at FROM desktop_trial WHERE email=$1 AND device_hash=$2",[email,device]);
+  const selected = paid.rows[0] && new Date(paid.rows[0].expires_at).getTime() > Date.now()
+    ? { type: "paid", plan: PAID_NAME, start: paid.rows[0].paid_at, end: paid.rows[0].expires_at, amountPaise: paid.rows[0].amount }
+    : trial.rows[0] && new Date(trial.rows[0].expires_at).getTime() > Date.now()
+      ? { type: "trial", plan: TRIAL_NAME, start: trial.rows[0].started_at, end: trial.rows[0].expires_at, amountPaise: 0 }
+      : paid.rows[0]
+        ? { type: "paid", plan: PAID_NAME, start: paid.rows[0].paid_at, end: paid.rows[0].expires_at, amountPaise: paid.rows[0].amount }
+        : trial.rows[0]
+          ? { type: "trial", plan: TRIAL_NAME, start: trial.rows[0].started_at, end: trial.rows[0].expires_at, amountPaise: 0 }
+          : null;
+  const now = new Date();
+  return json(200, { email, serverTime: now.toISOString(), availablePlan: {
+    name: PAID_NAME, amountPaise: monthlyPricePaise(), durationDays: PAID_DAYS,
+  }, ...(selected ? { plan: selected.plan, planType: selected.type,
+    status: new Date(selected.end).getTime() > now.getTime() ? "active" : "expired",
+    activatedAt: selected.start, expiresAt: selected.end,
+    remainingDays: Math.max(0, Math.ceil((new Date(selected.end).getTime()-now.getTime())/DAY_MS)),
+    amountPaise: selected.amountPaise } : { status: "none" }) });
 }

@@ -2,14 +2,16 @@ import crypto from "node:crypto";
 import { db } from "./db";
 import { assertKeyMode, capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
 import { accountEmail } from "./auth";
+import { scheduleCheckoutExpiry } from "./expiry-queue";
+import { monthlyPricePaise, PAID_NAME } from "./plan";
+import { enqueuePaidEmail, deliverEmailEvent } from "./lifecycle-email";
 
 type Config = { price: number; keyId: string; keySecret: string; webhookSecret: string; privateKey: string };
 
 function config(): Config {
   const required = ["DATABASE_URL", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "LICENSE_PRIVATE_KEY_PEM"] as const;
   for (const name of required) if (!process.env[name]) throw new Error(`${name} is not configured`);
-  const price = Number(process.env.MONTHLY_PRICE_PAISE);
-  if (!Number.isSafeInteger(price) || price < 100) throw new Error("MONTHLY_PRICE_PAISE is invalid");
+  const price = monthlyPricePaise();
   // A missing mode means Test Mode; Live keys require an explicit release decision.
   assertKeyMode(process.env.RAZORPAY_KEY_ID!, process.env.PAYMENT_MODE || "test");
   const privateKey = process.env.LICENSE_PRIVATE_KEY_PEM!.replace(/\\n/g, "\n");
@@ -61,7 +63,7 @@ export async function checkout(request: Request): Promise<Response> {
     method: "POST", signal: AbortSignal.timeout(12000),
     headers: { Authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ amount: cfg.price, currency: "INR", accept_partial: false, reference_id: id,
-      description: "PDFRoot Shortcut Pro — 30 days", notify: { sms: false, email: false },
+      description: `${PAID_NAME} — 30 days`, notify: { sms: false, email: false },
       // Razorpay requires at least 15 minutes. Our five-minute deadline is
       // enforced by cancellation from status polling and the expiry worker.
       ...(expiresAt ? { expire_by: Math.floor((checkoutStartedAt + 20 * 60_000) / 1000) } : {}),
@@ -74,6 +76,15 @@ export async function checkout(request: Request): Promise<Response> {
     throw new Error("Invalid checkout link from payment provider");
   }
   await db().query("UPDATE desktop_checkout SET link_id=$1, short_url=$2, expires_at=$3, state='pending' WHERE id=$4 AND state='creating'", [link.id, link.short_url, expiresAt, id]);
+  if (expiresAt) {
+    try {
+      // Do not expose a timed payment URL until its durable expiry job exists.
+      await scheduleCheckoutExpiry(id, expiresAt);
+    } catch {
+      await closeUnpaidCheckout(cfg, { id, link_id: link.id, state: "pending", expires_at: expiresAt, cancelled_at: null });
+      throw new Error("Checkout expiry could not be scheduled; no payment link was issued");
+    }
+  }
   return json(201, { checkoutId: id, token, paymentUrl: link.short_url, amountPaise: cfg.price, currency: "INR",
     ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) });
 }
@@ -102,6 +113,10 @@ type ExpiringCheckout = { id: string; state: string; link_id: string | null; exp
 
 async function cancelExpiredCheckout(cfg: Config, row: ExpiringCheckout): Promise<"not_due" | "closed" | "retry"> {
   if (row.state !== "pending" || !row.expires_at || Date.now() < new Date(row.expires_at).getTime()) return "not_due";
+  return closeUnpaidCheckout(cfg, row);
+}
+
+async function closeUnpaidCheckout(cfg: Config, row: ExpiringCheckout): Promise<"closed" | "retry"> {
   if (row.cancelled_at) return "closed";
   if (!row.link_id || !/^plink_[A-Za-z0-9]+$/.test(row.link_id)) return "retry";
   const url = `https://api.razorpay.com/v1/payment_links/${row.link_id}`;
@@ -115,11 +130,40 @@ async function cancelExpiredCheckout(cfg: Config, row: ExpiringCheckout): Promis
     if (!response.ok) return "retry";
     const link = await response.json();
     if (link.id !== row.link_id || !["cancelled", "expired"].includes(link.status)) return "retry";
-    await db().query("UPDATE desktop_checkout SET cancelled_at=now() WHERE id=$1 AND state='pending' AND cancelled_at IS NULL", [row.id]);
+    const result = await db().query("UPDATE desktop_checkout SET cancelled_at=now() WHERE id=$1 AND state='pending' AND cancelled_at IS NULL", [row.id]);
+    if (result.rowCount && row.expires_at) {
+      console.info("PDFRoot checkout expiry: unpaid link closed.", {
+        deadlineDelayMs: Math.max(0, Date.now() - new Date(row.expires_at).getTime()),
+      });
+    }
     return "closed";
   } catch {
     console.error("PDFRoot payment service: checkout cancellation will be retried.");
     return "retry";
+  }
+}
+
+export class CheckoutExpiryRetry extends Error {
+  constructor(readonly afterSeconds: number) {
+    super("Checkout expiry needs another delivery");
+  }
+}
+
+// Called only by the private Vercel Queue consumer. The stored deadline is the
+// authority: duplicate delivery, old messages and early delivery are safe.
+export async function expireCheckoutMessage(message: unknown): Promise<void> {
+  const id = (message as { checkoutId?: unknown } | null)?.checkoutId;
+  if (typeof id !== "string" || !/^PDR[a-f0-9]{30}$/.test(id)) return;
+  const cfg = config();
+  const result = await db().query("SELECT id,state,link_id,expires_at,cancelled_at FROM desktop_checkout WHERE id=$1", [id]);
+  const row: ExpiringCheckout | undefined = result.rows[0];
+  if (!row || row.state !== "pending" || !row.expires_at || row.cancelled_at) return;
+  const remaining = new Date(row.expires_at).getTime() - Date.now();
+  if (remaining > 0) throw new CheckoutExpiryRetry(Math.max(1, Math.ceil(remaining / 1000)));
+  if (await cancelExpiredCheckout(cfg, row) === "retry") {
+    // A completed payment needs its signed webhook, not cancellation retries.
+    const current = await db().query("SELECT state FROM desktop_checkout WHERE id=$1", [id]);
+    if (current.rows[0]?.state !== "paid") throw new CheckoutExpiryRetry(15);
   }
 }
 
@@ -167,13 +211,23 @@ export async function webhook(request: Request): Promise<Response> {
     if (priorPayment.rowCount) { await client.query("COMMIT"); return json(200, { ok: true, duplicate: true }); }
     // Create the device row before taking its lock, including for a first purchase.
     await client.query("INSERT INTO desktop_device_license(device_hash) VALUES($1) ON CONFLICT DO NOTHING", [row.device_hash]);
-    const prior = await client.query("SELECT expires_at FROM desktop_device_license WHERE device_hash=$1 FOR UPDATE", [row.device_hash]);
+    const prior = await client.query("SELECT expires_at,code FROM desktop_device_license WHERE device_hash=$1 FOR UPDATE", [row.device_hash]);
     const paidAt = new Date();
     const { code, expiresAt } = licenseForPayment(row, prior.rows[0]?.expires_at?.toISOString() ?? null, paidAt, cfg.privateKey);
     await client.query("UPDATE desktop_checkout SET state='paid',payment_id=$1,code=$2,paid_at=$3 WHERE id=$4", [paymentId, code, paidAt, id]);
     await client.query("UPDATE desktop_device_license SET expires_at=$1,code=$2 WHERE device_hash=$3", [expiresAt, code, row.device_hash]);
     await client.query("INSERT INTO desktop_webhook_event(id) VALUES($1) ON CONFLICT DO NOTHING", [eventId]);
+    if (row.customer_email) {
+      await enqueuePaidEmail(client, {
+        checkoutId: row.id, email: row.customer_email, amountPaise: row.amount,
+        activatedAt: paidAt, expiresAt: new Date(expiresAt), renewal: Boolean(prior.rows[0]?.code),
+      });
+    }
     await client.query("COMMIT");
+    if (row.customer_email) {
+      try { await deliverEmailEvent(`paid:${row.id}`); }
+      catch { console.error("PDFRoot lifecycle email: payment notice pending retry."); }
+    }
     return json(200, { ok: true });
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }

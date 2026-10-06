@@ -1,0 +1,17 @@
+{
+  "crons": [
+    { "path": "/v1/internal/lifecycle-email", "schedule": "30 2 * * *" }
+  ],
+  "functions": {
+    "app/v1/internal/checkout-expiry/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "desktop-checkout-expiry",
+          "retryAfterSeconds": 15,
+          "maxDeliveries": 50
+        }
+      ]
+    }
+  }
+}
