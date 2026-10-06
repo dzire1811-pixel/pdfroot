@@ -37,6 +37,7 @@
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/guj": "^1.0.0",
     "@tesseract.js-data/hin": "^1.0.0",
+    "@vercel/queue": "0.7.0",
     "@vercel/speed-insights": "^2.0.0",
     "docx": "^9.7.1",
     "jspdf": "^4.2.1",
@@ -57,6 +58,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.16",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.23.1",
