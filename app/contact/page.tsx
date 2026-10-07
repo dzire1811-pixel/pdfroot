@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "../route-styles.css";
 import { Mail, MessageSquare, ShieldCheck, Timer } from "lucide-react";
 import { BrandText } from "@/components/Brand";
+import { ContactForm } from "@/components/ContactForm";
 import { InfoBulletGrid, InfoCard, InfoPageLayout } from "@/components/InfoPageLayout";
 
 export const metadata: Metadata = {
@@ -51,27 +52,7 @@ export default function ContactPage() {
 
       <InfoCard title="How can we help?">
         <p>Share your question, issue, or suggestion. Please include the tool name and file type if your message is about a specific <BrandText styled /> tool.</p>
-        <form action="mailto:support@pdfroot.com" method="post" encType="text/plain" className="mt-6 grid gap-4">
-          <label htmlFor="contact-name" className="text-sm font-semibold text-foreground">
-            Name
-            <input id="contact-name" className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" name="name" autoComplete="name" placeholder="Your name" />
-          </label>
-          <label htmlFor="contact-email" className="text-sm font-semibold text-foreground">
-            Email
-            <input id="contact-email" className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" name="email" autoComplete="email" placeholder="you@example.com" type="email" />
-          </label>
-          <label htmlFor="contact-subject" className="text-sm font-semibold text-foreground">
-            Subject
-            <input id="contact-subject" className="mt-2 w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" name="subject" autoComplete="off" placeholder="What is this about?" />
-          </label>
-          <label htmlFor="contact-message" className="text-sm font-semibold text-foreground">
-            Message
-            <textarea id="contact-message" className="mt-2 min-h-36 w-full resize-y rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20" name="message" autoComplete="off" placeholder="Write your message here" />
-          </label>
-          <button type="submit" className="inline-flex items-center justify-center rounded-lg bg-primary px-7 py-4 text-base font-medium text-primary-foreground transition hover:-translate-y-0.5 hover:bg-primary/90">
-            Email Support
-          </button>
-        </form>
+        <ContactForm />
       </InfoCard>
 
       <InfoCard title="Help Topics">
