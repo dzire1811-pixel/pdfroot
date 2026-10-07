@@ -1,0 +1,91 @@
+name: Publish PDFRoot Desktop Pro Beta 7
+
+on:
+  push:
+    branches:
+      - codex/beta7-release-20261007
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: .release/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit.zip
+
+      - name: Extract desktop build kit
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath ".release/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit.zip" -DestinationPath ".release/work" -Force
+
+      - name: Install dependencies
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit/desktop/resources/app
+        run: npm ci
+
+      - name: Run desktop tests
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit/desktop/resources/app
+        run: npm test
+
+      - name: Build Windows x64 installer
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit/desktop/resources/app
+        run: npm run pack:win
+
+      - name: Verify release files
+        shell: pwsh
+        run: |
+          $release = ".release/work/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $release "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.7-x64.exe"
+          $blockmap = "$installer.blockmap"
+          $channel = Join-Path $release "beta.yml"
+          foreach ($file in @($installer, $blockmap, $channel)) {
+            if (-not (Test-Path -LiteralPath $file)) { throw "Missing release file: $file" }
+          }
+          if ((Get-Item -LiteralPath $installer).Length -lt 100MB) { throw "Installer is unexpectedly small." }
+          $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          "SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Publish GitHub prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $release = ".release/work/PDFRoot-Desktop-Pro-Beta7-Trial-Login-Build-Kit/desktop/resources/app/release"
+          $notes = @"
+          PDFRoot Desktop Pro Beta 7 for Windows 10/11 x64.
+
+          - Professional unified PDFRoot red, black and light interface
+          - Updated Crop Image editor with free crop, reset, output size and Exact KB controls
+          - Google account sign-in before trial or Pro checkout
+          - ₹199 / 30-day Razorpay activation flow
+          - 35 PDF and image tools with File Explorer shortcuts
+          - 62 automated desktop tests passed before release
+
+          SHA-256: $env:SHA256
+          "@
+          gh release create "v0.7.0-beta.7" `
+            "$release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.7-x64.exe" `
+            "$release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.7-x64.exe.blockmap" `
+            "$release/beta.yml" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --target "$env:GITHUB_SHA" `
+            --title "PDFRoot Desktop Pro v0.7.0-beta.7" `
+            --notes "$notes" `
+            --prerelease
+
+      - name: Remove temporary build branch
+        if: success()
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method DELETE "repos/$env:GITHUB_REPOSITORY/git/refs/heads/codex/beta7-release-20261007"
