@@ -72,13 +72,23 @@ export async function POST(request: NextRequest) {
       auth: { user: smtpUser, pass: smtpPassword },
     });
 
+    const logoUrl = new URL("/branding/horizontal-logo.png", request.nextUrl.origin).toString();
+
     await transport.sendMail({
       from: { name: "PDFRoot Website", address: smtpUser },
       to: supportEmail,
       replyTo: { name, address: email },
       subject: `[PDFRoot Support] ${subject}`,
       text: `New PDFRoot support message\n\nName: ${name}\nEmail: ${email}\nSubject: ${subject}\n\n${message}`,
-      html: `<div style="font-family:Arial,sans-serif;color:#111827;line-height:1.6"><h2 style="color:#c91d25">New PDFRoot support message</h2><p><strong>Name:</strong> ${escapeHtml(name)}</p><p><strong>Email:</strong> ${escapeHtml(email)}</p><p><strong>Subject:</strong> ${escapeHtml(subject)}</p><hr style="border:0;border-top:1px solid #e5e7eb"><p style="white-space:pre-wrap">${escapeHtml(message)}</p></div>`,
+      html: `<div style="margin:0;background:#f5f5f5;padding:28px 12px;font-family:Arial,sans-serif;color:#111111"><div style="max-width:640px;margin:0 auto;border:1px solid #e5e7eb;border-radius:14px;background:#ffffff;overflow:hidden"><div style="padding:24px 28px;border-bottom:3px solid #c91d25"><img src="cid:pdfroot-logo" width="215" height="80" alt="PDFRoot" style="display:block;width:215px;height:auto;max-width:100%;border:0"></div><div style="padding:28px"><h2 style="margin:0 0 22px;font-size:22px;font-weight:600;color:#111111">New support message</h2><p style="margin:0 0 10px"><strong>Name:</strong> ${escapeHtml(name)}</p><p style="margin:0 0 10px"><strong>Email:</strong> ${escapeHtml(email)}</p><p style="margin:0 0 10px"><strong>Subject:</strong> ${escapeHtml(subject)}</p><hr style="margin:22px 0;border:0;border-top:1px solid #e5e7eb"><p style="margin:0;white-space:pre-wrap">${escapeHtml(message)}</p></div><div style="padding:16px 28px;background:#111111;color:#ffffff;font-size:12px">Sent from the PDFRoot website contact form.</div></div></div>`,
+      attachments: [
+        {
+          filename: "pdfroot-logo.png",
+          path: logoUrl,
+          cid: "pdfroot-logo",
+          contentDisposition: "inline",
+        },
+      ],
     });
 
     return NextResponse.json({ message: "Thank you. Your message has been sent to PDFRoot Support." });
