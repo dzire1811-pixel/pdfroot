@@ -1,0 +1,13 @@
+# PDFRoot desktop account production fix
+
+Beta 9 already calls https://www.pdfroot.com/v1/account/*, but Production lacked these routes and returned HTTP 404. This deployment adds email OTP, verified Google sign-in, a device-bound 14-day trial, authenticated licence recovery and account summary. Beta 9 needs no installer change.
+
+The account service applies the additive SQL in desktop-account-schema.sql under a PostgreSQL transaction and advisory lock. Existing checkout rows, signed paid codes and expiry dates are preserved. Older trials gain a started_at value derived from their original expiry without changing their signed code. One trial is allowed per email and per computer; repeat requests return the same active trial.
+
+Production configuration reuses DATABASE_URL, LICENSE_PRIVATE_KEY_PEM and CONTACT_SMTP_USER / CONTACT_SMTP_PASSWORD (Titan). CONTACT_SMTP_HOST defaults to smtp.titan.email and CONTACT_SMTP_PORT to 465. Resend is supported when SMTP is absent via RESEND_API_KEY / PDFROOT_LOGIN_FROM. PDFROOT_GOOGLE_DESKTOP_CLIENT_ID must match the client bundled in the desktop sign-in page. PDFROOT_OTP_SECRET is optional; otherwise a domain-separated key is derived from the existing signing key. Private keys must correspond to a public verification key already shipped in Beta 9.
+
+OTP codes expire in 10 minutes, have five verification attempts and are stored as keyed hashes. Sessions last 90 days and store only token hashes. Delivery is limited to five codes per email per hour with a 60-second cooldown and 50 codes per request address per hour; addresses are keyed hashes. Google ID tokens are verified using Google's signing certificates, audience, issuer, expiry, nonce and verified email. External Google emails without an authoritative Gmail/Workspace identity must use email OTP.
+
+New desktop checkouts (clientVersion 7) require an account bearer token and associate the verified email with the checkout. Legacy checkout and existing Razorpay captured-payment/signature checks are preserved. Existing paid licences are not replaced by a trial request.
+
+Run npm run test:desktop-account for isolated PostgreSQL tests with mocked mail delivery and Google signing certificates. No customer receives test mail and no production licence is created by these tests. GET /v1/account/health checks configuration, signing-key compatibility, database schema and SMTP authentication without sending email or creating a trial. Final live checks use malformed or unauthenticated account requests, the existing status endpoint and the public Beta 9 download page; a real end-user OTP/Google login still requires the user's interaction.

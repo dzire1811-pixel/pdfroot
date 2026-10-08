@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
-import { Pool } from "pg";
+import { db } from "./db";
+import { accountEmail } from "./auth";
 import { assertKeyMode, capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
 
 type Config = { price: number; keyId: string; keySecret: string; webhookSecret: string; privateKey: string };
-let pool: Pool | undefined;
 
 function config(): Config {
   const required = ["DATABASE_URL", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "LICENSE_PRIVATE_KEY_PEM"] as const;
@@ -15,10 +15,6 @@ function config(): Config {
   const privateKey = process.env.LICENSE_PRIVATE_KEY_PEM!.replace(/\\n/g, "\n");
   if (crypto.createPrivateKey(privateKey).asymmetricKeyType !== "ed25519") throw new Error("Expected an Ed25519 signing key");
   return { price, privateKey, keyId: process.env.RAZORPAY_KEY_ID!, keySecret: process.env.RAZORPAY_KEY_SECRET!, webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET! };
-}
-
-function db(): Pool {
-  return pool ??= new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
 }
 
 function json(status: number, data: unknown) {
@@ -34,13 +30,15 @@ export async function checkout(request: Request): Promise<Response> {
   const cfg = config();
   const raw = await request.text();
   if (Buffer.byteLength(raw) > 4096) return json(413, { error: "Request is too large." });
-  let data: { deviceId?: unknown; customerName?: unknown };
+  let data: { deviceId?: unknown; customerName?: unknown; clientVersion?: unknown };
   try { data = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON." }); }
   const device = String(data?.deviceId || "").trim().toUpperCase();
   const name = String(data?.customerName || "").trim();
   if (!DEVICE_RE.test(device) || name.length < 2 || name.length > 100 || /[\r\n<>]/.test(name)) {
     return json(400, { error: "Enter your name (2–100 characters) and a valid PDFRoot device ID." });
   }
+  const email = data.clientVersion === 7 ? await accountEmail(request) : null;
+  if (data.clientVersion === 7 && !email) return json(401, { error: "Sign in before paying." });
   const id = `PDR${crypto.randomBytes(15).toString("hex")}`;
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -51,7 +49,11 @@ export async function checkout(request: Request): Promise<Response> {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [device]);
     const count = await client.query("SELECT count(*)::int AS n FROM desktop_checkout WHERE device_hash=$1 AND created_at > now() - interval '1 hour'", [device]);
     if (count.rows[0].n >= 10) { await client.query("ROLLBACK"); return json(429, { error: "Too many checkout requests. Try again later." }); }
-    await client.query("INSERT INTO desktop_checkout(id,token_hash,device_hash,customer_name,amount) VALUES($1,$2,$3,$4,$5)", [id, tokenHash, device, name, cfg.price]);
+    if (email) {
+      await client.query("INSERT INTO desktop_checkout(id,token_hash,device_hash,customer_name,amount,customer_email) VALUES($1,$2,$3,$4,$5,$6)", [id, tokenHash, device, name, cfg.price, email]);
+    } else {
+      await client.query("INSERT INTO desktop_checkout(id,token_hash,device_hash,customer_name,amount) VALUES($1,$2,$3,$4,$5)", [id, tokenHash, device, name, cfg.price]);
+    }
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }

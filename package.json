@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test:compat": "playwright test tests/legacy-browser-compat.spec.ts",
-    "indexnow": "node scripts/submit-indexnow.mjs"
+    "indexnow": "node scripts/submit-indexnow.mjs",
+    "test:desktop-account": "node --test tests/desktop-account.test.mjs tests/desktop-payment.test.mjs"
   },
   "browserslist": {
     "production": [
@@ -39,6 +40,7 @@
     "@tesseract.js-data/hin": "^1.0.0",
     "@vercel/speed-insights": "^2.0.0",
     "docx": "^9.7.1",
+    "google-auth-library": "11.2.0",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
@@ -58,6 +60,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^7.0.12",
