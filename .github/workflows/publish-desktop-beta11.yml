@@ -1,0 +1,120 @@
+name: Publish PDFRoot Desktop Pro Beta 11
+
+on:
+  push:
+    branches:
+      - codex/beta11-automatic-startup-20261008
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out release payload
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Expand source build kit
+        run: |
+          Expand-Archive -LiteralPath .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip -DestinationPath .release/work -Force
+      - name: Apply automatic startup and file-selection fixes
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          Copy-Item -Path ".release/beta11-overlay/app/*" -Destination $appDir -Recurse -Force
+      - name: Verify production configuration
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          $config = Get-Content "$appDir/resources/payment-api.json" -Raw | ConvertFrom-Json
+          if ($config.baseUrl -ne "https://www.pdfroot.com") { throw "Release must use the production backend." }
+          $package = Get-Content "$appDir/package.json" -Raw | ConvertFrom-Json
+          if ($package.version -ne "0.7.0-beta.11") { throw "Unexpected package version." }
+          if ($package.build.nsis.include -ne "resources/installer.nsh") { throw "Classic menu installer integration is missing." }
+          if (Get-ChildItem $appDir -Recurse -Include *.pfx,*.p12,*.msix) { throw "Unexpected certificate or native-menu package in this release." }
+      - name: Install dependencies
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm ci
+      - name: Run automated tests
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm test
+      - name: Build unsigned Windows installer
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm run pack:win
+      - name: Verify release files
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.11-x64.exe"
+          foreach ($file in @($installer, "$installer.blockmap", (Join-Path $releaseDir "beta.yml"))) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing release file: $file" }
+          }
+          if ((Get-Item -LiteralPath $installer).Length -lt 100MB) { throw "Installer is unexpectedly small." }
+          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          "INSTALLER_SHA256=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Installer SHA256: $sha"
+      - name: Test install, menu registration and uninstall on Windows
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = (Resolve-Path (Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.11-x64.exe")).Path
+          $installDir = Join-Path $env:LOCALAPPDATA "Programs/PDFRoot-Beta11-CI"
+          $process = Start-Process -FilePath $installer -ArgumentList "/S", "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exited with $($process.ExitCode)." }
+          $menu = "HKCU:\Software\Classes\*\shell\PDFRootDesktopPro"
+          if ((Get-ItemProperty -LiteralPath $menu).MUIVerb -ne "PDFRoot Desktop Pro") { throw "Classic menu was not installed." }
+          $commands = @(Get-ChildItem -LiteralPath "$menu\shell")
+          if ($commands.Count -ne 32) { throw "Expected 32 file commands, found $($commands.Count)." }
+          foreach ($command in $commands) {
+            $properties = Get-ItemProperty -LiteralPath $command.PSPath
+            if (-not (Test-Path -LiteralPath $properties.Icon -PathType Leaf)) { throw "Missing menu icon: $($properties.Icon)" }
+            $launch = (Get-Item -LiteralPath "$($command.PSPath)\command").GetValue("")
+            if ($launch -notlike '*--context-tool=*' -or $launch -notlike '*--file="%1"*') { throw "Missing quoted file argument." }
+          }
+          foreach ($key in @("HKCU:\Software\Classes\Directory\shell\PDFRootDesktopPro", "HKCU:\Software\Classes\Directory\Background\shell\PDFRootDesktopPro")) {
+            if (-not (Test-Path -LiteralPath $key)) { throw "Folder menu was not installed." }
+          }
+          $sourceDir = (Resolve-Path ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app").Path
+          node .release/beta11-overlay/windows-smoke.cjs (Join-Path $installDir "PDFRoot Desktop Pro.exe") $sourceDir
+          if ($LASTEXITCODE -ne 0) { throw "Installed-app runtime smoke tests failed." }
+          Get-Process -Name "PDFRoot Desktop Pro" -ErrorAction SilentlyContinue | Stop-Process -Force
+          $uninstaller = Join-Path $installDir "Uninstall PDFRoot Desktop Pro.exe"
+          if (-not (Test-Path -LiteralPath $uninstaller)) { throw "Uninstaller is missing." }
+          Start-Process -FilePath $uninstaller -ArgumentList "/S" -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path -LiteralPath $menu); $i++) { Start-Sleep -Seconds 1 }
+          foreach ($key in @($menu, "HKCU:\Software\Classes\Directory\shell\PDFRootDesktopPro", "HKCU:\Software\Classes\Directory\Background\shell\PDFRootDesktopPro")) {
+            if (Test-Path -LiteralPath $key) { throw "Menu was not removed during uninstall: $key" }
+          }
+          Write-Host "Install, 32 file commands, per-tool icons, folder menus and uninstall passed."
+      - name: Publish GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.11-x64.exe"
+          $notes = @"
+          PDFRoot Desktop Pro Beta 11
+
+          - Classic File Explorer menu installs automatically for the installing Windows user.
+          - Windows 10: right-click menu. Windows 11: Show more options.
+          - All 15 PDF-input and 17 image/government-input tools have their own menu icons.
+          - Folder and folder-background commands open the full tool catalog.
+          - Uninstall removes the PDFRoot menu entries.
+          - Automatically prepares shortcut keys and Windows startup for new profiles.
+          - Restores the app's own right-click entries without administrator repair steps.
+          - Passes the clicked file path directly and captures Explorer files before taking focus.
+          - Waits for slower selection helpers and restarts failed/hung helpers automatically.
+          - Shows a normal file chooser when Windows cannot provide the selected files.
+          - Preserves active licences and user startup preferences.
+          - No paid signing certificate or certificate trust setup is required by this installer.
+
+          Validation: 78 automated tests plus installed Windows app activation, hotkey, real image/PDF conversion, crop launch, restart, menu and uninstall checks passed. The hosted runner is Windows Server 2022; a separate physical Windows 10/11 test is still useful.
+          SHA256: $env:INSTALLER_SHA256
+          "@
+          gh release create "v0.7.0-beta.11" $installer "$installer.blockmap" (Join-Path $releaseDir "beta.yml") --repo "$env:GITHUB_REPOSITORY" --title "PDFRoot Desktop Pro v0.7.0-beta.11" --notes $notes --prerelease
