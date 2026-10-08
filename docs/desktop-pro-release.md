@@ -1,19 +1,24 @@
-# PDFRoot Desktop Pro beta download
+# PDFRoot Desktop Pro Beta 9
 
-The website route `/desktop-pro` lists the currently tested Windows x64 Beta 2 installer. The installer is distributed as a GitHub Release asset rather than checked into Git or added to the Vercel static bundle.
+The production `/desktop-pro` page links to the Windows x64 NSIS installer hosted as a GitHub prerelease asset. Installer binaries are not included in the Vercel bundle.
 
-Public release: https://github.com/dzire1811-pixel/pdfroot/releases/tag/v0.7.0-beta.2
+Release: https://github.com/dzire1811-pixel/pdfroot/releases/tag/v0.7.0-beta.9
 
-Asset: `PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.2-x64.exe` (109,174,652 bytes)
+Installer: `PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.9-x64.exe` (118413198 bytes)
 
-SHA-256: `BA4E337514D9DBFC09F97733F3207D788EF06EF1616511B8E46E710DCBB45C95`
+SHA-256: `EF43A41519D3F0910F838E9D6735DE6AC31FC804B950880EF5BE8EAC077CD5AA`
 
-The download button on `/desktop-pro` links directly to the verified GitHub Release asset. GitHub's asset digest and size match the local installer. No Vercel environment variable is needed.
+## File Explorer menu
 
-Release checks:
+The installer registers the classic context menu for the Windows account that installs the app. Each customer's installation receives the same integration automatically. Windows 10 displays it in the classic right-click menu; Windows 11 exposes it through **Show more options**. No paid signing certificate, self-signed certificate trust installation, or system-wide Explorer menu override is used.
 
-1. Keep the verified asset on the `v0.7.0-beta.2` pre-release. Never upload either seller private key package.
-2. Check the public `/desktop-pro` page and download button after deployment.
-3. Confirm installer launch and activation on a Windows x64 machine before a broader announcement.
+The menu provides 15 PDF-input commands and 17 image/government-input commands, with an individual icon for each tool. Folder and folder-background entries open the full catalog. Uninstall removes the PDFRoot menu keys. Existing keyboard shortcuts and the production payment/login configuration are preserved.
 
-Beta 2 uses manual monthly activation codes. The separate automatic payment service has not been deployed; the website page says so explicitly. Change both the installer and page copy together when payment activation is live.
+## Validation
+
+- All 70 source tests passed locally and on the Windows build runner.
+- The Windows workflow checks production configuration, builds the installer, and verifies installer/update files.
+- Before publication, the workflow silently installs the app, verifies all 32 commands, icon files and folder entries, then uninstalls and verifies menu cleanup.
+- A physical Windows 10/11 Explorer interaction check is separate from these Windows runner installation checks.
+
+Build workflow: `.github/workflows/publish-desktop-beta9.yml` on `codex/beta9-classic-menu-20261008`. The prerelease includes the installer, its blockmap and `beta.yml` for the existing beta update channel.
