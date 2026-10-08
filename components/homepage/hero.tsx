@@ -44,8 +44,15 @@ export function Hero() {
           <p className="mt-4 hidden max-w-[550px] text-left text-sm leading-relaxed text-zinc-600 sm:block">
             Core PDF and image workflows run in your browser <span className="text-zinc-500">|</span> Review before upload <span className="text-zinc-500">|</span> Works on Mobile &amp; Desktop
           </p>
-          <Link href="/desktop-pro" prefetch={false} className="mt-5 inline-flex items-center gap-2 text-sm font-normal text-primary underline decoration-primary/40 underline-offset-4 transition hover:decoration-primary">
-            Get PDFRoot Desktop Pro for Windows <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <Link href="/desktop-pro" prefetch={false} className="mt-5 inline-flex items-center gap-2 text-sm font-normal text-black underline decoration-black/40 underline-offset-4 transition hover:decoration-black">
+            Get PDFRoot Desktop Pro for Windows
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="2" y="2" width="9" height="9" />
+              <rect x="13" y="2" width="9" height="9" />
+              <rect x="2" y="13" width="9" height="9" />
+              <rect x="13" y="13" width="9" height="9" />
+            </svg>
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
           </Link>
         </div>
 
