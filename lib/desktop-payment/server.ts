@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
-import { Pool } from "pg";
+import { db } from "./db";
 import { assertKeyMode, capturedPaymentId, DEVICE_RE, licenseForPayment, signedWebhook, type PaymentEvent } from "./core";
+import { accountEmail } from "./auth";
 
 type Config = { price: number; keyId: string; keySecret: string; webhookSecret: string; privateKey: string };
-let pool: Pool | undefined;
 
 function config(): Config {
   const required = ["DATABASE_URL", "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "LICENSE_PRIVATE_KEY_PEM"] as const;
@@ -15,10 +15,6 @@ function config(): Config {
   const privateKey = process.env.LICENSE_PRIVATE_KEY_PEM!.replace(/\\n/g, "\n");
   if (crypto.createPrivateKey(privateKey).asymmetricKeyType !== "ed25519") throw new Error("Expected an Ed25519 signing key");
   return { price, privateKey, keyId: process.env.RAZORPAY_KEY_ID!, keySecret: process.env.RAZORPAY_KEY_SECRET!, webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET! };
-}
-
-function db(): Pool {
-  return pool ??= new Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
 }
 
 function json(status: number, data: unknown) {
@@ -34,10 +30,13 @@ export async function checkout(request: Request): Promise<Response> {
   const cfg = config();
   const raw = await request.text();
   if (Buffer.byteLength(raw) > 4096) return json(413, { error: "Request is too large." });
-  let data: { deviceId?: unknown; customerName?: unknown };
+  let data: { deviceId?: unknown; customerName?: unknown; clientVersion?: unknown };
   try { data = JSON.parse(raw); } catch { return json(400, { error: "Invalid JSON." }); }
   const device = String(data?.deviceId || "").trim().toUpperCase();
   const name = String(data?.customerName || "").trim();
+  const timedCheckout = data?.clientVersion === 7;
+  const customerEmail = timedCheckout ? await accountEmail(request) : null;
+  if (timedCheckout && !customerEmail) return json(401, { error: "Sign in with your email before paying." });
   if (!DEVICE_RE.test(device) || name.length < 2 || name.length > 100 || /[\r\n<>]/.test(name)) {
     return json(400, { error: "Enter your name (2–100 characters) and a valid PDFRoot device ID." });
   }
@@ -51,16 +50,19 @@ export async function checkout(request: Request): Promise<Response> {
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [device]);
     const count = await client.query("SELECT count(*)::int AS n FROM desktop_checkout WHERE device_hash=$1 AND created_at > now() - interval '1 hour'", [device]);
     if (count.rows[0].n >= 10) { await client.query("ROLLBACK"); return json(429, { error: "Too many checkout requests. Try again later." }); }
-    await client.query("INSERT INTO desktop_checkout(id,token_hash,device_hash,customer_name,amount) VALUES($1,$2,$3,$4,$5)", [id, tokenHash, device, name, cfg.price]);
+    await client.query("INSERT INTO desktop_checkout(id,token_hash,device_hash,customer_name,amount,customer_email) VALUES($1,$2,$3,$4,$5,$6)", [id, tokenHash, device, name, cfg.price, customerEmail]);
     await client.query("COMMIT");
   } catch (error) { await client.query("ROLLBACK"); throw error; }
   finally { client.release(); }
 
+  const expiresAt = timedCheckout ? new Date(Date.now() + 5 * 60_000) : null;
   const provider = await fetch("https://api.razorpay.com/v1/payment_links", {
     method: "POST", signal: AbortSignal.timeout(12000),
     headers: { Authorization: `Basic ${Buffer.from(`${cfg.keyId}:${cfg.keySecret}`).toString("base64")}`, "Content-Type": "application/json" },
     body: JSON.stringify({ amount: cfg.price, currency: "INR", accept_partial: false, reference_id: id,
-      description: "PDFRoot Desktop Pro — 30 days", notify: { sms: false, email: false } }),
+      description: "PDFRoot Shortcut Pro — 30 days", notify: { sms: false, email: false },
+      ...(expiresAt ? { expire_by: Math.floor(expiresAt.getTime() / 1000) } : {}),
+      ...(customerEmail ? { customer: { email: customerEmail } } : {}) }),
   });
   if (!provider.ok) throw new Error("Payment provider could not create a checkout link");
   const link = await provider.json();
@@ -68,8 +70,9 @@ export async function checkout(request: Request): Promise<Response> {
       link.amount !== cfg.price || link.currency !== "INR" || link.reference_id !== id) {
     throw new Error("Invalid checkout link from payment provider");
   }
-  await db().query("UPDATE desktop_checkout SET link_id=$1, short_url=$2, state='pending' WHERE id=$3 AND state='creating'", [link.id, link.short_url, id]);
-  return json(201, { checkoutId: id, token, paymentUrl: link.short_url, amountPaise: cfg.price, currency: "INR" });
+  await db().query("UPDATE desktop_checkout SET link_id=$1, short_url=$2, expires_at=$3, state='pending' WHERE id=$4 AND state='creating'", [link.id, link.short_url, expiresAt, id]);
+  return json(201, { checkoutId: id, token, paymentUrl: link.short_url, amountPaise: cfg.price, currency: "INR",
+    ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}) });
 }
 
 export async function status(request: Request): Promise<Response> {
@@ -77,11 +80,13 @@ export async function status(request: Request): Promise<Response> {
   const id = new URL(request.url).searchParams.get("checkoutId");
   const token = request.headers.get("authorization")?.match(/^Bearer ([A-Za-z0-9_-]{40,60})$/)?.[1];
   if (!id || !/^[A-Za-z0-9_-]{1,40}$/.test(id) || !token) return json(401, { error: "Checkout token is required." });
-  const result = await db().query("SELECT token_hash,state,code FROM desktop_checkout WHERE id=$1", [id]);
+  const result = await db().query("SELECT token_hash,state,code,expires_at FROM desktop_checkout WHERE id=$1", [id]);
   const row = result.rows[0];
   const hash = crypto.createHash("sha256").update(token).digest();
   if (!row || !crypto.timingSafeEqual(hash, Buffer.from(row.token_hash, "hex"))) return json(401, { error: "Invalid checkout token." });
-  return json(200, { state: row.state === "paid" ? "paid" : "pending", ...(row.state === "paid" ? { code: row.code } : {}) });
+  const state = row.state === "paid" ? "paid" : row.expires_at && Date.now() >= new Date(row.expires_at).getTime() ? "expired" : "pending";
+  return json(200, { state, ...(state === "paid" ? { code: row.code } : {}),
+    ...(row.expires_at ? { expiresAt: row.expires_at } : {}) });
 }
 
 export async function webhook(request: Request): Promise<Response> {
