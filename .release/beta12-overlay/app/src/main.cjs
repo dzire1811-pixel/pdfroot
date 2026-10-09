@@ -22,6 +22,7 @@ const { getTool, tools } = require("./catalog.cjs");
 const { createDeviceIdentity } = require("./device.cjs");
 const { LicenseStore } = require("./license.cjs");
 const { PaymentClient, paymentApiUrl } = require("./payment-client.cjs");
+const { shouldOpenCatalogAfterSync } = require("./payment-navigation.cjs");
 const { AccountClient } = require("./account-client.cjs");
 const { googleClientId, signInWithGoogle } = require("./google-login.cjs");
 const { quickShortcuts } = require("./shortcuts.cjs");
@@ -332,8 +333,9 @@ function setupAutoUpdater() {
 
 async function checkPendingPayment() {
   if (!paymentClient?.baseUrl || (!paymentClient.readSession() && !accountClient?.session())) return { state: "none" };
+  const previous = currentLicenseStatus();
   const result = await paymentClient.check();
-  if (result.state === "active" && mainWindow?.webContents.getURL().endsWith("/activation.html")) {
+  if (shouldOpenCatalogAfterSync(previous, result) && mainWindow?.webContents.getURL().endsWith("/activation.html")) {
     setTimeout(() => showCatalog(), 800);
   }
   return result;
