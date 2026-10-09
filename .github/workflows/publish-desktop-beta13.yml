@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build-and-release:
@@ -18,6 +19,12 @@ jobs:
       run:
         shell: pwsh
     steps:
+      - name: Cancel superseded build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $state = gh api repos/$env:GITHUB_REPOSITORY/actions/runs/37883864757 --jq '.status'
+          if ($state -ne "completed") { gh api -X POST repos/$env:GITHUB_REPOSITORY/actions/runs/37883864757/cancel }
       - name: Check out release payload
         uses: actions/checkout@v4
       - name: Set up Node.js
@@ -121,7 +128,7 @@ jobs:
           - Preserves active licences and user startup preferences.
           - No paid signing certificate or certificate trust setup is required by this installer.
 
-          Validation: 89 automated tests plus installed Windows app activation, hotkey, real image/PDF conversion, crop launch, restart, menu and uninstall checks passed. The hosted runner is Windows Server 2022; a separate physical Windows 10/11 test is still useful.
+          Validation: 90 automated tests plus installed Windows app activation, hotkey, real image/PDF conversion, crop launch, restart, menu and uninstall checks passed. The hosted runner is Windows Server 2022; a separate physical Windows 10/11 test is still useful.
           SHA256: $env:INSTALLER_SHA256
           "@
           gh release create "v0.7.0-beta.13" $installer "$installer.blockmap" (Join-Path $releaseDir "beta.yml") --repo "$env:GITHUB_REPOSITORY" --title "PDFRoot Desktop Pro v0.7.0-beta.13" --notes $notes --prerelease

@@ -18,7 +18,7 @@ function ui(overrides = {}) {
   const context = vm.createContext({ document: { querySelector: element, body: { classList: { add() {}, remove() {} } }, addEventListener() {} }, window: { pdfrootDesktop: api },
     setTimeout() {}, setInterval() {}, Date, console });
   vm.runInContext(fs.readFileSync(path.join(__dirname, 'ui/activation.js'), 'utf8'), context);
-  return { element, calls, async click(selector) { const el = element(selector); await el.handlers.click({ currentTarget: el }); } };
+  return { element, calls, run: expression => vm.runInContext(expression, context), async click(selector) { const el = element(selector); await el.handlers.click({ currentTarget: el }); } };
 }
 
 test('Google paid plan uses prepared checkout once without opening a second payment tab', async () => {
@@ -55,4 +55,13 @@ test('Google failure keeps email option visible with recovery message', async ()
   assert.match(u.element('#account-progress').textContent, /email code/);
   assert.equal(u.element('#email-entry').hidden, false);
   assert.equal(u.element('#google-sign-in').disabled, false);
+});
+
+test('existing trial sync never claims a failed checkout was paid', async () => {
+  const u = ui({ googleSignIn: async () => ({ email: 'buyer@example.com', paymentError: 'offline' }),
+    checkPayment: async () => ({ state: 'active', newlyActivated: false, status: { ok: true, payload: { plan: 'trial' } } }) });
+  await u.click('#choose-pro'); await u.click('#google-sign-in');
+  await u.run('checkPayment()');
+  assert.match(u.element('#payment-progress').textContent, /offline/);
+  assert.equal(u.element('#retry-payment').hidden, false);
 });

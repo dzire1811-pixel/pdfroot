@@ -335,10 +335,11 @@ async function checkPendingPayment() {
   if (!paymentClient?.baseUrl || (!paymentClient.readSession() && !accountClient?.session())) return { state: "none" };
   const previous = currentLicenseStatus();
   const result = await paymentClient.check();
-  if (shouldOpenCatalogAfterSync(previous, result) && mainWindow?.webContents.getURL().endsWith("/activation.html")) {
+  const newlyActivated = shouldOpenCatalogAfterSync(previous, result);
+  if (newlyActivated && mainWindow?.webContents.getURL().endsWith("/activation.html")) {
     setTimeout(() => showCatalog(), 800);
   }
-  return result;
+  return { ...result, newlyActivated };
 }
 
 function currentProcessingMode() {

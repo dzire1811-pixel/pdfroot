@@ -147,10 +147,13 @@ async function checkPayment() {
   if (result.state === "pending" && !onlinePayment.hidden && document.querySelector("#retry-payment").hidden) paymentProgress.textContent = "Waiting for confirmed payment… This screen will activate automatically.";
   if (result.state === "expired") paymentProgress.textContent = "Payment time expired. If you already paid, PDFRoot will still activate when confirmed. Otherwise, choose the plan again.";
   if (result.state === "active") {
-    expiresAt = null;
-    paymentProgress.textContent = "Payment confirmed. PDFRoot Shortcut Pro is active.";
+    if (result.newlyActivated && result.status?.payload?.plan === "monthly") {
+      expiresAt = null;
+      document.querySelector("#retry-payment").hidden = true;
+      paymentProgress.textContent = "Payment confirmed. PDFRoot Shortcut Pro is active.";
+    }
     renderStatus(result.status);
-    await refreshAccountSummary();
+    refreshAccountSummary().catch(() => {});
   }
   if (result.state === "error") paymentProgress.textContent = result.message;
   showTimer();
