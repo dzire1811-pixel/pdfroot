@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+    <title>Activate PDFRoot Desktop Pro</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body class="activation-page">
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-mark" src="pdfroot-logo.svg" alt="PDFRoot" />
+          <span><strong><em>PDF</em>Root</strong><small>Desktop Pro</small></span>
+        </div>
+        <span id="plan-status" class="status-pill locked">Activation required</span>
+      </header>
+      <section id="desktop-update-banner" class="desktop-update-banner" aria-live="polite" hidden>
+        <div><strong id="desktop-update-title">Updating PDFRoot Desktop Pro</strong><p id="desktop-update-note">The app will install the update and reopen automatically.</p></div>
+      </section>
+      <section class="panel activation-layout" aria-label="Monthly plan activation">
+        <aside class="activation-aside">
+          <img class="aside-logo" src="pdfroot-logo.svg" alt="PDFRoot" />
+          <p class="eyebrow">Your shortcut workspace</p>
+          <h1>Every PDFRoot tool, one shortcut away.</h1>
+          <p>Use professional PDF and image tools from one clean Windows desktop app. Start free for 14 days, then choose your plan.</p>
+          <ul class="benefits">
+            <li><span class="check">✓</span>35 PDF & image tools</li>
+            <li><span class="check">✓</span>Global keyboard shortcuts</li>
+            <li><span class="check">✓</span>Desktop shortcut catalog</li>
+            <li><span class="check">✓</span>Ad-free desktop window</li>
+          </ul>
+          <p class="aside-footer">Fast&nbsp;&nbsp;•&nbsp;&nbsp;Simple&nbsp;&nbsp;•&nbsp;&nbsp;Secure</p>
+        </aside>
+        <div class="activation-main">
+          <p class="eyebrow">Welcome to PDFRoot</p>
+          <h2 id="activation-title">Choose your plan</h2>
+          <p id="activation-copy" class="subtle">Choose a plan, sign in, and get started.</p>
+          <div class="plan-choices">
+            <div class="plan-choice trial-choice">
+              <p class="payment-card-kicker">Explore everything</p>
+              <div class="plan-choice-heading"><h3>Free Trial</h3><strong>₹0</strong></div>
+              <ul class="plan-service-list"><li>All 35 PDF and image tools</li><li>All keyboard shortcuts</li><li>Full access for 14 days</li><li>One Windows computer</li></ul>
+              <button id="start-trial" class="button secondary payment-cta" type="button">Choose Free Trial</button>
+              <small>One trial per verified email and computer.</small>
+            </div>
+            <div class="plan-choice pro-choice">
+              <p class="payment-card-kicker">Full access</p>
+              <div class="plan-choice-heading"><h3>PDFRoot Shortcut Pro</h3><strong id="pro-choice-price">₹199<small> / 30 days</small></strong></div>
+              <ul class="plan-service-list"><li>All 35 PDF and image tools</li><li>Global keyboard shortcuts</li><li>Auto and Manual processing modes</li><li>Ad-free desktop workspace</li><li>Automatic updates</li><li>Automatic activation after payment</li><li>One Windows computer</li></ul>
+              <button id="choose-pro" class="button payment-cta" type="button">Continue to payment</button>
+              <small>Secure payment with Razorpay · Valid for 30 days</small>
+            </div>
+          </div>
+          <div class="device-box">
+            <div><span>This computer’s device ID</span><code id="device-id">Loading…</code></div>
+            <button id="copy-device" class="icon-button" type="button">Copy</button>
+          </div>
+          <div id="online-payment" class="online-payment" hidden>
+            <div class="payment-card-heading">
+              <div class="payment-plan-logo"><img src="pdfroot-logo.svg" alt="" /></div>
+              <div><p class="payment-card-kicker">Selected plan</p><h3>PDFRoot Shortcut Pro</h3></div>
+            <span class="payment-card-price" id="payment-card-price">₹199<span> / 30 days</span></span>
+            </div>
+            <p class="payment-card-copy">Secure payment has opened in your browser. Complete it there and PDFRoot will activate automatically.</p>
+            <p id="checkout-timer" class="checkout-timer" aria-live="polite"></p>
+            <p class="payment-trust">Secure checkout by Razorpay · Automatic activation after confirmation</p>
+            <p id="payment-progress" class="subtle" aria-live="polite"></p>
+            <button id="retry-payment" class="button payment-cta" type="button" hidden>Retry payment</button>
+          </div>
+          <details><summary>Already have an activation code?</summary>
+          <label class="field-label" for="activation-code">Monthly activation code</label>
+          <textarea id="activation-code" class="code-input" spellcheck="false" autocomplete="off" placeholder="Paste the PDR1… activation code here"></textarea>
+          <div class="activation-actions">
+            <button id="activate" class="button" type="button">Activate &amp; Continue</button>
+            <button id="contact" class="button ghost" type="button">Need renewal help?</button>
+          </div>
+          </details>
+          <p id="notice" class="notice" aria-live="polite"></p>
+          <footer class="activation-footer"><span>One license works on one Windows computer.</span><button id="exit" class="button ghost" type="button">Exit</button></footer>
+        </div>
+      </section>
+    </main>
+    <div id="signin-modal" class="signin-modal" hidden>
+      <button class="signin-backdrop" type="button" aria-label="Close sign in"></button>
+      <section id="account-panel" class="signin-dialog" role="dialog" aria-modal="true" aria-labelledby="signin-heading">
+        <button id="close-signin" class="signin-close" type="button" aria-label="Close">×</button>
+        <div class="account-heading">
+          <div><p class="modal-kicker">PDFRoot account</p><h3 id="signin-heading">Sign in to continue</h3></div>
+          <span id="signed-in-email"></span>
+        </div>
+        <p id="signin-copy" class="signin-copy">Continue securely with your Google account.</p>
+        <button id="google-sign-in" class="button google-button" type="button"><span class="google-g">G</span> Continue with Google</button>
+        <div class="signin-divider"><span>or use email OTP</span></div>
+        <div id="email-entry" class="account-row">
+          <input id="account-email" class="payment-name" type="email" maxlength="254" autocomplete="email" placeholder="Your email address" />
+          <button id="send-code" class="button secondary" type="button">Send code</button>
+        </div>
+        <div id="code-entry" class="account-row" hidden>
+          <input id="email-code" class="payment-name" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6-digit email code" />
+          <button id="verify-code" class="button secondary" type="button">Verify email</button>
+        </div>
+        <p id="account-progress" class="subtle" aria-live="polite"></p>
+        <p class="signin-security">Your sign-in is used only to activate this computer.</p>
+      </section>
+    </div>
+    <script src="activation.js"></script>
+    <script src="update-ui.js"></script>
+  </body>
+</html>
