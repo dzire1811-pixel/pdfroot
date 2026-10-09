@@ -4,9 +4,9 @@ import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 
-const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.11/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.11-x64.exe";
-const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.11-x64.exe";
-const installerSha256 = "63B259731D4210F2697EA12E577AED79F63C37C313A26AB69776531E4FF48B51";
+const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.13/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.13-x64.exe";
+const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.13-x64.exe";
+const installerSha256 = "7A522F6B44498482B8739FCD23BA65CA239CC18C7D8CA19D15EBE4CE5164EBE8";
 
 export const metadata: Metadata = {
   title: "PDFRoot Desktop Pro for Windows",
@@ -55,7 +55,7 @@ export default function DesktopProPage() {
                 )}
                 <Link href="/tools" className="inline-flex min-h-14 items-center gap-2 rounded-xl border border-white/25 px-6 font-semibold text-white transition hover:bg-white/10">Use web tools <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
-              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 11 installer · 35 desktop tools · Approximately 112 MB</p>
+              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 13 installer · 35 desktop tools · Approximately 112 MB</p>
             </div>
             <div className="rounded-[28px] border border-white/15 bg-white/10 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.25)] backdrop-blur sm:p-6">
               <div className="flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800">
@@ -94,8 +94,8 @@ export default function DesktopProPage() {
               <div className="flex items-center gap-3 text-[#e21c32]"><MonitorDown className="h-7 w-7" aria-hidden="true" /><h2 id="desktop-install" className="text-2xl font-bold text-slate-900">Install and activate</h2></div>
               <ol className="mt-6 space-y-4 text-sm leading-6 text-slate-700">
                 <li><strong>1.</strong> Download and run the Windows x64 installer.</li>
-                <li><strong>2.</strong> Open PDFRoot Desktop Pro and choose the free trial or ₹199 Pro plan. Sign in securely with your Google account when prompted.</li>
-                <li><strong>3.</strong> For Pro, complete the payment on Razorpay. Keep PDFRoot open while it confirms payment and automatically applies your 30-day licence.</li>
+                <li><strong>2.</strong> Open PDFRoot Desktop Pro and choose the free trial or ₹199 Pro plan. Sign in with Google or verify your email using a code.</li>
+                <li><strong>3.</strong> For Pro, secure Razorpay payment opens after sign-in. Complete payment there and keep PDFRoot open for automatic activation. If checkout cannot open, select “Retry payment” in the app.</li>
                 <li><strong>4.</strong> PDFRoot prepares its shortcuts automatically and stays ready in the Windows tray. Select PDF or image files and choose a tool from the PDFRoot Desktop Pro right-click menu, or use a keyboard shortcut. On Windows 11, first choose “Show more options”. Updates are checked automatically when the app opens.</li>
               </ol>
               <p className="mt-6 rounded-xl bg-green-50 p-4 text-sm leading-6 text-green-900">₹199 for 30 days on one Windows computer. Renew by making another payment through the app. Need activation or renewal help? <Link href="/contact" className="font-semibold text-green-800 underline underline-offset-2">Contact PDFRoot</Link>.</p>
