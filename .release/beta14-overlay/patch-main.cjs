@@ -3,6 +3,8 @@ const path = require("node:path");
 if (!process.argv[2]) throw new Error("Provide the path of src/main.cjs");
 const mainPath = path.resolve(process.argv[2]);
 let source = fs.readFileSync(mainPath, "utf8");
+const hasWindowsLineEndings = source.includes("\r\n");
+source = source.replace(/\r\n/g, "\n");
 const oldBlock = [
   '      const filename = path.basename(result.outputPath || item.filePath);',
   '      if (result.outputPath) item.filePath = result.outputPath;',
@@ -22,4 +24,4 @@ if (source.split(oldBlock).length !== 2 || source.split(oldMessage).length !== 2
   throw new Error("Crop save code has changed; refusing to patch a different version of main.cjs");
 }
 source = source.replace(oldBlock, newBlock).replace(oldMessage, newMessage);
-fs.writeFileSync(mainPath, source);
+fs.writeFileSync(mainPath, hasWindowsLineEndings ? source.replace(/\n/g, "\r\n") : source);
