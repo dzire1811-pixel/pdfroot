@@ -37,6 +37,7 @@ jobs:
           node .release/beta14-overlay/patch-main.cjs "$appDir/src/main.cjs"
           Copy-Item -Path ".release/beta15-overlay/app/*" -Destination $appDir -Recurse -Force
           node .release/beta15-overlay/patch-main.cjs "$appDir/src/main.cjs"
+          node .release/beta15-overlay/patch-existing-tests.cjs "$appDir/src/local-auto.test.cjs"
           foreach ($manifest in @("$appDir/package.json", "$appDir/package-lock.json")) {
             $text = Get-Content -LiteralPath $manifest -Raw
             if (-not $text.Contains("0.7.0-beta.13")) { throw "Expected Beta 13 source: $manifest" }
