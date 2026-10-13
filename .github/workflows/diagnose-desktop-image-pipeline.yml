@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   inspect:
-    if: github.event.head_commit.message == 'Inspect full desktop image engine source'
+    if: github.event.head_commit.message == 'Inspect Front Back output color test'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,6 +14,6 @@ jobs:
           mkdir -p /tmp/pdfroot-beta
           unzip -q .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip -d /tmp/pdfroot-beta
           cd /tmp/pdfroot-beta/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/src
-          echo 'PDFROOT_FULL_IMAGE_SOURCE_START'
-          cat local-auto.cjs
-          echo 'PDFROOT_FULL_IMAGE_SOURCE_END'
+          echo 'PDFROOT_CARD_COLOR_TEST_START'
+          sed -n '188,246p' local-auto.test.cjs
+          echo 'PDFROOT_CARD_COLOR_TEST_END'
