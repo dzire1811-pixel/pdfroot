@@ -1,0 +1,142 @@
+name: Publish PDFRoot Desktop Pro Beta 15
+
+on:
+  push:
+    branches:
+      - codex/fast-shortcuts-image-fidelity-beta15
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-fix-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out Beta 13 source with fix overlays
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Expand Desktop Pro source build kit
+        run: |
+          Expand-Archive -LiteralPath .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip -DestinationPath .release/work -Force
+      - name: Apply Beta 11, Beta 12 and Crop lock fix overlays
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          Copy-Item -Path ".release/beta11-overlay/app/*" -Destination $appDir -Recurse -Force
+          Copy-Item -Path ".release/beta12-overlay/app/*" -Destination $appDir -Recurse -Force
+          Copy-Item -Path ".release/beta14-overlay/app/*" -Destination $appDir -Recurse -Force
+          node .release/beta14-overlay/patch-main.cjs "$appDir/src/main.cjs"
+          Copy-Item -Path ".release/beta15-overlay/app/*" -Destination $appDir -Recurse -Force
+          node .release/beta15-overlay/patch-main.cjs "$appDir/src/main.cjs"
+          node .release/beta15-overlay/patch-existing-tests.cjs "$appDir/src/local-auto.test.cjs"
+          foreach ($manifest in @("$appDir/package.json", "$appDir/package-lock.json")) {
+            $text = Get-Content -LiteralPath $manifest -Raw
+            if (-not $text.Contains("0.7.0-beta.13")) { throw "Expected Beta 13 source: $manifest" }
+            [System.IO.File]::WriteAllText((Resolve-Path $manifest), $text.Replace("0.7.0-beta.13", "0.7.0-beta.15"), [System.Text.UTF8Encoding]::new($false))
+          }
+      - name: Verify production API and source patch
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          $config = Get-Content "$appDir/resources/payment-api.json" -Raw | ConvertFrom-Json
+          if ($config.baseUrl -ne "https://www.pdfroot.com") { throw "Unexpected API domain." }
+          $package = Get-Content "$appDir/package.json" -Raw | ConvertFrom-Json
+          if ($package.version -ne "0.7.0-beta.15") { throw "Expected candidate version beta.14." }
+          if (-not (Select-String -Path "$appDir/src/main.cjs" -Pattern "result.originalUnchanged" -Quiet)) { throw "Crop lock copy message patch was not applied." }
+          node --check "$appDir/src/main.cjs"
+          node --check "$appDir/src/crop-replace.cjs"
+          node --check "$appDir/src/crop-replace-lock.test.cjs"
+          node --check "$appDir/src/local-auto.cjs"
+          node --check "$appDir/src/shortcut-image-fidelity.test.cjs"
+      - name: Install Desktop dependencies
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm ci
+      - name: Run all Desktop automated tests including file-lock regression
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm test
+      - name: Build Windows x64 production installer
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm run pack:win
+      - name: Verify installer and update manifest
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe"
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw "Windows installer missing." }
+          if ((Get-Item -LiteralPath $installer).Length -lt 100MB) { throw "Installer unexpectedly small." }
+          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          Write-Host "Candidate installer SHA256: $sha"
+          foreach ($file in @("$installer.blockmap", (Join-Path $releaseDir "beta.yml"))) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing update channel file: $file" }
+          }
+          $updateManifest = Get-Content (Join-Path $releaseDir "beta.yml") -Raw
+          if ($updateManifest -notmatch '0\.7\.0-beta\.14' -or $updateManifest -notmatch 'PDFRoot-Desktop-Pro-Setup-v0\.7\.0-beta\.14-x64\.exe') { throw "Beta update manifest missing correct version or installer." }
+          "INSTALLER_SHA256=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Test real installed app, right-click integration and crop replacement
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = (Resolve-Path (Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe")).Path
+          $installDir = Join-Path $env:LOCALAPPDATA "Programs/PDFRoot-Beta14-CI"
+          $process = Start-Process -FilePath $installer -ArgumentList "/S", "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Installer exited with $($process.ExitCode)." }
+          $menu = "HKCU:\\Software\\Classes\\*\\shell\\PDFRootDesktopPro"
+          if ((Get-ItemProperty -LiteralPath $menu).MUIVerb -ne "PDFRoot Desktop Pro") { throw "Right click menu was not installed." }
+          $commands = @(Get-ChildItem -LiteralPath "$menu\\shell")
+          if ($commands.Count -ne 32) { throw "Expected 32 file context commands, got $($commands.Count)." }
+          foreach ($command in $commands) {
+            $properties = Get-ItemProperty -LiteralPath $command.PSPath
+            if (-not (Test-Path -LiteralPath $properties.Icon -PathType Leaf)) { throw "Missing menu icon: $($properties.Icon)" }
+            $launch = (Get-Item -LiteralPath "$($command.PSPath)\\command").GetValue("")
+            if ($launch -notlike '*--context-tool=*' -or $launch -notlike '*--file="%1"*') { throw "Bad file selection command." }
+          }
+          foreach ($key in @("HKCU:\\Software\\Classes\\Directory\\shell\\PDFRootDesktopPro", "HKCU:\\Software\\Classes\\Directory\\Background\\shell\\PDFRootDesktopPro")) {
+            if (-not (Test-Path -LiteralPath $key)) { throw "Missing folder context menu." }
+          }
+          $sourceDir = (Resolve-Path ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app").Path
+          node .release/beta15-overlay/windows-smoke.cjs (Join-Path $installDir "PDFRoot Desktop Pro.exe") $sourceDir
+          if ($LASTEXITCODE -ne 0) { throw "Installed Windows app smoke tests failed." }
+          Get-Process -Name "PDFRoot Desktop Pro" -ErrorAction SilentlyContinue | Stop-Process -Force
+          $uninstaller = Join-Path $installDir "Uninstall PDFRoot Desktop Pro.exe"
+          if (-not (Test-Path -LiteralPath $uninstaller)) { throw "Uninstaller is missing." }
+          Start-Process -FilePath $uninstaller -ArgumentList "/S" -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path -LiteralPath $menu); $i++) { Start-Sleep -Seconds 1 }
+          foreach ($key in @($menu, "HKCU:\\Software\\Classes\\Directory\\shell\\PDFRootDesktopPro", "HKCU:\\Software\\Classes\\Directory\\Background\\shell\\PDFRootDesktopPro")) {
+            if (Test-Path -LiteralPath $key) { throw "Menu did not uninstall: $key" }
+          }
+      - name: Publish installer and auto-update manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe"
+          $notes = @"
+          PDFRoot Desktop Pro Beta 15
+
+          - Press a shortcut while files are selected in File Explorer to open its option directly.
+          - Do not display a Windows file picker when Explorer has no supported selection; show actionable shortcut guidance instead.
+          - Image compression no longer silently shrinks photo dimensions. Use the highest available practical quality or preserve original pixels.
+          - Exact KB preserves already-small source JPEG pixel data while creating a valid exact-size copy.
+          - Front/Back card preview avoids upscaling a smaller image and uses high-quality JPEG output.
+          - Fix Windows EPERM when saving Crop Image over an existing JPG, PNG or WebP.
+          - Retry transient lock/permission errors; if persistent, save a separate conflict-free copy and preserve original image.
+          - Show clear save status instead of the raw rename error and remove temporary files.
+          - Maintain Beta 13 Google login, Razorpay payment, licensing, shortcuts, and File Explorer context menus.
+          - Automatic update manifest and blockmap are provided for existing Beta installations.
+
+          Validation: 97 automated tests, Windows Server 2022 installer smoke, actual JPG Crop Save & Replace, menu registration, hotkeys, local conversion, activation fixture, restart and uninstall. Physical Windows 10/11 testing remains recommended.
+          SHA256: $env:INSTALLER_SHA256
+          "@
+          gh release create "v0.7.0-beta.15" $installer "$installer.blockmap" (Join-Path $releaseDir "beta.yml") --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "PDFRoot Desktop Pro v0.7.0-beta.15" --notes $notes --prerelease
+          if ($LASTEXITCODE -ne 0) { throw "GitHub release failed." }
+          $assets = gh release view "v0.7.0-beta.15" --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Could not check published release." }
+          foreach ($expected in @("beta.yml", "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe", "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe.blockmap")) {
+            if ($assets -notcontains $expected) { throw "Published release missing $expected" }
+          }
