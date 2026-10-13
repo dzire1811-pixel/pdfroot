@@ -100,7 +100,7 @@ jobs:
             if (-not (Test-Path -LiteralPath $key)) { throw "Missing folder context menu." }
           }
           $sourceDir = (Resolve-Path ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app").Path
-          node .release/beta15-overlay/windows-smoke.cjs (Join-Path $installDir "PDFRoot Desktop Pro.exe") $sourceDir
+          node .release/beta14-overlay/windows-smoke.cjs (Join-Path $installDir "PDFRoot Desktop Pro.exe") $sourceDir
           if ($LASTEXITCODE -ne 0) { throw "Installed Windows app smoke tests failed." }
           Get-Process -Name "PDFRoot Desktop Pro" -ErrorAction SilentlyContinue | Stop-Process -Force
           $uninstaller = Join-Path $installDir "Uninstall PDFRoot Desktop Pro.exe"
