@@ -37,7 +37,7 @@ replaceOnce(
 );
 replaceOnce(
   `    await dialog.showMessageBox({ type: "info", title: tool.name,
-      message: \`${tool.name} needs ${expectedType} files.\`, detail: "Choose the required files to continue.", buttons: ["Choose files", "Cancel"] })
+      message: \`\${tool.name} needs \${expectedType} files.\`, detail: "Choose the required files to continue.", buttons: ["Choose files", "Cancel"] })
       .then(async result => { selectedFiles = result.response === 0 ? await chooseToolFiles(slug) : []; });
     if (!selectedFiles.length || !contextToolAcceptsFiles(slug, selectedFiles)) return false;`,
   `    notify("PDFRoot Desktop Pro", tool.name + " requires " + expectedType + " files. Select valid files in File Explorer and try again.");
