@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   inspect:
-    if: github.event.head_commit.message == 'Inspect local image pipeline before fidelity patch'
+    if: github.event.head_commit.message == 'Inspect full desktop image engine source'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,9 +14,6 @@ jobs:
           mkdir -p /tmp/pdfroot-beta
           unzip -q .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip -d /tmp/pdfroot-beta
           cd /tmp/pdfroot-beta/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/src
-          echo '==== automatic-mode.cjs ===='
-          cat automatic-mode.cjs
-          echo '==== image handling in local-auto.cjs ===='
-          grep -nE -i 'quality|resize|compress|jpeg|jimp|image|kb|scale|resampl|dimensions' local-auto.cjs | head -220
-          echo '==== image-handling source list ===='
-          find . -maxdepth 1 -type f | sort
+          echo 'PDFROOT_FULL_IMAGE_SOURCE_START'
+          cat local-auto.cjs
+          echo 'PDFROOT_FULL_IMAGE_SOURCE_END'
