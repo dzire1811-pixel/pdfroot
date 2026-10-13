@@ -1,0 +1,83 @@
+name: Test PDFRoot Desktop Fast Shortcuts & Image Fidelity Beta 15
+
+on:
+  push:
+    branches:
+      - codex/fast-shortcuts-image-fidelity-beta15
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows-fix-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out Beta 13 source with fix overlays
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Expand Desktop Pro source build kit
+        run: |
+          Expand-Archive -LiteralPath .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip -DestinationPath .release/work -Force
+      - name: Apply Beta 11, Beta 12 and Crop lock fix overlays
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          Copy-Item -Path ".release/beta11-overlay/app/*" -Destination $appDir -Recurse -Force
+          Copy-Item -Path ".release/beta12-overlay/app/*" -Destination $appDir -Recurse -Force
+          Copy-Item -Path ".release/beta14-overlay/app/*" -Destination $appDir -Recurse -Force
+          node .release/beta14-overlay/patch-main.cjs "$appDir/src/main.cjs"
+          Copy-Item -Path ".release/beta15-overlay/app/*" -Destination $appDir -Recurse -Force
+          node .release/beta15-overlay/patch-main.cjs "$appDir/src/main.cjs"
+          foreach ($manifest in @("$appDir/package.json", "$appDir/package-lock.json")) {
+            $text = Get-Content -LiteralPath $manifest -Raw
+            if (-not $text.Contains("0.7.0-beta.13")) { throw "Expected Beta 13 source: $manifest" }
+            [System.IO.File]::WriteAllText((Resolve-Path $manifest), $text.Replace("0.7.0-beta.13", "0.7.0-beta.15"), [System.Text.UTF8Encoding]::new($false))
+          }
+      - name: Verify production API and source patch
+        run: |
+          $appDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app"
+          $config = Get-Content "$appDir/resources/payment-api.json" -Raw | ConvertFrom-Json
+          if ($config.baseUrl -ne "https://www.pdfroot.com") { throw "Unexpected API domain." }
+          $package = Get-Content "$appDir/package.json" -Raw | ConvertFrom-Json
+          if ($package.version -ne "0.7.0-beta.15") { throw "Expected candidate version beta.14." }
+          if (-not (Select-String -Path "$appDir/src/main.cjs" -Pattern "result.originalUnchanged" -Quiet)) { throw "Crop lock copy message patch was not applied." }
+          node --check "$appDir/src/main.cjs"
+          node --check "$appDir/src/crop-replace.cjs"
+          node --check "$appDir/src/crop-replace-lock.test.cjs"
+          node --check "$appDir/src/local-auto.cjs"
+          node --check "$appDir/src/shortcut-image-fidelity.test.cjs"
+      - name: Install Desktop dependencies
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm ci
+      - name: Run all Desktop automated tests including file-lock regression
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm test
+      - name: Build Windows x64 installer candidate (not published)
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm run pack:win
+      - name: Confirm Beta15 candidate installer exists
+        run: |
+          $releaseDir = ".release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release"
+          $installer = Join-Path $releaseDir "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe"
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw "Windows installer missing." }
+          if ((Get-Item -LiteralPath $installer).Length -lt 100MB) { throw "Installer unexpectedly small." }
+          $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
+          Write-Host "Candidate installer SHA256: $sha"
+          "Candidate installer SHA256: $sha" | Out-File -FilePath (Join-Path $releaseDir "SHA256.txt") -Encoding utf8
+      - name: Upload candidate for validation (no automatic customer update)
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDFRoot-Desktop-Pro-beta15-Fast-Shortcuts-Image-Fidelity-Candidate
+          path: |
+            .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe
+            .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/SHA256.txt
+          retention-days: 7
