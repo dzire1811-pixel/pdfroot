@@ -58,7 +58,7 @@ class ScannerScreen(
         }
         logo.addView(label("PDF", 29, red, true))
         logo.addView(label("Root", 29, dark, true))
-        logo.addView(label("  ALL-IN-ONE", 11, muted))
+        logo.addView(label("  MOBILE", 11, muted))
         main.addView(logo)
 
         val hero = card()
@@ -109,7 +109,7 @@ class ScannerScreen(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        libraryHeader.addView(label("My Scans", 20, dark, true),
+        libraryHeader.addView(label("My Documents", 20, dark, true),
             LinearLayout.LayoutParams(0, -2, 1f))
         libraryHeader.addView(savedCount)
         main.addView(libraryHeader, top(27))
@@ -131,7 +131,7 @@ class ScannerScreen(
             val empty = card()
             empty.addView(column(18).apply {
                 addView(label(
-                    "No scans yet. Tap “Scan a document” to capture your first PDF.",
+                    "No PDFs yet. Scan a document or convert gallery images to create your first PDF.",
                     14, muted
                 ))
             })
