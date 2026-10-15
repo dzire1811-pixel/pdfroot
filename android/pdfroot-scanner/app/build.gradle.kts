@@ -11,6 +11,7 @@ dependencies {
  implementation("androidx.activity:activity-ktx:1.10.1")
  implementation("androidx.appcompat:appcompat:1.7.1")
  implementation("androidx.browser:browser:1.8.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
  implementation("com.google.android.material:material:1.12.0")
  implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 }
