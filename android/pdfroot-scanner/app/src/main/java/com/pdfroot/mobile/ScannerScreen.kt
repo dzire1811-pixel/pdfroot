@@ -22,6 +22,8 @@ class ScannerScreen(
     private val context: Context,
     private val onScan: () -> Unit,
     private val onTools: () -> Unit,
+    private val onImagePdf: () -> Unit,
+    private val onQuickTool: (String) -> Unit,
     private val onOpen: (File) -> Unit,
     private val onShare: (File) -> Unit,
     private val onSave: (File) -> Unit,
@@ -56,12 +58,12 @@ class ScannerScreen(
         }
         logo.addView(label("PDF", 29, red, true))
         logo.addView(label("Root", 29, dark, true))
-        logo.addView(label("  SCANNER", 11, muted))
+        logo.addView(label("  ALL-IN-ONE", 11, muted))
         main.addView(logo)
 
         val hero = card()
         val heroBody = column(22)
-        heroBody.addView(label("Scan. Edit. Save.", 27, dark, true))
+        heroBody.addView(label("All your documents. One app.", 25, dark, true))
         heroBody.addView(label(
             "Turn paper documents into clean, multi-page PDFs with your phone.",
             15, muted
@@ -73,12 +75,33 @@ class ScannerScreen(
         hero.addView(heroBody)
         main.addView(hero, top(25))
 
+        val imagesCard = card()
+        imagesCard.addView(column(18).apply {
+            addView(label("Images to PDF · Offline", 18, dark, true))
+            addView(label("Select photos from your gallery and make one multi-page PDF.", 13, muted), top(6))
+            addView(button("Choose images & create PDF", false) { onImagePdf() },
+                LinearLayout.LayoutParams(-1, dp(49)).apply { topMargin = dp(13) })
+        })
+        main.addView(imagesCard, top(15))
+
         val toolsCard = card()
         val toolsBody = column(18)
         toolsBody.addView(label("All PDFRoot Tools", 18, dark, true))
         toolsBody.addView(label("Image resize, merge PDF, compress and more.", 13, muted), top(5))
-        toolsBody.addView(button("Open PDFRoot Tools", false) { onTools() },
+        toolsBody.addView(button("Browse All Tools", false) { onTools() },
             LinearLayout.LayoutParams(-1, dp(49)).apply { topMargin = dp(12) })
+        toolsBody.addView(label("Quick access", 14, dark, true), top(17))
+        listOf(
+            "Merge PDF" to "merge-pdf",
+            "Compress PDF" to "compress-pdf",
+            "Exact KB Resize" to "resize-image-to-exact-kb",
+            "Crop Image" to "crop-image",
+            "Signature Resize" to "signature-resize-tool",
+            "PDF to JPG" to "pdf-to-jpg"
+        ).forEach { (title, slug) ->
+            toolsBody.addView(button(title + "  ›", false) { onQuickTool(slug) },
+                LinearLayout.LayoutParams(-1, dp(43)).apply { topMargin = dp(7) })
+        }
         toolsCard.addView(toolsBody)
         main.addView(toolsCard, top(15))
 
