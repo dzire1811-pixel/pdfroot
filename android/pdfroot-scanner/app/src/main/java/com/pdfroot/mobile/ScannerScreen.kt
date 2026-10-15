@@ -39,7 +39,7 @@ class ScannerScreen(
     private val status = label("Your PDFs are stored privately in this app. Use Save to keep a copy outside the app.", 12, muted)
 
     val root: ScrollView = ScrollView(context).apply {
-        setBackgroundColor(background)
+        setBackgroundColor(this@ScannerScreen.background)
         isFillViewport = true
     }
 
