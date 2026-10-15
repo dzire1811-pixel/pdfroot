@@ -12,7 +12,6 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
@@ -20,10 +19,35 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import java.io.File
 import kotlin.concurrent.thread
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
     private lateinit var screen: ScannerScreen
     private var pendingSave: File? = null
+    private val convertingImages = AtomicBoolean(false)
+
+    private val galleryPicker = registerForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isEmpty()) return@registerForActivityResult
+        if (uris.size > 30) { report("Select no more than 30 images"); return@registerForActivityResult }
+        if (!convertingImages.compareAndSet(false, true)) { report("Already processing images"); return@registerForActivityResult }
+        report("Creating PDF from " + uris.size + " image(s)...")
+        thread(name = "images-to-pdf") {
+            try {
+                val pdf = ImagePdfConverter.convert(this, uris)
+                runOnUiThread {
+                    if (!isDestroyed) { report("PDF ready: " + pdf.name); refresh() }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    if (!isDestroyed) report("Conversion failed: " + (e.localizedMessage ?: "unknown error"))
+                }
+            } finally {
+                convertingImages.set(false)
+            }
+        }
+    }
 
     private val scanLauncher =
         registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { output ->
@@ -87,6 +111,8 @@ class MainActivity : AppCompatActivity() {
             this,
             onScan = { startScan() },
             onTools = { openPdfRootTools() },
+            onImagePdf = { galleryPicker.launch(arrayOf("image/*")) },
+            onQuickTool = { openPdfRootTools("https://www.pdfroot.com/" + it) },
             onOpen = { openPdf(it) },
             onShare = { sharePdf(it) },
             onSave = { savePdf(it) },
@@ -141,16 +167,11 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
-    private fun openPdfRootTools() {
-        val url = Uri.parse("https://www.pdfroot.com/tools")
+    private fun openPdfRootTools(url: String = ToolsActivity.HOME) {
         try {
-            CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(this, url)
+            startActivity(Intent(this, ToolsActivity::class.java).putExtra(ToolsActivity.EXTRA_URL, url))
         } catch (e: Exception) {
-            try {
-                startActivity(Intent(Intent.ACTION_VIEW, url))
-            } catch (_: ActivityNotFoundException) {
-                report("No web browser is installed")
-            }
+            report("Could not open PDFRoot tools: " + (e.localizedMessage ?: "unknown error"))
         }
     }
 
