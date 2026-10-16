@@ -166,6 +166,34 @@ async function output(suffix) {
     await waitFor('compression popup closed', async () => !(await targets()).some(x => x.id === retryPage.id));
     console.log('Compact popup: real Create, clear stale status, explicit image compression, exact output, original protection and packaged native encoder passed.');
 
+    // Regression: PNG/non-JPEG pages previously stopped at a large "minimum".
+    // Click every real popup action and verify the packaged ESM/wasm renderer.
+    const pngDoc=await PDFDocument.create(), pngImage=await pngDoc.embedPng(await canvas.encode('png'));
+    for(let i=0;i<2;i++)pngDoc.addPage([300,400]).drawImage(pngImage,{x:0,y:0,width:300,height:400});
+    pngDoc.getPage(0).drawText('Strong compression sample',{x:15,y:370,size:14});
+    const pngSource=path.join(scratch,'Scanned PNG document.pdf'),pngSourceBytes=Buffer.from(await pngDoc.save());
+    fs.writeFileSync(pngSource,pngSourceBytes);
+    launch('resize-pdf-to-exact-kb',[pngSource]);
+    const strongPage=await readyPage('exact-kb-pdf.html');
+    await evaluate(strongPage,`document.querySelector('#target').value='70';document.querySelector('#settings').requestSubmit();true`);
+    await waitFor('ordinary compression choice',async()=>evaluate(strongPage,`!!document.querySelector('.compress:not(:disabled)')`));
+    await evaluate(strongPage,`document.querySelector('.compress').click();true`);
+    await waitFor('Strong opt-in choice',async()=>evaluate(strongPage,`!!document.querySelector('.strong:not(:disabled)')`));
+    const warning=await evaluate(strongPage,`document.querySelector('#results').textContent`);
+    assert.match(warning,/resolution/);assert.match(warning,/Text and forms become images/);assert.doesNotMatch(warning,/needs at least/);
+    assert.equal(fs.readdirSync(scratch).filter(name=>name.startsWith('Scanned PNG document-exact-')).length,0,'Rasterized before Strong consent');
+    await captureScreenshot(strongPage,path.join(source,'release','Exact-KB-PDF-strong-choice.png'));
+    await evaluate(strongPage,`document.querySelector('.strong').click();true`);
+    await waitFor('70 KB Strong output',async()=>evaluate(strongPage,`/Saved: 70 KB exactly.*Strong compression used/.test(document.querySelector('#results').textContent)`),60000);
+    const strongName=fs.readdirSync(scratch).find(name=>name.startsWith('Scanned PNG document-exact-'));
+    assert.equal(fs.statSync(path.join(scratch,strongName)).size,70000);
+    const strongOutput=await PDFDocument.load(fs.readFileSync(path.join(scratch,strongName)));assert.equal(strongOutput.getPageCount(),2);
+    assert.deepEqual(fs.readFileSync(pngSource),pngSourceBytes);
+    await captureScreenshot(strongPage,path.join(source,'release','Exact-KB-PDF-strong-result.png'));
+    await evaluate(strongPage,`setTimeout(()=>document.querySelector('#cancel').click(),100);true`);
+    await waitFor('Strong popup closed',async()=>!(await targets()).some(x=>x.id===strongPage.id));
+    console.log('Installed Strong compression: PNG pages reached exactly 70,000 bytes; explicit consent, packaged renderer, all pages and original protection passed.');
+
     // Exercise the same Explorer image through all three real UI buttons.
     const compressionPhoto = path.join(scratch, 'પરીક્ષણ compression photo.jpg');
     const compressionBytes = await canvas.encode('jpeg',97);

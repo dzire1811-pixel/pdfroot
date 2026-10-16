@@ -21,13 +21,13 @@ function setBusy(value) {
 function action(row, label, handler, className = '') {
   const button = document.createElement('button'); button.type = 'button'; button.className = className; button.textContent = label; button.addEventListener('click', handler); row.append(button);
 }
-async function createPdf(allowImageCompression = false) {
+async function createPdf(allowImageCompression = false, allowStrongCompression = false) {
   if (busy) return;
   const targetKb = target.value;
   if (!Number.isInteger(Number(targetKb)) || Number(targetKb) < 5 || Number(targetKb) > 100000) { status('Enter a whole number from 5 to 100,000 KB.', 'error'); return; }
-  setBusy(true); status(allowImageCompression ? 'Creating PDF with the best image quality that fits…' : 'Creating your PDF…');
+  setBusy(true); status(allowStrongCompression ? 'Trying smaller page images for your target…' : allowImageCompression ? 'Creating PDF with the best image quality that fits…' : 'Creating your PDF…');
   try {
-    const response = await api.exactPdfRun({ targetKb, bytesPerKb: 1000, allowImageCompression });
+    const response = await api.exactPdfRun({ targetKb, bytesPerKb: 1000, allowImageCompression, allowStrongCompression });
     if (response.error) { status(response.error, 'error'); return; }
     results.hidden = false; results.replaceChildren();
     for (const result of response.results || []) {
@@ -36,17 +36,22 @@ async function createPdf(allowImageCompression = false) {
       const text = document.createElement('p');
       if (result.ok) {
         text.className = 'success';
-        text.textContent = `Saved: ${Number(targetKb).toLocaleString('en-US')} KB exactly. ${result.qualityChanged ? 'Images compressed; dimensions unchanged.' + (result.imageQuality < 20 ? ' Strong compression used: check readability before upload.' : '') : 'Original quality preserved.'}`;
+        text.textContent = `Saved: ${Number(targetKb).toLocaleString('en-US')} KB exactly. ${result.method === 'strong-compressed' ? 'Strong compression used. Pages are images; check readability before upload.' : result.qualityChanged ? 'Images compressed; dimensions unchanged.' + (result.imageQuality < 20 ? ' Strong compression used: check readability before upload.' : '') : 'Original quality preserved.'}`;
         row.append(text); action(row, 'Show PDF', () => api.exactPdfReveal(result.outputPath));
       } else if (result.code === 'TARGET_UNREACHABLE' && result.bestBytes) {
-        const minimumKb = Math.ceil((allowImageCompression ? result.compressionBestBytes || result.bestBytes : result.bestBytes) / 1000);
+        const minimumKb = Math.ceil(Math.min(result.bestBytes, ...(allowImageCompression ? [result.compressionBestBytes || Infinity] : []), ...(allowStrongCompression ? [result.strongBestBytes || Infinity] : [])) / 1000);
         text.className = 'notice';
         text.textContent = allowImageCompression
-          ? `This PDF needs at least ${minimumKb.toLocaleString('en-US')} KB with the supported compression. Try that size.`
-          : `${Number(targetKb).toLocaleString('en-US')} KB needs image compression, which may change image quality. Original quality needs ${minimumKb.toLocaleString('en-US')} KB.`;
+          ? `The methods tried did not reach ${Number(targetKb).toLocaleString('en-US')} KB. Smallest found: ${minimumKb.toLocaleString('en-US')} KB.`
+          : `The lossless methods tried did not reach ${Number(targetKb).toLocaleString('en-US')} KB. Smallest found: ${minimumKb.toLocaleString('en-US')} KB. Image compression may reduce quality.`;
         row.append(text);
         if (!allowImageCompression) action(row, `Compress to ${Number(targetKb).toLocaleString('en-US')} KB`, () => createPdf(true), 'compress');
-        action(row, `Create ${minimumKb.toLocaleString('en-US')} KB`, () => { target.value = minimumKb; return createPdf(allowImageCompression); });
+        if (allowImageCompression && !allowStrongCompression) {
+          const warning = document.createElement('p'); warning.className = 'notice';
+          warning.textContent = 'Strong compression lowers resolution. Text and forms become images; clarity may decrease.'; row.append(warning);
+          action(row, `Strong compress to ${Number(targetKb).toLocaleString('en-US')} KB`, () => createPdf(true, true), 'compress strong');
+        }
+        action(row, `Create ${minimumKb.toLocaleString('en-US')} KB`, () => { target.value = minimumKb; return createPdf(allowImageCompression, allowStrongCompression); });
       } else { text.className = 'error'; text.textContent = result.message || 'Could not create this PDF. Please try another file.'; row.append(text); }
       results.append(row);
     }

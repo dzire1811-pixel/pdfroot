@@ -1,4 +1,4 @@
-name: Publish Desktop Pro Beta 19
+name: Publish Desktop Pro Beta 20
 on:
   push:
     branches: [codex/exact-kb-pdf]
@@ -45,7 +45,7 @@ jobs:
       - name: Verify installed Windows application
         run: |
           $appDir = (Resolve-Path '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app').Path
-          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe'
+          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.20-x64.exe'
           $installDir = Join-Path $env:LOCALAPPDATA 'Programs/PDFRoot-Exact-KB-Test'
           $process = Start-Process $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Installer failed' }
@@ -54,7 +54,7 @@ jobs:
       - name: Save installer candidate
         uses: actions/upload-artifact@v4
         with:
-          name: PDFRoot-Desktop-Pro-Beta19-Verified
+          name: PDFRoot-Desktop-Pro-Beta20-Verified
           path: |
             .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.exe
             .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.blockmap
@@ -68,10 +68,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $releaseDir = '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release'
-          $installer = Join-Path $releaseDir 'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe'
+          $installer = Join-Path $releaseDir 'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.20-x64.exe'
           $sha = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
-          $notes = Get-Content '.release/image-compression-overlay/release-notes.md' -Raw
+          $notes = Get-Content '.release/exact-kb-pdf-overlay/beta20-release-notes.md' -Raw
           $notes += "`n`nInstaller SHA-256: ``$sha```n"
-          [System.IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP 'beta19-notes.md'), $notes)
-          gh release create v0.7.0-beta.19 $installer "$installer.blockmap" (Join-Path $releaseDir 'beta.yml') --repo $env:GITHUB_REPOSITORY --title 'PDFRoot Desktop Pro Beta 19 — Image compression levels' --notes-file (Join-Path $env:RUNNER_TEMP 'beta19-notes.md') --target $env:GITHUB_SHA --prerelease
+          [System.IO.File]::WriteAllText((Join-Path $env:RUNNER_TEMP 'beta20-notes.md'), $notes)
+          gh release create v0.7.0-beta.20 $installer "$installer.blockmap" (Join-Path $releaseDir 'beta.yml') --repo $env:GITHUB_REPOSITORY --title 'PDFRoot Desktop Pro Beta 20 — Exact KB PDF strong compression' --notes-file (Join-Path $env:RUNNER_TEMP 'beta20-notes.md') --target $env:GITHUB_SHA --prerelease
           if ($LASTEXITCODE -ne 0) { throw 'Release publishing failed' }

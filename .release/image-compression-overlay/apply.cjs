@@ -30,6 +30,6 @@ edit('src/main.cjs', "if (slug === 'resize-pdf-to-exact-kb') return startExactPd
   }`);
 for (const file of ['package.json', 'package-lock.json']) {
   const name = path.join(app, file);
-  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.18', '0.7.0-beta.19'));
+  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.18', '0.7.0-beta.20'));
 }
-console.log('Image compression presets and Beta 19 applied.');
+console.log('Image compression presets and Beta 20 applied.');

@@ -140,7 +140,7 @@ async function compressJpegImages(document, targetBytes) {
   }
   return { ...best, bestBytes: smallestBytes };
 }
-async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCompression = false } = {}) {
+async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCompression = false, allowStrongCompression = false } = {}) {
   const targetBytes = parseTarget(targetKb, bytesPerKb);
   const original = Buffer.from(input);
   if (original.length > MAX_BYTES) throw new ExactPdfError('TOO_LARGE', 'PDFs up to 100 MiB are supported.');
@@ -151,6 +151,8 @@ async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCo
   let imageQuality;
   let changedImages = 0;
   let compressionBestBytes;
+  let strongBestBytes;
+  let renderDpi;
   if (original.length > targetBytes) {
     // Rewriting XFA can break dynamic forms; never discard or flatten them.
     const acroForm = document.catalog.lookup(PDFName.of('AcroForm'));
@@ -161,7 +163,7 @@ async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCo
     const optimized = Buffer.from(await document.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false }));
     if (optimized.length < best.length) { best = optimized; method = 'lossless'; }
   }
-  if (best.length > targetBytes && allowImageCompression === true) {
+  if (best.length > targetBytes && (allowImageCompression === true || allowStrongCompression === true)) {
     const compressed = await compressJpegImages(document, targetBytes);
     compressionBestBytes = compressed?.bestBytes;
     if (compressed?.data && compressed.data.length <= targetBytes) {
@@ -171,15 +173,25 @@ async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCo
       changedImages = compressed.changedImages;
     }
   }
+  if (best.length > targetBytes && allowStrongCompression === true) {
+    const { strongCompressPdf } = require('./exact-kb-pdf-strong.cjs');
+    const compressed = await strongCompressPdf(original, targetBytes);
+    strongBestBytes = compressed.bestBytes;
+    if (compressed.data && compressed.data.length <= targetBytes) {
+      best = compressed.data; method = 'strong-compressed';
+      imageQuality = compressed.imageQuality; renderDpi = compressed.dpi;
+    }
+  }
   if (best.length > targetBytes) {
-    throw new ExactPdfError('TARGET_UNREACHABLE', `Cannot reach ${targetBytes.toLocaleString('en-US')} bytes without reducing quality. Best result from this tool: ${best.length.toLocaleString('en-US')} bytes. Choose a larger target. No file was saved.`, { bestBytes: best.length, targetBytes, originalBytes: original.length, compressionBestBytes });
+    const smallestFound = Math.min(best.length, compressionBestBytes || Infinity, strongBestBytes || Infinity);
+    throw new ExactPdfError('TARGET_UNREACHABLE', `The methods tried could not reach ${targetBytes.toLocaleString('en-US')} bytes. Smallest result found: ${smallestFound.toLocaleString('en-US')} bytes. No file was saved.`, { bestBytes: best.length, targetBytes, originalBytes: original.length, compressionBestBytes, strongBestBytes });
   }
   const data = padBeforeEof(best, targetBytes);
   const verified = await loadPdf(data);
   if (data.length !== targetBytes || verified.getPageCount() !== document.getPageCount()) {
     throw new ExactPdfError('VERIFY_FAILED', 'Output validation failed. No file was saved.');
   }
-  return { data, targetBytes, originalBytes: original.length, contentBytes: best.length, paddingBytes: data.length - best.length, pages: document.getPageCount(), method, qualityChanged: method === 'image-compressed', imageQuality, changedImages };
+  return { data, targetBytes, originalBytes: original.length, contentBytes: best.length, paddingBytes: data.length - best.length, pages: document.getPageCount(), method, qualityChanged: ['image-compressed', 'strong-compressed'].includes(method), imageQuality, changedImages, renderDpi };
 }
 async function writeNewCopy(source, data, targetBytes) {
   const parsed = path.parse(source);
@@ -213,7 +225,7 @@ async function processExactPdfFiles(files, options) {
       const { data, ...summary } = result;
       results.push({ ok: true, source, outputPath, ...summary });
     } catch (error) {
-      results.push({ ok: false, source, code: error.code || 'IO_ERROR', message: error.message, bestBytes: error.bestBytes, targetBytes: error.targetBytes, compressionBestBytes: error.compressionBestBytes });
+      results.push({ ok: false, source, code: error.code || 'IO_ERROR', message: error.message, bestBytes: error.bestBytes, targetBytes: error.targetBytes, compressionBestBytes: error.compressionBestBytes, strongBestBytes: error.strongBestBytes });
     }
   }
   return results;
