@@ -4,9 +4,9 @@ import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 
-const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.19/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe";
-const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe";
-const installerSha256 = "9B17E2900ECF9558BCE73E390A895E61BB9CB66958747E343033EA409399B96E";
+const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.20/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.20-x64.exe";
+const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.20-x64.exe";
+const installerSha256 = "2C14CB03E690EDAC88DBFE4C990960D540F8D98BA7A400C5E81BE6AA40DED268";
 
 export const metadata: Metadata = {
   title: "PDFRoot Desktop Pro for Windows",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 
 const highlights = [
   { icon: Keyboard, title: "Keyboard and right-click shortcuts", text: "Select files in File Explorer and start common PDF and image tasks with a keyboard shortcut or the PDFRoot right-click menu." },
-  { icon: Files, title: "PDF workspace", text: "Merge, compress and convert files, or create an Exact KB PDF. Preview page order for JPG to PDF and Merge PDF." },
+  { icon: Files, title: "PDF workspace", text: "Merge, compress and convert files, or create an Exact KB PDF. Optional Strong compression helps with smaller targets; check clarity before upload." },
   { icon: FileImage, title: "Image workspace", text: "Compress images with Normal, Low or Heavy and see the actual KB saved. Crop, rotate and prepare photos for government forms." },
 ];
 const catalogPreview = [
@@ -55,7 +55,7 @@ export default function DesktopProPage() {
                 )}
                 <Link href="/tools" className="inline-flex min-h-14 items-center gap-2 rounded-xl border border-white/25 px-6 font-semibold text-white transition hover:bg-white/10">Use web tools <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
-              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 19 installer · 36 desktop tools · Approximately 113 MB</p>
+              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 20 installer · 36 desktop tools · Approximately 114 MB</p>
             </div>
             <div className="rounded-[28px] border border-white/15 bg-white/10 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.25)] backdrop-blur sm:p-6">
               <div className="flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800">
