@@ -1,0 +1,59 @@
+name: Build Exact KB PDF candidate
+on:
+  push:
+    branches: [codex/exact-kb-pdf]
+permissions:
+  contents: read
+jobs:
+  windows-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assemble current desktop source and Exact KB PDF
+        run: |
+          Expand-Archive .release/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit.zip .release/work
+          $appDir = '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app'
+          foreach ($version in @(11,12,14,15)) {
+            Copy-Item ".release/beta$version-overlay/app/*" $appDir -Recurse -Force
+            if ($version -eq 14 -or $version -eq 15) { node ".release/beta$version-overlay/patch-main.cjs" "$appDir/src/main.cjs" }
+          }
+          node .release/beta15-overlay/patch-existing-tests.cjs "$appDir/src/local-auto.test.cjs"
+          node .release/exact-kb-pdf-overlay/apply.cjs $appDir
+          if ($LASTEXITCODE -ne 0) { throw 'Overlay failed' }
+      - name: Install dependencies
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm ci
+      - name: Verify and test desktop tools
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: |
+          node --check src/main.cjs
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed' }
+      - name: Build Windows x64 installer candidate
+        working-directory: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app
+        run: npm run pack:win
+      - name: Verify installed Windows application
+        run: |
+          $appDir = (Resolve-Path '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app').Path
+          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.16-x64.exe'
+          $installDir = Join-Path $env:LOCALAPPDATA 'Programs/PDFRoot-Exact-KB-Test'
+          $process = Start-Process $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Installer failed' }
+          node .release/exact-kb-pdf-overlay/windows-smoke.cjs (Join-Path $installDir 'PDFRoot Desktop Pro.exe') $appDir
+          if ($LASTEXITCODE -ne 0) { throw 'Installed smoke tests failed' }
+      - name: Save installer candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDFRoot-Exact-KB-PDF-Windows-Candidate
+          path: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.exe
+          if-no-files-found: error
+          retention-days: 14

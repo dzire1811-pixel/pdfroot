@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self';">
+<title>PDFRoot - Exact KB PDF</title><link rel="stylesheet" href="exact-kb-pdf.css">
+</head>
+<body><main>
+<header><img src="pdfroot-logo.svg" alt="PDFRoot"><span>Desktop Pro</span><small>LOCAL PDF TOOLS</small></header>
+<div class="heading"><img src="tool-icons/resize-pdf-to-exact-kb.svg" alt=""><div><h1>Exact KB PDF</h1><p>The size you need. Original quality preserved.</p></div></div>
+<section class="panel"><div class="file-heading"><h2>Your PDFs</h2><button id="choose" type="button">Choose PDF</button></div><p id="files" class="file-list">Choose a PDF to get started.</p></section>
+<form id="settings" class="panel">
+<label for="target">Target file size</label><div class="input-row"><input id="target" type="number" min="0.001" max="104857.6" step="0.001" value="500" required><select id="unit" aria-label="KB definition"><option value="1000">KB (1 KB = 1,000 bytes)</option><option value="1024">KiB (1 KiB = 1,024 bytes)</option></select></div>
+<div class="presets" aria-label="Common sizes"><button type="button" data-size="100">100</button><button type="button" data-size="200">200</button><button type="button" data-size="500">500</button><button type="button" data-size="1000">1,000</button></div>
+<p id="target-bytes" class="muted"></p>
+<div class="quality"><span aria-hidden="true">✓</span><div><h2>Quality unchanged</h2><p>Text stays selectable. Images keep their resolution and image data. Pages and form appearances stay intact.</p></div></div>
+<p class="note">Some PDFs cannot fit a small target without quality loss. We will show the best lossless size this tool found. Smaller PDFs use harmless padding to reach the exact size.</p>
+<button id="create" class="primary" type="submit">Create Exact KB PDF</button><p class="save-note">A separate copy saves beside each original PDF.</p>
+</form>
+<section id="results" class="panel" aria-live="polite" hidden></section>
+<footer>Up to 50 PDFs · 100 MiB per file · Files stay on your computer</footer>
+</main><script src="exact-kb-pdf.js"></script></body></html>
