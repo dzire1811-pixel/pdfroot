@@ -55,6 +55,14 @@ async function captureScreenshot(target, outputPath) {
     socket.addEventListener('error', () => {clearTimeout(timeout); socket.close(); reject(new Error('Screenshot connection failed'));});
   });
 }
+async function readyPage(fileName) {
+  return waitFor(`loaded ${fileName}`, async () => {
+    const page = (await targets()).find(x => x.url.split('?')[0].endsWith(fileName));
+    if (!page) return false;
+    const ready = await evaluate(page, `location.href === ${JSON.stringify(page.url)} && document.readyState === 'complete' && !!window.pdfrootDesktop && !!document.querySelector('main')`);
+    return ready ? page : false;
+  });
+}
 async function mainPage() {
   return waitFor('loaded main page', async () => {
     const page = (await targets()).find(x => /catalog\.html|activation\.html/.test(x.url));
@@ -169,7 +177,7 @@ async function output(suffix) {
     const secondPhoto = path.join(scratch, 'second image.png');
     await fs.promises.writeFile(secondPhoto, await new Jimp({ width: 90, height: 120, color: 0x3366ffff }).getBuffer(JimpMime.png));
     launch('jpg-to-pdf', [photo, secondPhoto]);
-    const preview = await waitFor('page-order preview', async () => (await targets()).find(x => x.url.includes('page-order-choice.html')));
+    const preview = await readyPage('page-order-choice.html');
     const pages = await evaluate(preview, 'window.pdfrootDesktop.pageOrderPreviews()');
     assert.equal(pages.pages.length, 2);
     await evaluate(preview, `window.pdfrootDesktop.choosePageOrder(${JSON.stringify(pages.pages.map(x => x.id))})`);
@@ -178,7 +186,7 @@ async function output(suffix) {
     assert.equal(pdf.getPageCount(), 2);
     console.log('Installed JPG/PNG-to-PDF preview and two-page output passed.');
     launch('crop-image', [photo]);
-    const crop = await waitFor('crop editor', async () => (await targets()).find(x => x.url.includes('crop-choice.html')));
+    const crop = await readyPage('crop-choice.html');
     const cropData = await evaluate(crop, 'window.pdfrootDesktop.cropItems()');
     assert.equal(cropData.length, 1);
 
@@ -213,4 +221,4 @@ async function output(suffix) {
     fs.writeFileSync(keyPath, originalKey);
     fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
-})().catch(error => { console.error(error.message); process.exitCode = 1; });
+})().catch(error => { console.error(error.stack || error.message); process.exitCode = 1; });
