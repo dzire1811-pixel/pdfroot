@@ -4,9 +4,9 @@ import Link from "next/link";
 import { ArrowRight, Check, Download, FileImage, Files, Keyboard, MonitorDown, ShieldCheck } from "lucide-react";
 import { HomepageSiteHeader } from "@/components/homepage/site-header";
 
-const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.15/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe";
-const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe";
-const installerSha256 = "494606FCE58B307F527CD3AD54FA356976128E35A6540DC7BBA28F116CEA63D9";
+const downloadUrl = "https://github.com/dzire1811-pixel/pdfroot/releases/download/v0.7.0-beta.19/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe";
+const installerName = "PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.19-x64.exe";
+const installerSha256 = "9B17E2900ECF9558BCE73E390A895E61BB9CB66958747E343033EA409399B96E";
 
 export const metadata: Metadata = {
   title: "PDFRoot Desktop Pro for Windows",
@@ -21,8 +21,8 @@ export const metadata: Metadata = {
 
 const highlights = [
   { icon: Keyboard, title: "Keyboard and right-click shortcuts", text: "Select files in File Explorer and start common PDF and image tasks with a keyboard shortcut or the PDFRoot right-click menu." },
-  { icon: Files, title: "PDF workspace", text: "Merge, compress and convert files. Preview page order for JPG to PDF and Merge PDF." },
-  { icon: FileImage, title: "Image workspace", text: "Crop, rotate and adjust images, or prepare photos for government forms." },
+  { icon: Files, title: "PDF workspace", text: "Merge, compress and convert files, or create an Exact KB PDF. Preview page order for JPG to PDF and Merge PDF." },
+  { icon: FileImage, title: "Image workspace", text: "Compress images with Normal, Low or Heavy and see the actual KB saved. Crop, rotate and prepare photos for government forms." },
 ];
 const catalogPreview = [
   { name: "Merge PDF", icon: "merge-pdf.svg" },
@@ -55,7 +55,7 @@ export default function DesktopProPage() {
                 )}
                 <Link href="/tools" className="inline-flex min-h-14 items-center gap-2 rounded-xl border border-white/25 px-6 font-semibold text-white transition hover:bg-white/10">Use web tools <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </div>
-              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 15 installer · 35 desktop tools · Approximately 112 MB</p>
+              <p className="mt-5 text-sm text-slate-300">Windows 10/11 · 64-bit (x64) · Beta 19 installer · 36 desktop tools · Approximately 113 MB</p>
             </div>
             <div className="rounded-[28px] border border-white/15 bg-white/10 p-4 shadow-[0_30px_80px_rgba(0,0,0,0.25)] backdrop-blur sm:p-6">
               <div className="flex items-center justify-between rounded-t-xl border-b border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-800">

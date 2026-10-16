@@ -1,34 +1,15 @@
-# PDFRoot Desktop Pro Beta 15
+# PDFRoot Desktop Pro Beta 19 release
 
-Production download page: https://www.pdfroot.com/desktop-pro
-GitHub release: https://github.com/dzire1811-pixel/pdfroot/releases/tag/v0.7.0-beta.15
+The production `/desktop-pro` page links to the verified Windows x64 Beta 19 installer, distributed as a GitHub Release asset. The installer is not part of the website static bundle.
 
-Installer: PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.15-x64.exe
-Size: 118425299 bytes
-SHA-256: 494606FCE58B307F527CD3AD54FA356976128E35A6540DC7BBA28F116CEA63D9
+Compress Image opens the same compact Normal / Low / Heavy chooser from the catalog, keyboard shortcut and Explorer menu. Native JPEG/WebP encoding replaces the old mild-recompression/copy behavior. Every level preserves dimensions; stronger levels are lossy. Transparent PNG stays PNG, with colour reduction only in Low/Heavy. Opaque PNG may become JPG, as disclosed before choosing a level. Already compact inputs are never enlarged, and results report original/output KB and percentage saved. Originals are kept as separate files.
 
-## Keyboard shortcut and file picker behavior
+The release also contains the Beta 18 Exact KB PDF fixes: compact popup, exact-byte outputs, explicit opt-in for lossy image compression and ICC colour-profile preservation.
 
-Auto and Normal Mode hotkeys read the currently selected, supported File Explorer files and launch the corresponding editor or conversion without invoking the Windows "Select files for..." dialog. Right-click commands do not pop open a picker either. If File Explorer does not report an eligible selection, PDFRoot shows a notification advising the user to select suitable files and press the shortcut again. A shortcut cannot process an image that has never been selected. The existing add-image chooser inside Crop is intentionally preserved for explicit user clicks.
+## Verification and build
 
-The persistent Windows STA Explorer helper, Unicode paths, automatic startup, right-click repair, current email/Google sign-in, payment and license flow remain present. Responsiveness depends on Explorer and the customer's PC; no absolute zero-delay guarantee is made.
+Source: GitHub tag `v0.7.0-beta.19`. The `test-exact-kb-pdf.yml` workflow assembles the Beta 11/12/14/15 overlays, then the Exact KB PDF overlay and image-compression overlay. It installs locked dependencies with Node.js 22, runs all 113 automated tests, builds the x64 NSIS installer and tests the installed app on Windows Server 2022 before publishing.
 
-## Image fidelity
+Installed tests exercise all three image compression buttons on the same image, verify distinct smaller output sizes, unchanged dimensions, original bytes, cancellation, actual savings messages, licensing in an isolated profile, registered shortcuts, Exact KB PDF and crop replacement. This does not replace physical Windows 10/11 device testing.
 
-- The generic and government image-compression shortcuts do not automatically shrink JPG dimensions (the previous build always shrank them 14% or 28%).
-- Lossless PNG output stays PNG; WebP is retained as WebP instead of converted to JPEG during a compression shortcut.
-- JPEG compression tries a high-quality same-resolution encode when it makes the result smaller, otherwise writes an unchanged copy. Existing originals are never modified.
-- For Exact KB, an already-small valid JPEG is padded directly without any pixel re-encoding. When output must be smaller than input, quality/dimensions may need to change; this is an unavoidable size-versus-quality constraint.
-- Front & Back does not enlarge the smaller ID photo to match the larger one, uses centered panels and higher JPEG output quality; PNG-to-JPG quality setting has also been increased.
-
-## Tests and release
-
-Source branch: codex/fast-shortcuts-image-fidelity-beta15
-Windows release workflow: https://github.com/dzire1811-pixel/pdfroot/actions/runs/38391764511
-
-- 97 automated tests passed on the Windows CI runner, covering crop, File Explorer selection, shortcut input, compression dimensions, exact-KB byte and pixel integrity, Front & Back, activation and other local tools.
-- Installer was installed on Windows Server 2022; real crop JPG replace, menu registration and uninstall, hotkey, trial fixture, conversion and restart smoke checks passed.
-- The release includes electron-updater beta.yml and installer blockmap for automatic beta updates.
-- Real physical Windows 10 and Windows 11 customer machines have not been independently checked. Not every visual/quality condition for all 35 tools is exhaustively proved by these tests.
-
-The GitHub release holds the installer outside Vercel so the website deploy remains compact.
+The GitHub prerelease contains the installer, its `.blockmap` and `beta.yml` for the existing beta automatic update channel. The website lists its SHA-256. Downloads and updates use the same installer; existing activation settings remain in the app profile.
