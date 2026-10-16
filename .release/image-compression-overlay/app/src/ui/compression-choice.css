@@ -1,0 +1,112 @@
+:root {
+  color: #10213f;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f8fafc;
+}
+
+.compress-choice-shell {
+  position: relative;
+  min-height: 346px;
+  padding: 24px 26px 23px;
+  border: 1px solid #dfe6f1;
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(185, 28, 28, 0.10), transparent 38%),
+    #ffffff;
+  box-shadow: 0 18px 45px rgba(15, 35, 69, 0.22);
+}
+
+.close-choice {
+  position: absolute;
+  top: 11px;
+  right: 13px;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #70809a;
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.close-choice:hover { background: #f1f4f8; color: #263a5a; }
+
+header { padding-right: 34px; }
+
+.brand {
+  display: block;
+  width: 118px;
+  height: auto;
+  margin-bottom: 14px;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: #b91c1c;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  margin: 7px 0 17px;
+  color: #61708a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.levels {
+  display: grid;
+  gap: 9px;
+}
+
+.level {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #142440;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+
+.level span { font-size: 14px; font-weight: 500; }
+.level small { color: #6a7890; font-size: 11px; font-weight: 400; }
+.level:hover, .level:focus-visible {
+  border-color: #b91c1c;
+  background: #fff8f8;
+  box-shadow: 0 5px 14px rgba(185, 28, 28, .11);
+  outline: none;
+  transform: translateY(-1px);
+}
+.level.heavy:hover, .level.heavy:focus-visible { background: #fff4f4; }
+
+/* Fit the image-specific disclosure in the same compact shortcut style. */
+body.image-compression .compress-choice-shell { min-height: 0; padding: 18px 20px; }
+body.image-compression header { padding-right: 25px; }
+body.image-compression .compress-choice-shell .shortcut-brand { margin-bottom: 8px; }
+body.image-compression h1 { font-size: 24px; }
+body.image-compression .subtitle { margin: 6px 0 12px; font-size: 11px; }
+body.image-compression .levels { gap: 7px; }
+body.image-compression .level { padding: 10px 12px; }

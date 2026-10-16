@@ -174,8 +174,8 @@ async function output(suffix) {
     for (const level of ['normal','low','heavy']) {
       launch('compress-image',[compressionPhoto]);
       const chooser=await readyPage('compression-choice.html');
-      const ui=await evaluate(chooser, `({title:document.querySelector('#choice-title').textContent, levels:[...document.querySelectorAll('[data-level] span')].map(x=>x.textContent), fits:document.documentElement.scrollHeight<=innerHeight})`);
-      assert.equal(ui.title,'Compress Image'); assert.deepEqual(ui.levels,['Normal','Low','Heavy']); assert.equal(ui.fits,true,'Image chooser is clipped');
+      const ui=await evaluate(chooser, `({title:document.querySelector('#choice-title').textContent, levels:[...document.querySelectorAll('[data-level] span')].map(x=>x.textContent), height:innerHeight, contentHeight:document.documentElement.scrollHeight, fits:document.documentElement.scrollHeight<=innerHeight})`);
+      assert.equal(ui.title,'Compress Image'); assert.deepEqual(ui.levels,['Normal','Low','Heavy']); assert.equal(ui.fits,true,'Image chooser is clipped: '+JSON.stringify(ui));
       if(level==='normal') await captureScreenshot(chooser,path.join(source,'release','Image-Compression-choices.png'));
       await evaluate(chooser,`setTimeout(() => document.querySelector('[data-level="${level}"]').click(),100); true`);
       const saved=await output(`-compressed-${level}.jpg`);

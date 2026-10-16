@@ -6,6 +6,7 @@ document.querySelector('#file-count').textContent = image
   : count === 1 ? 'Choose a compression level. Your PDF stays in the same folder.'
     : `Choose a compression level. ${count} PDFs will stay in their original folder.`;
 if (image) {
+  document.body.classList.add('image-compression');
   document.title = 'PDFRoot — Compress Image';
   document.querySelector('#choice-title').textContent = 'Compress Image';
   const descriptions = { normal: 'High quality · gentle compression', low: 'Smaller file · balanced quality', heavy: 'Strong compression · more visible quality loss' };
