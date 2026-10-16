@@ -54,6 +54,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PDFRoot-Exact-KB-PDF-Windows-Candidate
-          path: .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.exe
+          path: |
+            .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.exe
+            .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/Exact-KB-PDF-preview.png
           if-no-files-found: error
           retention-days: 14

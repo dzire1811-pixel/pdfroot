@@ -46,6 +46,15 @@ async function evaluate(target, expression) {
     socket.addEventListener('error', () => { clearTimeout(timeout); socket.close(); reject(new Error('CDP connection failed')); });
   });
 }
+async function captureScreenshot(target, outputPath) {
+  const socket = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => { socket.close(); reject(new Error('Screenshot timed out')); }, 15000);
+    socket.addEventListener('open', () => socket.send(JSON.stringify({id: 1, method: 'Page.captureScreenshot', params: {format: 'png', captureBeyondViewport: true}})));
+    socket.addEventListener('message', event => {const response = JSON.parse(event.data); if (response.id !== 1) return; clearTimeout(timeout); socket.close(); if (!response.result?.data) return reject(new Error('Screenshot failed')); fs.writeFileSync(outputPath, Buffer.from(response.result.data, 'base64')); resolve();});
+    socket.addEventListener('error', () => {clearTimeout(timeout); socket.close(); reject(new Error('Screenshot connection failed'));});
+  });
+}
 async function mainPage() { return waitFor('main page', async () => (await targets()).find(x => /catalog\.html|activation\.html/.test(x.url))); }
 async function invoke(name, ...args) {
   return evaluate(await mainPage(), `window.pdfrootDesktop.${name}(...${JSON.stringify(args)})`);
@@ -93,7 +102,7 @@ async function output(suffix) {
     await waitFor('activated catalog', async () => (await targets()).find(x => x.url.endsWith('catalog.html')));
     assert.equal((await invoke('processingMode')).mode, 'auto');
     assert.equal((await invoke('tools')).length, 36);
-    console.log('Fresh profile: activation, 35-tool catalog, automatic Windows startup, and all 27 registered shortcuts passed.');
+    console.log('Fresh profile: activation, 36-tool catalog, automatic Windows startup, and all 28 registered shortcuts passed.');
 
     const exactSource = path.join(scratch, 'Exact KB source.pdf');
     const exactDoc = await PDFDocument.create();
@@ -106,6 +115,7 @@ async function output(suffix) {
     assert.equal(fs.statSync(exactResult.results[0].outputPath).size, 500000);
     const reopened = await PDFDocument.load(fs.readFileSync(exactResult.results[0].outputPath));
     assert.equal(reopened.getPageCount(), 1);
+    await captureScreenshot(exactPage, path.join(source, 'release', 'Exact-KB-PDF-preview.png'));
     await evaluate(exactPage, 'window.close()');
     console.log('Installed Exact KB PDF: right-click launch, worker, IPC, and 500,000-byte output passed.');
 
@@ -130,7 +140,7 @@ async function output(suffix) {
     const pages = await evaluate(preview, 'window.pdfrootDesktop.pageOrderPreviews()');
     assert.equal(pages.pages.length, 2);
     await evaluate(preview, `window.pdfrootDesktop.choosePageOrder(${JSON.stringify(pages.pages.map(x => x.id))})`);
-    const pdfName = await output('.pdf');
+    const pdfName = await output('PDFRoot-images.pdf');
     const pdf = await PDFDocument.load(fs.readFileSync(path.join(scratch, pdfName)));
     assert.equal(pdf.getPageCount(), 2);
     console.log('Installed JPG/PNG-to-PDF preview and two-page output passed.');
