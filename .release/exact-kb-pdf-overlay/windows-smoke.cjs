@@ -162,8 +162,40 @@ async function output(suffix) {
     assert.equal(fs.statSync(path.join(scratch,compressedOutput)).size,chosenKb*1000);
     assert.deepEqual(fs.readFileSync(imageSource),Buffer.from(largeBytes));
     await captureScreenshot(retryPage,path.join(source,'release','Exact-KB-PDF-result.png'));
-    await evaluate(retryPage,`document.querySelector('#cancel').click(); true`);
+    await evaluate(retryPage,`setTimeout(() => document.querySelector('#cancel').click(), 100); true`);
+    await waitFor('compression popup closed', async () => !(await targets()).some(x => x.id === retryPage.id));
     console.log('Compact popup: real Create, clear stale status, explicit image compression, exact output, original protection and packaged native encoder passed.');
+
+    // Exercise the same Explorer image through all three real UI buttons.
+    const compressionPhoto = path.join(scratch, 'પરીક્ષણ compression photo.jpg');
+    const compressionBytes = await canvas.encode('jpeg',97);
+    fs.writeFileSync(compressionPhoto,compressionBytes);
+    const compressionSizes=[];
+    for (const level of ['normal','low','heavy']) {
+      launch('compress-image',[compressionPhoto]);
+      const chooser=await readyPage('compression-choice.html');
+      const ui=await evaluate(chooser, `({title:document.querySelector('#choice-title').textContent, levels:[...document.querySelectorAll('[data-level] span')].map(x=>x.textContent), fits:document.documentElement.scrollHeight<=innerHeight})`);
+      assert.equal(ui.title,'Compress Image'); assert.deepEqual(ui.levels,['Normal','Low','Heavy']); assert.equal(ui.fits,true,'Image chooser is clipped');
+      if(level==='normal') await captureScreenshot(chooser,path.join(source,'release','Image-Compression-choices.png'));
+      await evaluate(chooser,`setTimeout(() => document.querySelector('[data-level="${level}"]').click(),100); true`);
+      const saved=await output(`-compressed-${level}.jpg`);
+      const data=fs.readFileSync(path.join(scratch,saved)), decoded=await Jimp.read(data);
+      assert.equal(decoded.width,420); assert.equal(decoded.height,500);
+      assert.ok(data.length<compressionBytes.length*.95); compressionSizes.push(data.length);
+      await waitFor('image savings notification',async()=>{
+        const activity=await invoke('shortcutActivity');
+        return activity?.label==='Compress Image' && activity.phase==='complete' && /KB → .*KB/.test(activity.message);
+      });
+      await waitFor('chooser closed',async()=>!(await targets()).some(x=>x.id===chooser.id));
+    }
+    assert.ok(compressionSizes[0]>compressionSizes[1] && compressionSizes[1]>compressionSizes[2]);
+    assert.deepEqual(fs.readFileSync(compressionPhoto),compressionBytes);
+    launch('compress-image',[compressionPhoto]);
+    const cancelledChooser=await readyPage('compression-choice.html');
+    await evaluate(cancelledChooser,`setTimeout(() => document.querySelector('#close-choice').click(),100); true`);
+    await waitFor('cancelled chooser closed',async()=>!(await targets()).some(x=>x.id===cancelledChooser.id));
+    assert.equal(fs.readdirSync(scratch).filter(x=>/-compressed-(normal|low|heavy)\.jpg$/.test(x)).length,3);
+    console.log('Installed Compress Image Normal/Low/Heavy:',compressionBytes.length,'→',compressionSizes.join('/'),'; UI, actual savings, original protection and cancel passed.');
 
     // Send an actual Windows keyboard event; no manual Refresh is invoked.
     const ps = spawnSync('powershell.exe', ['-NoProfile', '-STA', '-Command',
