@@ -117,14 +117,39 @@ async function output(suffix) {
     fs.writeFileSync(exactSource, await exactDoc.save());
     launch('resize-pdf-to-exact-kb', [exactSource]);
     const exactPage = await waitFor('Exact KB PDF window', async () => (await targets()).find(x => /exact-kb-pdf\.html/.test(x.url)));
-    const exactResult = await evaluate(exactPage, `window.pdfrootDesktop.exactPdfRun({ targetKb: '500', bytesPerKb: 1000 })`);
-    assert.equal(exactResult.results[0].ok, true, JSON.stringify(exactResult));
-    assert.equal(fs.statSync(exactResult.results[0].outputPath).size, 500000);
-    const reopened = await PDFDocument.load(fs.readFileSync(exactResult.results[0].outputPath));
-    assert.equal(reopened.getPageCount(), 1);
+    await waitFor('loaded compact popup', async () => evaluate(exactPage, `document.readyState === 'complete' && !!document.querySelector('#target')`));
     await captureScreenshot(exactPage, path.join(source, 'release', 'Exact-KB-PDF-preview.png'));
-    await evaluate(exactPage, 'window.close()');
-    console.log('Installed Exact KB PDF: right-click launch, worker, IPC, and 500,000-byte output passed.');
+    const layout = await evaluate(exactPage, `({width: innerWidth, height: innerHeight, unitDropdown: !!document.querySelector('#unit'), background: getComputedStyle(document.body).backgroundColor})`);
+    assert.equal(layout.width, 430); assert.ok(layout.height < 450); assert.equal(layout.unitDropdown, false); assert.equal(layout.background, 'rgb(255, 255, 255)');
+    await evaluate(exactPage, `document.querySelector('#settings').requestSubmit(); true`);
+    await waitFor('simple Create PDF button result', async () => evaluate(exactPage, `/Saved: 500 KB exactly/.test(document.querySelector('#results').textContent)`));
+    const firstOutput = fs.readdirSync(scratch).find(name => name.includes('exact-500000-bytes'));
+    assert.equal(fs.statSync(path.join(scratch, firstOutput)).size, 500000);
+    await evaluate(exactPage, `document.querySelector('#target').value = '600'; document.querySelector('#target').dispatchEvent(new Event('input')); true`);
+    assert.equal(await evaluate(exactPage, `document.querySelector('#results').hidden`), true, 'Old status did not clear when size changed');
+    await evaluate(exactPage, `document.querySelector('#cancel').click(); true`);
+
+    // Real packaged native JPEG encoder, explicit opt-in, and UI retry path.
+    const {createCanvas} = appRequire('@napi-rs/canvas');
+    const canvas=createCanvas(420,500), ctx=canvas.getContext('2d'), pixels=ctx.createImageData(420,500); let seed=17;
+    for(let i=0;i<pixels.data.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;pixels.data[i]=seed&255;pixels.data[i+1]=(seed>>>8)&255;pixels.data[i+2]=(seed>>>16)&255;pixels.data[i+3]=255;}
+    ctx.putImageData(pixels,0,0); const jpeg=await canvas.encode('jpeg',99);
+    const imageDoc=await PDFDocument.create(); const embedded=await imageDoc.embedJpg(Uint8Array.from(jpeg)); imageDoc.addPage([420,500]).drawImage(embedded,{x:0,y:0,width:420,height:500});
+    const largeBytes=await imageDoc.save(); const imageSource=path.join(scratch,'Image document.pdf'); fs.writeFileSync(imageSource,largeBytes);
+    const chosenKb=Math.floor(largeBytes.length*.72/1000);
+    launch('resize-pdf-to-exact-kb',[imageSource]);
+    const retryPage=await waitFor('compression popup',async()=>(await targets()).find(x=>/exact-kb-pdf\.html/.test(x.url)));
+    await waitFor('compression popup ready',async()=>evaluate(retryPage,`document.readyState === 'complete' && !!document.querySelector('#target')`));
+    await evaluate(retryPage,`document.querySelector('#target').value=${chosenKb}; document.querySelector('#settings').requestSubmit(); true`);
+    await waitFor('image compression choice',async()=>evaluate(retryPage,`!!document.querySelector('.compress:not(:disabled)')`));
+    await evaluate(retryPage,`document.querySelector('.compress').click(); true`);
+    await waitFor('compressed exact PDF created',async()=>evaluate(retryPage,`/Images compressed; dimensions unchanged/.test(document.querySelector('#results').textContent)`),60000);
+    const compressedOutput=fs.readdirSync(scratch).find(name=>name.startsWith('Image document-exact-'));
+    assert.equal(fs.statSync(path.join(scratch,compressedOutput)).size,chosenKb*1000);
+    assert.deepEqual(fs.readFileSync(imageSource),Buffer.from(largeBytes));
+    await captureScreenshot(retryPage,path.join(source,'release','Exact-KB-PDF-result.png'));
+    await evaluate(retryPage,`document.querySelector('#cancel').click(); true`);
+    console.log('Compact popup: real Create, clear stale status, explicit image compression, exact output, original protection and packaged native encoder passed.');
 
     // Send an actual Windows keyboard event; no manual Refresh is invoked.
     const ps = spawnSync('powershell.exe', ['-NoProfile', '-STA', '-Command',

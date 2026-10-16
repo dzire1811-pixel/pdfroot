@@ -65,7 +65,65 @@ function compressStreams(document) {
     document.context.assign(ref, PDFRawStream.of(dict, compressed));
   }
 }
-async function createExactPdf(input, { targetKb, bytesPerKb = 1000 } = {}) {
+async function compressJpegImages(document, targetBytes) {
+  // Re-encoding is allowed only after the customer explicitly opts in. Keep
+  // native text, page geometry, masks, fonts, and forms out of this path.
+  const { createCanvas, loadImage } = require('@napi-rs/canvas');
+  const images = [];
+  let pixelCount = 0;
+  for (const [ref, stream] of document.context.enumerateIndirectObjects()) {
+    if (!(stream instanceof PDFRawStream)) continue;
+    const dict = stream.dict;
+    if (dict.get(PDFName.of('Subtype'))?.toString() !== '/Image' || dict.get(PDFName.of('Filter'))?.toString() !== '/DCTDecode') continue;
+    if (!['/DeviceRGB', '/DeviceGray'].includes(dict.get(PDFName.of('ColorSpace'))?.toString())) continue;
+    if (['Decode', 'SMask', 'Mask', 'ImageMask', 'Alternates', 'SMaskInData', 'OPI', 'F'].some(key => dict.has(PDFName.of(key)))) continue;
+    if (dict.get(PDFName.of('BitsPerComponent'))?.asNumber() !== 8) continue;
+    const width = dict.get(PDFName.of('Width'))?.asNumber();
+    const height = dict.get(PDFName.of('Height'))?.asNumber();
+    if (!Number.isSafeInteger(width * height) || width < 1 || height < 1 || width * height > 20_000_000 || pixelCount + width * height > 40_000_000) continue;
+    try {
+      const decoded = await loadImage(Buffer.from(stream.contents));
+      if (decoded.width !== width || decoded.height !== height) continue;
+      const image = createCanvas(width, height);
+      image.getContext('2d').drawImage(decoded, 0, 0);
+      pixelCount += width * height;
+      images.push({ ref, stream, image });
+    } catch { /* Unsupported JPEG codecs are preserved, never rasterized. */ }
+  }
+  if (!images.length) return null;
+  const save = () => document.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false });
+  let smallestBytes = Infinity;
+  async function atQuality(quality) {
+    let changedImages = 0;
+    for (const { ref, stream, image } of images) {
+      const bytes = Buffer.from(await image.encode('jpeg', quality));
+      if (bytes.length < stream.contents.length) {
+        const dict = stream.dict.clone(document.context);
+        dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+        dict.delete(PDFName.of('DecodeParms'));
+        document.context.assign(ref, PDFRawStream.of(dict, bytes));
+        changedImages++;
+      } else document.context.assign(ref, stream);
+    }
+    const data = Buffer.from(await save());
+    smallestBytes = Math.min(smallestBytes, data.length);
+    return { data, quality, changedImages };
+  }
+  // A quality floor prevents chasing extreme targets with unreadable scans.
+  // Search the highest practical JPEG quality that fits, without resizing.
+  let low = 20, high = 95, best = null;
+  const floor = await atQuality(low);
+  if (floor.data.length > targetBytes) return { bestBytes: floor.data.length };
+  best = floor; low++;
+  while (low <= high) {
+    const quality = Math.floor((low + high) / 2);
+    const attempt = await atQuality(quality);
+    if (attempt.data.length <= targetBytes) { best = attempt; low = quality + 1; }
+    else high = quality - 1;
+  }
+  return { ...best, bestBytes: smallestBytes };
+}
+async function createExactPdf(input, { targetKb, bytesPerKb = 1000, allowImageCompression = false } = {}) {
   const targetBytes = parseTarget(targetKb, bytesPerKb);
   const original = Buffer.from(input);
   if (original.length > MAX_BYTES) throw new ExactPdfError('TOO_LARGE', 'PDFs up to 100 MiB are supported.');
@@ -73,6 +131,9 @@ async function createExactPdf(input, { targetKb, bytesPerKb = 1000 } = {}) {
   checkSupported(document);
   let best = original;
   let method = 'original';
+  let imageQuality;
+  let changedImages = 0;
+  let compressionBestBytes;
   if (original.length > targetBytes) {
     // Rewriting XFA can break dynamic forms; never discard or flatten them.
     const acroForm = document.catalog.lookup(PDFName.of('AcroForm'));
@@ -83,15 +144,25 @@ async function createExactPdf(input, { targetKb, bytesPerKb = 1000 } = {}) {
     const optimized = Buffer.from(await document.save({ useObjectStreams: true, addDefaultPage: false, updateFieldAppearances: false }));
     if (optimized.length < best.length) { best = optimized; method = 'lossless'; }
   }
+  if (best.length > targetBytes && allowImageCompression === true) {
+    const compressed = await compressJpegImages(document, targetBytes);
+    compressionBestBytes = compressed?.bestBytes;
+    if (compressed?.data && compressed.data.length <= targetBytes) {
+      best = compressed.data;
+      method = 'image-compressed';
+      imageQuality = compressed.quality;
+      changedImages = compressed.changedImages;
+    }
+  }
   if (best.length > targetBytes) {
-    throw new ExactPdfError('TARGET_UNREACHABLE', `Cannot reach ${targetBytes.toLocaleString('en-US')} bytes without reducing quality. Best result from this tool: ${best.length.toLocaleString('en-US')} bytes. Choose a larger target. No file was saved.`, { bestBytes: best.length, targetBytes, originalBytes: original.length });
+    throw new ExactPdfError('TARGET_UNREACHABLE', `Cannot reach ${targetBytes.toLocaleString('en-US')} bytes without reducing quality. Best result from this tool: ${best.length.toLocaleString('en-US')} bytes. Choose a larger target. No file was saved.`, { bestBytes: best.length, targetBytes, originalBytes: original.length, compressionBestBytes });
   }
   const data = padBeforeEof(best, targetBytes);
   const verified = await loadPdf(data);
   if (data.length !== targetBytes || verified.getPageCount() !== document.getPageCount()) {
     throw new ExactPdfError('VERIFY_FAILED', 'Output validation failed. No file was saved.');
   }
-  return { data, targetBytes, originalBytes: original.length, contentBytes: best.length, paddingBytes: data.length - best.length, pages: document.getPageCount(), method };
+  return { data, targetBytes, originalBytes: original.length, contentBytes: best.length, paddingBytes: data.length - best.length, pages: document.getPageCount(), method, qualityChanged: method === 'image-compressed', imageQuality, changedImages };
 }
 async function writeNewCopy(source, data, targetBytes) {
   const parsed = path.parse(source);
@@ -125,7 +196,7 @@ async function processExactPdfFiles(files, options) {
       const { data, ...summary } = result;
       results.push({ ok: true, source, outputPath, ...summary });
     } catch (error) {
-      results.push({ ok: false, source, code: error.code || 'IO_ERROR', message: error.message, bestBytes: error.bestBytes, targetBytes: error.targetBytes });
+      results.push({ ok: false, source, code: error.code || 'IO_ERROR', message: error.message, bestBytes: error.bestBytes, targetBytes: error.targetBytes, compressionBestBytes: error.compressionBestBytes });
     }
   }
   return results;

@@ -1,44 +1,67 @@
 const api = window.pdfrootDesktop;
 const target = document.querySelector('#target');
-const unit = document.querySelector('#unit');
 const results = document.querySelector('#results');
 let busy = false;
 function showFiles(files) {
-  document.querySelector('#files').textContent = files.length ? files.map(item => item.name).join('\n') : 'Choose a PDF to get started.';
+  const label = document.querySelector('#files');
+  label.textContent = files.length > 1 ? `${files.length} PDFs selected` : files[0]?.name || 'Choose a PDF to get started.';
+  label.title = files.map(item => item.name).join('\n');
+  document.querySelector('#choose').textContent = files.length ? 'Change' : 'Choose PDF';
 }
-function updateTarget() {
-  const bytes = Number(target.value) * Number(unit.value);
-  document.querySelector('#target-bytes').textContent = Number.isFinite(bytes) && bytes > 0 ? `${Math.round(bytes).toLocaleString('en-US')} bytes exactly` : 'Enter a target size.';
-}
-function status(message, error = false) {
+function status(message, className = '') {
   results.hidden = false; results.replaceChildren();
-  const p = document.createElement('p'); p.className = error ? 'error' : ''; p.textContent = message; results.append(p);
+  const p = document.createElement('p'); p.className = className; p.textContent = message; results.append(p);
 }
-document.querySelector('#choose').addEventListener('click', async () => {
-  try { const response = await api.exactPdfChoose(); if (response?.error) status(response.error, true); else if (response?.files) { showFiles(response.files); results.hidden = true; } }
-  catch { status('Could not choose a PDF. Please try again.', true); }
-});
-document.querySelectorAll('[data-size]').forEach(button => button.addEventListener('click', () => { target.value = button.dataset.size; updateTarget(); }));
-target.addEventListener('input', updateTarget); unit.addEventListener('change', updateTarget);
-document.querySelector('#settings').addEventListener('submit', async event => {
-  event.preventDefault(); if (busy) return; busy = true;
-  document.querySelectorAll('button, input, select').forEach(element => { element.disabled = true; });
-  status('Checking lossless options and verifying the final size…');
+function clearStatus() { results.hidden = true; results.replaceChildren(); }
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll('button, input').forEach(element => { element.disabled = value; });
+  document.querySelector('#create').textContent = value ? 'Creating…' : 'Create PDF';
+}
+function action(row, label, handler, className = '') {
+  const button = document.createElement('button'); button.type = 'button'; button.className = className; button.textContent = label; button.addEventListener('click', handler); row.append(button);
+}
+async function createPdf(allowImageCompression = false) {
+  if (busy) return;
+  const targetKb = target.value;
+  if (!Number.isInteger(Number(targetKb)) || Number(targetKb) < 5 || Number(targetKb) > 100000) { status('Enter a whole number from 5 to 100,000 KB.', 'error'); return; }
+  setBusy(true); status(allowImageCompression ? 'Creating PDF with the best image quality that fits…' : 'Creating your PDF…');
   try {
-    const response = await api.exactPdfRun({ targetKb: target.value, bytesPerKb: Number(unit.value) });
-    if (response.error) { status(response.error, true); return; }
-    results.replaceChildren();
-    for (const result of response.results) {
+    const response = await api.exactPdfRun({ targetKb, bytesPerKb: 1000, allowImageCompression });
+    if (response.error) { status(response.error, 'error'); return; }
+    results.hidden = false; results.replaceChildren();
+    for (const result of response.results || []) {
       const row = document.createElement('div'); row.className = 'result';
-      const name = document.createElement('h3'); name.textContent = result.source.split(/[\\/]/).pop(); row.append(name);
-      const text = document.createElement('p'); text.className = result.ok ? 'success' : 'error';
-      text.textContent = result.ok ? `Created · ${result.targetBytes.toLocaleString('en-US')} bytes exactly · ${result.pages} page(s)\nQuality unchanged. ${result.paddingBytes ? 'Padding added to reach the exact size.' : 'No padding needed.'}` : result.message;
-      row.append(text);
-      if (result.ok) { const reveal = document.createElement('button'); reveal.type = 'button'; reveal.textContent = 'Show saved PDF'; reveal.addEventListener('click', () => api.exactPdfReveal(result.outputPath)); row.append(reveal); }
-      else if (result.bestBytes) { const larger = document.createElement('button'); larger.type = 'button'; larger.textContent = 'Use a larger target'; larger.addEventListener('click', () => { target.value = Math.ceil(result.bestBytes / Number(unit.value)); updateTarget(); target.focus(); }); row.append(larger); }
+      if (response.results.length > 1) { const name = document.createElement('h2'); name.textContent = result.source.split(/[\\/]/).pop(); row.append(name); }
+      const text = document.createElement('p');
+      if (result.ok) {
+        text.className = 'success';
+        text.textContent = `Saved: ${Number(targetKb).toLocaleString('en-US')} KB exactly. ${result.qualityChanged ? 'Images compressed; dimensions unchanged.' : 'Original quality preserved.'}`;
+        row.append(text); action(row, 'Show PDF', () => api.exactPdfReveal(result.outputPath));
+      } else if (result.code === 'TARGET_UNREACHABLE' && result.bestBytes) {
+        const minimumKb = Math.ceil((allowImageCompression ? result.compressionBestBytes || result.bestBytes : result.bestBytes) / 1000);
+        text.className = 'notice';
+        text.textContent = allowImageCompression
+          ? `This PDF needs at least ${minimumKb.toLocaleString('en-US')} KB with the supported compression. Try that size.`
+          : `${Number(targetKb).toLocaleString('en-US')} KB needs image compression, which may change image quality. Original quality needs ${minimumKb.toLocaleString('en-US')} KB.`;
+        row.append(text);
+        if (!allowImageCompression) action(row, `Compress to ${Number(targetKb).toLocaleString('en-US')} KB`, () => createPdf(true), 'compress');
+        action(row, `Create ${minimumKb.toLocaleString('en-US')} KB`, () => { target.value = minimumKb; return createPdf(allowImageCompression); });
+      } else { text.className = 'error'; text.textContent = result.message || 'Could not create this PDF. Please try another file.'; row.append(text); }
       results.append(row);
     }
-  } catch { status('Processing could not finish. Please try again.', true); }
-  finally { busy = false; document.querySelectorAll('button, input, select').forEach(element => { element.disabled = false; }); }
+  } catch { status('Could not finish. Please try again.', 'error'); }
+  finally { setBusy(false); }
+}
+document.querySelector('#choose').addEventListener('click', async () => {
+  try { const response = await api.exactPdfChoose(); if (response?.error) status(response.error, 'error'); else if (response?.files) { showFiles(response.files); clearStatus(); } }
+  catch { status('Could not choose a PDF. Please try again.', 'error'); }
 });
-updateTarget(); api.exactPdfFiles().then(showFiles).catch(() => status('Could not load selected PDFs.', true));
+document.querySelector('#settings').addEventListener('submit', event => { event.preventDefault(); void createPdf(false); });
+target.addEventListener('input', clearStatus);
+function close() { if (!busy) void api.exactPdfClose(); }
+document.querySelector('#cancel').addEventListener('click', close); document.querySelector('#cancel-top').addEventListener('click', close);
+window.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+new ResizeObserver(() => { void api.exactPdfResize(Math.ceil(document.querySelector('main').getBoundingClientRect().height)); }).observe(document.querySelector('main'));
+api.exactPdfFiles().then(showFiles).catch(() => status('Could not load selected PDFs.', 'error'));
+window.addEventListener('load', () => { target.focus(); target.select(); });

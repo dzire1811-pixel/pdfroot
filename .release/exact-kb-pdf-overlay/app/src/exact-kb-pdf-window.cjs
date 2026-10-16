@@ -41,13 +41,20 @@ function setupExactPdfWindow({ BrowserWindow, ipcMain, dialog, shell, resourcePa
   ipcMain.handle('desktop:exact-pdf-reveal', (event, output) => {
     if (trusted(event) && current.outputs.has(output)) shell.showItemInFolder(output);
   });
+  ipcMain.handle('desktop:exact-pdf-close', event => { if (trusted(event) && !current.busy) current.window.close(); });
+  ipcMain.handle('desktop:exact-pdf-resize', (event, height) => {
+    if (trusted(event) && Number.isFinite(height)) current.window.setContentSize(430, Math.max(300, Math.min(560, Math.ceil(height))));
+  });
   return function openExactPdf(files = []) {
     if (current && !current.window.isDestroyed()) { current.window.show(); current.window.focus(); return; }
     const window = new BrowserWindow({
-      width: 760, height: 680, minWidth: 620, minHeight: 560,
-      title: 'PDFRoot Desktop Pro - Exact KB PDF', backgroundColor: '#111111', icon: resourcePath('icon.png'),
+      width: 430, height: 340, resizable: false, frame: false, show: false,
+      minimizable: false, maximizable: false, fullscreenable: false, alwaysOnTop: true,
+      title: 'PDFRoot Desktop Pro - Exact KB PDF', backgroundColor: '#ffffff', icon: resourcePath('icon.png'),
       webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
+    window.setMenu(null);
+    window.once('ready-to-show', () => { window.show(); window.focus(); });
     current = { window, files: files.slice(0, 50), busy: false, outputs: new Set() };
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', event => event.preventDefault());

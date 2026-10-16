@@ -78,3 +78,22 @@ test('background worker produces a real exact-size PDF', async () => {
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'pdfroot-exact-worker-'));
   try {const file=path.join(directory,'a.pdf');await fs.writeFile(file,await fixture());const response=await new Promise((resolve,reject)=>{const worker=new Worker(path.join(__dirname,'exact-kb-pdf-worker.cjs'),{workerData:{files:[file],options:{targetKb:10}}});worker.once('message',resolve);worker.once('error',reject);});assert.equal(response.results[0].ok,true);assert.equal((await fs.stat(response.results[0].outputPath)).size,10000);}finally{await fs.rm(directory,{recursive:true,force:true});}
 });
+
+test('JPEG compression requires explicit true and keeps original dimensions, native text and form values', async () => {
+  const {createCanvas}=require('@napi-rs/canvas');
+  const canvas=createCanvas(420,500), ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,420,500);
+  // Deterministic varied content makes a high-quality image meaningfully large.
+  const pixels=ctx.getImageData(0,0,420,500);let seed=17;
+  for(let i=0;i<pixels.data.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;pixels.data[i]=seed&255;pixels.data[i+1]=(seed>>>8)&255;pixels.data[i+2]=(seed>>>16)&255;pixels.data[i+3]=255;}
+  ctx.putImageData(pixels,0,0);const jpg=await canvas.encode('jpeg',99);
+  const doc=await PDFDocument.create();const image=await doc.embedJpg(Uint8Array.from(jpg));const page=doc.addPage([420,600]);page.drawImage(image,{x:0,y:0,width:420,height:500});page.drawText('Original native text',{x:20,y:540,size:15});
+  const field=doc.getForm().createTextField('kept');field.setText('Original value');field.addToPage(page,{x:20,y:505,width:180,height:24});doc.getForm().updateFieldAppearances(await doc.embedFont(StandardFonts.Helvetica));
+  const source=Buffer.from(await doc.save({updateFieldAppearances:false}));const kb=Math.floor(source.length*0.72/1000);
+  for(const allowImageCompression of [undefined,false,'true',1])await assert.rejects(createExactPdf(source,{targetKb:kb,allowImageCompression}),e=>e.code==='TARGET_UNREACHABLE');
+  const result=await createExactPdf(source,{targetKb:kb,allowImageCompression:true});assert.equal(result.data.length,kb*1000);assert.equal(result.qualityChanged,true);assert.equal(result.method,'image-compressed');assert.ok(result.imageQuality>=20);
+  const output=await PDFDocument.load(result.data);assert.equal(output.getForm().getTextField('kept').getText(),'Original value');
+  const original=await PDFDocument.load(source);const originalStreams=streams(original), outputStreams=new Map(streams(output));
+  for(const[ref,stream]of originalStreams){const saved=outputStreams.get(ref);if(stream.dict.get(PDFName.of('Subtype'))?.toString()==='/Image'){assert.equal(saved.dict.get(PDFName.of('Width')).asNumber(),420);assert.equal(saved.dict.get(PDFName.of('Height')).asNumber(),500);}else assert.deepEqual(Buffer.from(saved.contents),Buffer.from(stream.contents));}
+  // With a larger target, an opt-in still leaves already-fitting images intact.
+  const larger=await createExactPdf(source,{targetKb:Math.ceil(source.length/1000)+1,allowImageCompression:true});assert.equal(larger.qualityChanged,false);assert.equal(larger.method,'original');
+});

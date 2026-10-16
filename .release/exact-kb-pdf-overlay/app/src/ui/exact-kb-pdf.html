@@ -6,17 +6,15 @@
 <title>PDFRoot - Exact KB PDF</title><link rel="stylesheet" href="exact-kb-pdf.css">
 </head>
 <body><main>
-<header><img src="pdfroot-logo.svg" alt="PDFRoot"><span>Desktop Pro</span><small>LOCAL PDF TOOLS</small></header>
-<div class="heading"><img src="tool-icons/resize-pdf-to-exact-kb.svg" alt=""><div><h1>Exact KB PDF</h1><p>The size you need. Original quality preserved.</p></div></div>
-<section class="panel"><div class="file-heading"><h2>Your PDFs</h2><button id="choose" type="button">Choose PDF</button></div><p id="files" class="file-list">Choose a PDF to get started.</p></section>
-<form id="settings" class="panel">
-<label for="target">Target file size</label><div class="input-row"><input id="target" type="number" min="0.001" max="104857.6" step="0.001" value="500" required><select id="unit" aria-label="KB definition"><option value="1000">KB (1 KB = 1,000 bytes)</option><option value="1024">KiB (1 KiB = 1,024 bytes)</option></select></div>
-<div class="presets" aria-label="Common sizes"><button type="button" data-size="100">100</button><button type="button" data-size="200">200</button><button type="button" data-size="500">500</button><button type="button" data-size="1000">1,000</button></div>
-<p id="target-bytes" class="muted"></p>
-<div class="quality"><span aria-hidden="true">✓</span><div><h2>Quality unchanged</h2><p>Text stays selectable. Images keep their resolution and image data. Pages and form appearances stay intact.</p></div></div>
-<p class="note">Some PDFs cannot fit a small target without quality loss. We will show the best lossless size this tool found. Smaller PDFs use harmless padding to reach the exact size.</p>
-<button id="create" class="primary" type="submit">Create Exact KB PDF</button><p class="save-note">A separate copy saves beside each original PDF.</p>
+<button id="cancel-top" class="close" type="button" aria-label="Close">×</button>
+<div class="brand"><img src="pdfroot-logo.svg" alt=""><span><strong><em>PDF</em>Root</strong><small>DESKTOP PRO</small></span></div>
+<p class="mode">AUTO MODE</p><h1>Exact KB PDF</h1>
+<p class="description">The result will be saved beside the selected PDF.</p>
+<div id="selection"><span id="files" title="">Choose a PDF to get started.</span><button id="choose" type="button">Choose PDF</button></div>
+<form id="settings">
+<label for="target">Target size (KB)</label><input id="target" type="number" min="5" max="100000" step="1" value="500" required>
+<p class="hint">Enter 5 to 100,000 KB. Press Enter to create.</p>
+<section id="results" aria-live="polite" hidden></section>
+<div class="actions"><button id="cancel" type="button">Cancel</button><button id="create" type="submit">Create PDF</button></div>
 </form>
-<section id="results" class="panel" aria-live="polite" hidden></section>
-<footer>Up to 50 PDFs · 100 MiB per file · Files stay on your computer</footer>
 </main><script src="exact-kb-pdf.js"></script></body></html>

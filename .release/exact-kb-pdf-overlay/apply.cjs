@@ -24,18 +24,20 @@ edit('src/preload.cjs', '  choosePdfCompression:', `  exactPdfFiles: () => ipcRe
   exactPdfChoose: () => ipcRenderer.invoke('desktop:exact-pdf-choose'),
   exactPdfRun: (options) => ipcRenderer.invoke('desktop:exact-pdf-run', options),
   exactPdfReveal: (output) => ipcRenderer.invoke('desktop:exact-pdf-reveal', output),
+  exactPdfClose: () => ipcRenderer.invoke('desktop:exact-pdf-close'),
+  exactPdfResize: (height) => ipcRenderer.invoke('desktop:exact-pdf-resize', height),
   choosePdfCompression:`);
 edit('src/catalog.cjs', 'const tools = [', `const tools = [
-  { name: 'Exact KB PDF', slug: 'resize-pdf-to-exact-kb', category: 'PDF', description: 'Set an exact PDF size with lossless compression and quality protection.' },`);
+  { name: 'Exact KB PDF', slug: 'resize-pdf-to-exact-kb', category: 'PDF', description: 'Create an exact-size PDF with quality protection and optional image compression.' },`);
 edit('src/automatic-mode.cjs', 'const automaticTools = Object.freeze({', `const automaticTools = Object.freeze({
-  'resize-pdf-to-exact-kb': autoTool({ label: 'Exact KB PDF', sectionId: 'exact-kb-pdf', extensions: PDF_EXTENSIONS, fileLabel: 'PDF', maximumFiles: 50, autoDescription: 'choose an exact size with unchanged quality' }),`);
+  'resize-pdf-to-exact-kb': autoTool({ label: 'Exact KB PDF', sectionId: 'exact-kb-pdf', extensions: PDF_EXTENSIONS, fileLabel: 'PDF', maximumFiles: 50, autoDescription: 'enter a target size in KB' }),`);
 edit('src/context-menu.cjs', 'const pdfInputSlugs = Object.freeze([', `const pdfInputSlugs = Object.freeze([
   'resize-pdf-to-exact-kb',`);
 edit('src/startup-setup.cjs', 'const installerKeys = {', `const installerKeys = {"resize-pdf-to-exact-kb":"03ExactKbPdf",`);
 edit('resources/installer.nsh', '  !insertmacro PDFRootPdfCommand "03CompressPdf"', `  !insertmacro PDFRootPdfCommand "03ExactKbPdf" "Exact KB PDF" "resize-pdf-to-exact-kb"
   !insertmacro PDFRootPdfCommand "03CompressPdf"`);
 edit('src/shortcuts.cjs', 'const shortcutDefinitions = [', `const shortcutDefinitions = [
-  { accelerator: 'Control+Alt+Q', display: 'Ctrl + Alt + Q', label: 'Exact KB PDF (quality unchanged)', slug: 'resize-pdf-to-exact-kb' },`);
+  { accelerator: 'Control+Alt+Q', display: 'Ctrl + Alt + Q', label: 'Exact KB PDF', slug: 'resize-pdf-to-exact-kb' },`);
 edit('src/shortcuts.cjs', 'const fallbackAccelerators = Object.freeze({', `const fallbackAccelerators = Object.freeze({
   'Control+Alt+Q': 'Control+Alt+Shift+Q',`);
 edit('src/shortcuts.cjs', 'const backupAccelerators = Object.freeze({', `const backupAccelerators = Object.freeze({
@@ -49,6 +51,6 @@ edit('src/context-menu.test.cjs', 'pdfInputSlugs.length, 15', 'pdfInputSlugs.len
 edit('src/context-menu.test.cjs', 'contextMenuTools.length, 33', 'contextMenuTools.length, 34');
 for (const file of ['package.json', 'package-lock.json']) {
   const name = path.join(app, file);
-  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.13', '0.7.0-beta.16').replaceAll('0.7.0-beta.15', '0.7.0-beta.16').replaceAll('0.7.0-beta.9', '0.7.0-beta.16'));
+  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.13', '0.7.0-beta.17').replaceAll('0.7.0-beta.15', '0.7.0-beta.17').replaceAll('0.7.0-beta.9', '0.7.0-beta.17'));
 }
 console.log('Exact KB PDF overlay applied.');
