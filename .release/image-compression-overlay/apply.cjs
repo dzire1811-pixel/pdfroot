@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const app = path.resolve(process.argv[2]);
 function edit(file, before, after) {
-  const name = path.join(app, file), text = fs.readFileSync(name, 'utf8');
+  const name = path.join(app, file), text = fs.readFileSync(name, 'utf8').replaceAll('\r\n', '\n');
   if (!text.includes(before)) throw new Error(`Image overlay anchor missing: ${file}: ${before.slice(0, 65)}`);
   fs.writeFileSync(name, text.replace(before, after));
 }
