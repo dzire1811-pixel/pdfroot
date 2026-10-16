@@ -11,12 +11,15 @@ async function strongCompressPdf(original, targetBytes) {
   let root = path.dirname(require.resolve('pdfjs-dist/package.json'));
   const unpacked = root.replace(/([\\/])app\.asar([\\/])/, '$1app.asar.unpacked$2');
   if (unpacked !== root && fs.existsSync(path.join(unpacked, 'legacy/build/pdf.mjs'))) root = unpacked;
+  // PDF.js requires a forward trailing slash even for Windows file paths.
+  // Keep a filesystem path so its Node factory can read the assets directly.
+  const assets = root.replaceAll('\\', '/') + '/';
   const pdfjs = await import(pathToFileURL(path.join(root, 'legacy/build/pdf.mjs')).href);
   const task = pdfjs.getDocument({
     data: Uint8Array.from(original), isEvalSupported: false, useSystemFonts: false,
-    standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep,
-    cMapUrl: path.join(root, 'cmaps') + path.sep, cMapPacked: true,
-    wasmUrl: path.join(root, 'wasm') + path.sep,
+    standardFontDataUrl: assets + 'standard_fonts/',
+    cMapUrl: assets + 'cmaps/', cMapPacked: true,
+    wasmUrl: assets + 'wasm/',
     verbosity: pdfjs.VerbosityLevel.ERRORS,
   });
   let bestBytes = Infinity;
