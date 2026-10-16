@@ -127,7 +127,8 @@ async function output(suffix) {
     assert.equal(fs.statSync(path.join(scratch, firstOutput)).size, 500000);
     await evaluate(exactPage, `document.querySelector('#target').value = '600'; document.querySelector('#target').dispatchEvent(new Event('input')); true`);
     assert.equal(await evaluate(exactPage, `document.querySelector('#results').hidden`), true, 'Old status did not clear when size changed');
-    await evaluate(exactPage, `document.querySelector('#cancel').click(); true`);
+    await evaluate(exactPage, `setTimeout(() => document.querySelector('#cancel').click(), 100); true`);
+    await waitFor('first compact popup closed', async () => !(await targets()).some(x => x.id === exactPage.id));
 
     // Real packaged native JPEG encoder, explicit opt-in, and UI retry path.
     const {createCanvas} = appRequire('@napi-rs/canvas');
@@ -194,7 +195,8 @@ async function output(suffix) {
     assert.equal(savedJpeg.height, 36);
     assert.deepEqual(fs.readFileSync(photo), croppedBytes);
     console.log('Installed Windows Crop Save & Replace Original verified using actual JPG bytes.');
-    await evaluate(crop, 'window.pdfrootDesktop.closeCrop()');
+    await evaluate(crop, 'setTimeout(() => window.pdfrootDesktop.closeCrop(), 100); true');
+    await waitFor('crop window closed', async () => !(await targets()).some(x => x.id === crop.id));
     console.log('Installed crop editor opened the selected image.');
     await invoke('setStartup', false);
     assert.equal(await invoke('startup'), false);
