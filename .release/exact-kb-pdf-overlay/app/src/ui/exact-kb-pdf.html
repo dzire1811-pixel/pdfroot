@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self';">
+<title>PDFRoot - Exact KB PDF</title><link rel="stylesheet" href="exact-kb-pdf.css">
+</head>
+<body><main>
+<button id="cancel-top" class="close" type="button" aria-label="Close">×</button>
+<div class="brand"><img src="pdfroot-logo.svg" alt=""><span><strong><em>PDF</em>Root</strong><small>DESKTOP PRO</small></span></div>
+<p class="mode">AUTO MODE</p><h1>Exact KB PDF</h1>
+<p class="description">The result will be saved beside the selected PDF.</p>
+<div id="selection"><span id="files" title="">Choose a PDF to get started.</span><button id="choose" type="button">Choose PDF</button></div>
+<form id="settings">
+<label for="target">Target size (KB)</label><input id="target" type="number" min="5" max="100000" step="1" value="500" required>
+<p class="hint">Enter 5 to 100,000 KB. Press Enter to create.</p>
+<section id="results" aria-live="polite" hidden></section>
+<div class="actions"><button id="cancel" type="button">Cancel</button><button id="create" type="submit">Create PDF</button></div>
+</form>
+</main><script src="exact-kb-pdf.js"></script></body></html>
