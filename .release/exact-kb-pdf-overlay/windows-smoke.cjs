@@ -55,7 +55,14 @@ async function captureScreenshot(target, outputPath) {
     socket.addEventListener('error', () => {clearTimeout(timeout); socket.close(); reject(new Error('Screenshot connection failed'));});
   });
 }
-async function mainPage() { return waitFor('main page', async () => (await targets()).find(x => /catalog\.html|activation\.html/.test(x.url))); }
+async function mainPage() {
+  return waitFor('loaded main page', async () => {
+    const page = (await targets()).find(x => /catalog\.html|activation\.html/.test(x.url));
+    if (!page) return false;
+    const ready = await evaluate(page, `document.readyState === 'complete' && !!window.pdfrootDesktop && !!document.querySelector('#choose-pro, #tool-sections')`);
+    return ready ? page : false;
+  });
+}
 async function invoke(name, ...args) {
   return evaluate(await mainPage(), `window.pdfrootDesktop.${name}(...${JSON.stringify(args)})`);
 }
