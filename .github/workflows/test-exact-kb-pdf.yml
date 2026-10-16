@@ -44,7 +44,7 @@ jobs:
       - name: Verify installed Windows application
         run: |
           $appDir = (Resolve-Path '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app').Path
-          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.17-x64.exe'
+          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.18-x64.exe'
           $installDir = Join-Path $env:LOCALAPPDATA 'Programs/PDFRoot-Exact-KB-Test'
           $process = Start-Process $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Installer failed' }

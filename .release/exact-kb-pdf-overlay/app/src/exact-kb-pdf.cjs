@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { PDFDocument, PDFName, PDFDict, PDFRawStream } = require('pdf-lib');
+const { PDFDocument, PDFName, PDFDict, PDFRawStream, PDFArray } = require('pdf-lib');
 
 const MAX_BYTES = 100 * 1024 * 1024;
 class ExactPdfError extends Error {
@@ -68,26 +68,43 @@ function compressStreams(document) {
 async function compressJpegImages(document, targetBytes) {
   // Re-encoding is allowed only after the customer explicitly opts in. Keep
   // native text, page geometry, masks, fonts, and forms out of this path.
-  const { createCanvas, loadImage } = require('@napi-rs/canvas');
+  const { createCanvas, loadImage, ImageData } = require('@napi-rs/canvas');
+  const { Jimp } = require('jimp');
   const images = [];
   let pixelCount = 0;
   for (const [ref, stream] of document.context.enumerateIndirectObjects()) {
     if (!(stream instanceof PDFRawStream)) continue;
     const dict = stream.dict;
     if (dict.get(PDFName.of('Subtype'))?.toString() !== '/Image' || dict.get(PDFName.of('Filter'))?.toString() !== '/DCTDecode') continue;
-    if (!['/DeviceRGB', '/DeviceGray'].includes(dict.get(PDFName.of('ColorSpace'))?.toString())) continue;
+    // Color spaces are often indirect objects (including ICC profiles), as
+    // produced by scanners and PDF writers. Resolve rather than compare refs.
+    const colorSpace = document.context.lookup(dict.get(PDFName.of('ColorSpace')));
+    let keepIccProfile = false;
+    if (colorSpace instanceof PDFArray && document.context.lookup(colorSpace.get(0))?.toString() === '/ICCBased') {
+      const profile = document.context.lookup(colorSpace.get(1));
+      if (!(profile instanceof PDFRawStream) || profile.dict.get(PDFName.of('N'))?.asNumber() !== 3) continue;
+      keepIccProfile = true;
+    } else if (!['/DeviceRGB', '/DeviceGray'].includes(colorSpace?.toString())) continue;
     if (['Decode', 'SMask', 'Mask', 'ImageMask', 'Alternates', 'SMaskInData', 'OPI', 'F'].some(key => dict.has(PDFName.of(key)))) continue;
     if (dict.get(PDFName.of('BitsPerComponent'))?.asNumber() !== 8) continue;
     const width = dict.get(PDFName.of('Width'))?.asNumber();
     const height = dict.get(PDFName.of('Height'))?.asNumber();
     if (!Number.isSafeInteger(width * height) || width < 1 || height < 1 || width * height > 20_000_000 || pixelCount + width * height > 40_000_000) continue;
     try {
-      const decoded = await loadImage(Buffer.from(stream.contents));
-      if (decoded.width !== width || decoded.height !== height) continue;
       const image = createCanvas(width, height);
-      image.getContext('2d').drawImage(decoded, 0, 0);
+      if (keepIccProfile) {
+        // Decode raw JPEG samples without color management, then retain the
+        // original PDF ICC profile. This avoids applying its transform twice.
+        const decoded = await Jimp.read(Buffer.from(stream.contents));
+        if (decoded.width !== width || decoded.height !== height) continue;
+        image.getContext('2d').putImageData(new ImageData(Uint8ClampedArray.from(decoded.bitmap.data), width, height), 0, 0);
+      } else {
+        const decoded = await loadImage(Buffer.from(stream.contents));
+        if (decoded.width !== width || decoded.height !== height) continue;
+        image.getContext('2d').drawImage(decoded, 0, 0);
+      }
       pixelCount += width * height;
-      images.push({ ref, stream, image });
+      images.push({ ref, stream, image, keepIccProfile });
     } catch { /* Unsupported JPEG codecs are preserved, never rasterized. */ }
   }
   if (!images.length) return null;
@@ -95,11 +112,11 @@ async function compressJpegImages(document, targetBytes) {
   let smallestBytes = Infinity;
   async function atQuality(quality) {
     let changedImages = 0;
-    for (const { ref, stream, image } of images) {
+    for (const { ref, stream, image, keepIccProfile } of images) {
       const bytes = Buffer.from(await image.encode('jpeg', quality));
       if (bytes.length < stream.contents.length) {
         const dict = stream.dict.clone(document.context);
-        dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+        if (!keepIccProfile) dict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
         dict.delete(PDFName.of('DecodeParms'));
         document.context.assign(ref, PDFRawStream.of(dict, bytes));
         changedImages++;
@@ -111,7 +128,7 @@ async function compressJpegImages(document, targetBytes) {
   }
   // A quality floor prevents chasing extreme targets with unreadable scans.
   // Search the highest practical JPEG quality that fits, without resizing.
-  let low = 20, high = 95, best = null;
+  let low = 5, high = 95, best = null;
   const floor = await atQuality(low);
   if (floor.data.length > targetBytes) return { bestBytes: floor.data.length };
   best = floor; low++;

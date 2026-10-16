@@ -51,6 +51,6 @@ edit('src/context-menu.test.cjs', 'pdfInputSlugs.length, 15', 'pdfInputSlugs.len
 edit('src/context-menu.test.cjs', 'contextMenuTools.length, 33', 'contextMenuTools.length, 34');
 for (const file of ['package.json', 'package-lock.json']) {
   const name = path.join(app, file);
-  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.13', '0.7.0-beta.17').replaceAll('0.7.0-beta.15', '0.7.0-beta.17').replaceAll('0.7.0-beta.9', '0.7.0-beta.17'));
+  fs.writeFileSync(name, fs.readFileSync(name, 'utf8').replaceAll('0.7.0-beta.13', '0.7.0-beta.18').replaceAll('0.7.0-beta.15', '0.7.0-beta.18').replaceAll('0.7.0-beta.9', '0.7.0-beta.18'));
 }
 console.log('Exact KB PDF overlay applied.');

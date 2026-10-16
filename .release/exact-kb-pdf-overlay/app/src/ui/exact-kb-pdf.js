@@ -36,7 +36,7 @@ async function createPdf(allowImageCompression = false) {
       const text = document.createElement('p');
       if (result.ok) {
         text.className = 'success';
-        text.textContent = `Saved: ${Number(targetKb).toLocaleString('en-US')} KB exactly. ${result.qualityChanged ? 'Images compressed; dimensions unchanged.' : 'Original quality preserved.'}`;
+        text.textContent = `Saved: ${Number(targetKb).toLocaleString('en-US')} KB exactly. ${result.qualityChanged ? 'Images compressed; dimensions unchanged.' + (result.imageQuality < 20 ? ' Strong compression used: check readability before upload.' : '') : 'Original quality preserved.'}`;
         row.append(text); action(row, 'Show PDF', () => api.exactPdfReveal(result.outputPath));
       } else if (result.code === 'TARGET_UNREACHABLE' && result.bestBytes) {
         const minimumKb = Math.ceil((allowImageCompression ? result.compressionBestBytes || result.bestBytes : result.bestBytes) / 1000);

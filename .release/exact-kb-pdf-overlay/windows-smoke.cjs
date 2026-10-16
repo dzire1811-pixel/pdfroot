@@ -9,7 +9,7 @@ const executable = path.resolve(process.argv[2]);
 const source = path.resolve(process.argv[3]);
 const appRequire = createRequire(path.join(source, 'package.json'));
 const { Jimp, JimpMime } = appRequire('jimp');
-const { PDFDocument } = appRequire('pdf-lib');
+const { PDFDocument, PDFName } = appRequire('pdf-lib');
 const { createLicenseCode } = require(path.join(source, 'src/license.cjs'));
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'pdfroot-installed-smoke-'));
 const keyPath = path.join(path.dirname(executable), 'resources/license-public-key.pem');
@@ -142,8 +142,13 @@ async function output(suffix) {
     const {createCanvas} = appRequire('@napi-rs/canvas');
     const canvas=createCanvas(420,500), ctx=canvas.getContext('2d'), pixels=ctx.createImageData(420,500); let seed=17;
     for(let i=0;i<pixels.data.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;pixels.data[i]=seed&255;pixels.data[i+1]=(seed>>>8)&255;pixels.data[i+2]=(seed>>>16)&255;pixels.data[i+3]=255;}
-    ctx.putImageData(pixels,0,0); const jpeg=await canvas.encode('jpeg',99);
+    ctx.putImageData(pixels,0,0); const jpeg=await canvas.encode('jpeg',30);
     const imageDoc=await PDFDocument.create(); const embedded=await imageDoc.embedJpg(Uint8Array.from(jpeg)); imageDoc.addPage([420,500]).drawImage(embedded,{x:0,y:0,width:420,height:500});
+    const icc=Buffer.from('AAACTGxjbXMEQAAAbW50clJHQiBYWVogB+oACgAQAAoANwAvYWNzcEFQUEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1sY21zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALZGVzYwAAAQgAAAA2Y3BydAAAAUAAAABMd3RwdAAAAYwAAAAUY2hhZAAAAaAAAAAsclhZWgAAAcwAAAAUYlhZWgAAAeAAAAAUZ1hZWgAAAfQAAAAUclRSQwAAAggAAAAgZ1RSQwAAAggAAAAgYlRSQwAAAggAAAAgY2hybQAAAigAAAAkbWx1YwAAAAAAAAABAAAADGVuVVMAAAAaAAAAHABzAFIARwBCACAAYgB1AGkAbAB0AC0AaQBuAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAADAAAAAcAE4AbwAgAGMAbwBwAHkAcgBpAGcAaAB0ACwAIAB1AHMAZQAgAGYAcgBlAGUAbAB5WFlaIAAAAAAAAPbWAAEAAAAA0y1zZjMyAAAAAAABDEIAAAXe///zJQAAB5MAAP2Q///7of///aIAAAPcAADAblhZWiAAAAAAAABvoAAAOPUAAAOQWFlaIAAAAAAAACSfAAAPhAAAtsNYWVogAAAAAAAAYpcAALeHAAAY2XBhcmEAAAAAAAMAAAACZmYAAPKnAAANWQAAE9AAAApbY2hybQAAAAAAAwAAAACj1wAAVHsAAEzNAACZmgAAJmYAAA9c','base64');
+    const profileRef=imageDoc.context.register(imageDoc.context.flateStream(icc,{N:3,Alternate:'DeviceRGB'}));
+    const colorRef=imageDoc.context.register(imageDoc.context.obj([PDFName.of('ICCBased'),profileRef]));
+    await imageDoc.flush();
+    imageDoc.context.lookup(embedded.ref).dict.set(PDFName.of('ColorSpace'),colorRef);
     const largeBytes=await imageDoc.save(); const imageSource=path.join(scratch,'Image document.pdf'); fs.writeFileSync(imageSource,largeBytes);
     const chosenKb=Math.floor(largeBytes.length*.72/1000);
     launch('resize-pdf-to-exact-kb',[imageSource]);

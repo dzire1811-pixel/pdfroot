@@ -90,10 +90,31 @@ test('JPEG compression requires explicit true and keeps original dimensions, nat
   const field=doc.getForm().createTextField('kept');field.setText('Original value');field.addToPage(page,{x:20,y:505,width:180,height:24});doc.getForm().updateFieldAppearances(await doc.embedFont(StandardFonts.Helvetica));
   const source=Buffer.from(await doc.save({updateFieldAppearances:false}));const kb=Math.floor(source.length*0.72/1000);
   for(const allowImageCompression of [undefined,false,'true',1])await assert.rejects(createExactPdf(source,{targetKb:kb,allowImageCompression}),e=>e.code==='TARGET_UNREACHABLE');
-  const result=await createExactPdf(source,{targetKb:kb,allowImageCompression:true});assert.equal(result.data.length,kb*1000);assert.equal(result.qualityChanged,true);assert.equal(result.method,'image-compressed');assert.ok(result.imageQuality>=20);
+  const result=await createExactPdf(source,{targetKb:kb,allowImageCompression:true});assert.equal(result.data.length,kb*1000);assert.equal(result.qualityChanged,true);assert.equal(result.method,'image-compressed');assert.ok(result.imageQuality>=5);
   const output=await PDFDocument.load(result.data);assert.equal(output.getForm().getTextField('kept').getText(),'Original value');
   const original=await PDFDocument.load(source);const originalStreams=streams(original), outputStreams=new Map(streams(output));
   for(const[ref,stream]of originalStreams){const saved=outputStreams.get(ref);if(stream.dict.get(PDFName.of('Subtype'))?.toString()==='/Image'){assert.equal(saved.dict.get(PDFName.of('Width')).asNumber(),420);assert.equal(saved.dict.get(PDFName.of('Height')).asNumber(),500);}else assert.deepEqual(Buffer.from(saved.contents),Buffer.from(stream.contents));}
   // With a larger target, an opt-in still leaves already-fitting images intact.
   const larger=await createExactPdf(source,{targetKb:Math.ceil(source.length/1000)+1,allowImageCompression:true});assert.equal(larger.qualityChanged,false);assert.equal(larger.method,'original');
+});
+
+
+test('indirect ICC RGB images compress below the former quality floor while retaining the profile', async () => {
+  const {createCanvas}=require('@napi-rs/canvas'); const canvas=createCanvas(420,500),ctx=canvas.getContext('2d'),pixels=ctx.createImageData(420,500);let seed=17;
+  for(let i=0;i<pixels.data.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;pixels.data[i]=seed&255;pixels.data[i+1]=(seed>>>8)&255;pixels.data[i+2]=(seed>>>16)&255;pixels.data[i+3]=255;}
+  ctx.putImageData(pixels,0,0);const jpg=await canvas.encode('jpeg',30);
+  const doc=await PDFDocument.create();const embedded=await doc.embedJpg(Uint8Array.from(jpg));doc.addPage([420,500]).drawImage(embedded,{x:0,y:0,width:420,height:500});
+  const iccBytes=Buffer.from('AAACTGxjbXMEQAAAbW50clJHQiBYWVogB+oACgAQAAoANwAvYWNzcEFQUEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1sY21zAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALZGVzYwAAAQgAAAA2Y3BydAAAAUAAAABMd3RwdAAAAYwAAAAUY2hhZAAAAaAAAAAsclhZWgAAAcwAAAAUYlhZWgAAAeAAAAAUZ1hZWgAAAfQAAAAUclRSQwAAAggAAAAgZ1RSQwAAAggAAAAgYlRSQwAAAggAAAAgY2hybQAAAigAAAAkbWx1YwAAAAAAAAABAAAADGVuVVMAAAAaAAAAHABzAFIARwBCACAAYgB1AGkAbAB0AC0AaQBuAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAADAAAAAcAE4AbwAgAGMAbwBwAHkAcgBpAGcAaAB0ACwAIAB1AHMAZQAgAGYAcgBlAGUAbAB5WFlaIAAAAAAAAPbWAAEAAAAA0y1zZjMyAAAAAAABDEIAAAXe///zJQAAB5MAAP2Q///7of///aIAAAPcAADAblhZWiAAAAAAAABvoAAAOPUAAAOQWFlaIAAAAAAAACSfAAAPhAAAtsNYWVogAAAAAAAAYpcAALeHAAAY2XBhcmEAAAAAAAMAAAACZmYAAPKnAAANWQAAE9AAAApbY2hybQAAAAAAAwAAAACj1wAAVHsAAEzNAACZmgAAJmYAAA9c','base64');
+  const profile=doc.context.register(doc.context.flateStream(iccBytes,{N:3,Alternate:'DeviceRGB'}));
+  const color=doc.context.register(doc.context.obj([PDFName.of('ICCBased'),profile]));
+  await doc.flush();
+  doc.context.lookup(embedded.ref).dict.set(PDFName.of('ColorSpace'),color);
+  const original=Buffer.from(await doc.save());const targetKb=Math.floor(original.length*.68/1000);
+  await assert.rejects(createExactPdf(original,{targetKb}),e=>e.code==='TARGET_UNREACHABLE');
+  const output=await createExactPdf(original,{targetKb,allowImageCompression:true});
+  assert.equal(output.data.length,targetKb*1000);assert.equal(output.qualityChanged,true);assert.ok(output.imageQuality<20);
+  const after=await PDFDocument.load(output.data);const savedImage=after.context.lookup(embedded.ref);
+  assert.equal(savedImage.dict.get(PDFName.of('ColorSpace')).toString(),color.toString());
+  assert.deepEqual(Buffer.from(after.context.lookup(profile).contents),Buffer.from(doc.context.lookup(profile).contents));
+  assert.equal(savedImage.dict.get(PDFName.of('Width')).asNumber(),420);assert.equal(savedImage.dict.get(PDFName.of('Height')).asNumber(),500);
 });
