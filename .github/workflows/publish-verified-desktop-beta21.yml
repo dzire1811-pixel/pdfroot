@@ -1,0 +1,58 @@
+name: Publish verified PDFRoot Desktop Pro Beta 21
+on:
+  push:
+    branches: [codex/publish-desktop-beta21-20261023]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish-verified-installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Retrieve the Windows-tested installer
+        uses: actions/download-artifact@v4
+        with:
+          name: PDFRoot-Desktop-Pro-Beta21-Verified
+          path: release
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 39955758003
+      - name: Verify installer and update channel
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, pathlib, re
+          folder = pathlib.Path('release')
+          exe = folder / 'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.21-x64.exe'
+          data = exe.read_bytes()
+          assert len(data) == 119109406, 'Unexpected installer size'
+          assert hashlib.sha256(data).hexdigest() == 'b63c0fccc56d1c99382e24e23c267f1f4d57d9dd74013f09af784cdcdf020443', 'Installer differs from tested artifact'
+          assert pathlib.Path(str(exe) + '.blockmap').is_file(), 'Blockmap missing'
+          manifest = (folder / 'beta.yml').read_text()
+          assert re.search(r'^version: 0\.7\.0-beta\.21$', manifest, re.M), 'Wrong update version'
+          assert re.search(r'^path: ' + re.escape(exe.name) + r'$', manifest, re.M), 'Wrong update installer'
+          checksum = re.search(r'^sha512: (\S+)$', manifest, re.M).group(1)
+          assert base64.b64decode(checksum) == hashlib.sha512(data).digest(), 'Update manifest digest mismatch'
+          print('Verified the original Windows-tested installer and update channel.')
+          PY
+      - name: Publish installer and beta update files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > release-notes.md <<'NOTES'
+          PDFRoot Desktop Pro Beta 21
+
+          - Starts in the background at Windows sign-in, including on upgraded profiles.
+          - Prepares local Crop, page-order, Front/Back, compression, image-settings and Exact KB PDF windows before first use.
+          - Keeps global shortcuts ready and avoids unnecessary Explorer selection lookup work.
+          - Preserves existing licensing, payment, Exact KB PDF and image compression features.
+
+          Validation: 123 automated tests and installed Windows checks for background restart, startup preferences, all local tool families, Ctrl+Alt+C detection and Crop Save & Replace.
+          Full selected-file keypress-to-preview timing on physical Windows 10/11 remains hardware-dependent. The hosted runner cannot open Explorer's interactive UI.
+
+          Installer SHA-256: B63C0FCCC56D1C99382E24E23C267F1F4D57D9DD74013F09AF784CDCDF020443
+          Verified build: https://github.com/dzire1811-pixel/pdfroot/actions/runs/39955758003
+          NOTES
+          gh release create v0.7.0-beta.21 release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.21-x64.exe release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.21-x64.exe.blockmap release/beta.yml --repo "$GITHUB_REPOSITORY" --target 46e12323c3782f88852b01e7ab24693705baa80f --title 'PDFRoot Desktop Pro Beta 21 — Windows startup and prepared shortcuts' --notes-file release-notes.md --prerelease
+          gh release view v0.7.0-beta.21 --repo "$GITHUB_REPOSITORY" --json assets,tagName
