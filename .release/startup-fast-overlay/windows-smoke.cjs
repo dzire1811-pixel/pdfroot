@@ -16,6 +16,8 @@ const originalKey = fs.readFileSync(keyPath), keys = crypto.generateKeyPairSync(
 const port = 9240;
 const env = { ...process.env, APPDATA: path.join(scratch, 'profile') };
 let processHandle;
+const problems = [];
+let appLog = "";
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(label, check, timeout = 30000) {
   const end = Date.now() + timeout; let last;
@@ -42,13 +44,17 @@ async function evaluate(target, expression) {
 }
 async function mainPage() { return waitFor('main page', async () => (await targets()).find(x => /catalog\.html|activation\.html/.test(x.url))); }
 async function invoke(name, ...args) { return evaluate(await mainPage(), `window.pdfrootDesktop.${name}(...${JSON.stringify(args)})`); }
-function launch(slug, files) { return spawn(executable, [`--context-tool=${slug}`, ...files.map(f => `--file=${f}`)], { env, stdio: 'ignore' }); }
+function launch(slug, files) { return spawn(executable, [`--context-tool=${slug}`, ...files.map(f => `--file=${f}`)], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+ processHandle.stdout.on('data', data => { appLog += data; }); processHandle.stderr.on('data', data => { appLog += data; });
+}
 async function page(name) { return waitFor(name, async () => (await targets()).find(x => x.url.includes(name))); }
 async function quit() {
   await evaluate(await mainPage(), 'setTimeout(() => window.pdfrootDesktop.quit(), 50); true');
   await waitFor('process exit', () => processHandle.exitCode !== null, 10000);
 }
-function start() { processHandle = spawn(executable, [`--remote-debugging-port=${port}`, '--disable-gpu', '--background'], { env, stdio: 'ignore' }); }
+function start() { processHandle = spawn(executable, [`--remote-debugging-port=${port}`, '--disable-gpu', '--background'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+ processHandle.stdout.on('data', data => { appLog += data; }); processHandle.stderr.on('data', data => { appLog += data; });
+}
 (async () => {
  try {
   fs.mkdirSync(env.APPDATA, { recursive: true });
@@ -61,7 +67,9 @@ function start() { processHandle = spawn(executable, [`--remote-debugging-port=$
   await quit(); start(); await mainPage();
   await waitFor('six prepared local windows', async () => (await invoke('shortcutEngineStatus')).ready.length === 6);
   assert.equal((await invoke('shortcutEngineStatus')).mainVisible, false, 'Background login showed the catalog');
-  assert.equal(await invoke('startup'), true);
+  console.log('Startup diagnostics: ' + JSON.stringify(await invoke('shortcutEngineStatus')));
+  console.log('Run registry: ' + spawnSync('reg.exe', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', '/v', 'PDFRoot Desktop Pro'], { encoding: 'utf8' }).stdout);
+  if (!await invoke('startup')) problems.push('Startup was not detected as enabled');
   const shortcuts = await invoke('shortcuts');
   assert.equal(shortcuts.length, 28);
   assert.equal(shortcuts.every(x => x.registered), true);
@@ -140,7 +148,12 @@ Start-Sleep -Milliseconds 300
   assert.equal(await invoke('startup'), true);
   assert.equal((await invoke('shortcutEngineStatus')).mainVisible, false);
   await quit();
+  assert.deepEqual(problems, [], 'Installed startup checks failed');
   console.log('Windows background restart, all local tool families, primary crop hotkey, crop save and startup preference checks passed.');
+ } catch (error) {
+  console.error("App output: " + appLog);
+  try { console.error("Last state: " + JSON.stringify(await invoke("shortcutEngineStatus"))); console.error("Shortcut: " + JSON.stringify(await invoke("shortcutActivity"))); } catch {}
+  throw error;
  } finally {
   if (processHandle && processHandle.exitCode === null) { processHandle.kill(); await pause(1500); }
   fs.writeFileSync(keyPath, originalKey);
