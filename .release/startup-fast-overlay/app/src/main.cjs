@@ -1475,7 +1475,7 @@ function handleWindowShortcut(event, input) {
 }
 
 function setupIpc() {
-  ipcMain.handle('desktop:shortcut-engine-status', () => ({ ...shortcutWindows.status(), mainVisible: mainWindow?.isVisible() || false, login: process.platform === "win32" ? app.getLoginItemSettings(startupLoginOptions(process.execPath)) : null }));
+  ipcMain.handle('desktop:shortcut-engine-status', () => ({ ...shortcutWindows.status(), mainVisible: mainWindow?.isVisible() || false }));
   ipcMain.handle("desktop:update-status", (event) => isLocalAppPage(event) ? updateState() : { error: "Open PDFRoot to check updates." });
   ipcMain.handle("desktop:check-update", (event) => isLocalAppPage(event)
     ? checkForDesktopUpdate(true) : { error: "Open PDFRoot to check updates." });

@@ -86,6 +86,6 @@ test('startup status matches the named launch item even when Electron reports op
  const entry = { name: 'PDFRoot Desktop Pro', scope: 'user', enabled: true, path: exe, args: ['--background'] };
  assert.equal(automaticStartupEnabled({ openAtLogin: false, launchItems: [entry] }, exe), true);
  assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, enabled: false }] }, exe), false);
- assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, args: [] }] }, exe), false);
+ assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, args: [] }] }, exe), true);
  assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, path: 'other.exe' }] }, exe), false);
 });

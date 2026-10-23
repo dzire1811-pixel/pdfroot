@@ -48,9 +48,10 @@ function startupLoginOptions(executable) {
 function automaticStartupEnabled(login, executable) {
   if (!Array.isArray(login.launchItems)) return Boolean(login.openAtLogin);
   const normalize = value => String(value || '').replace(/^"|"$/g, '').replace(/\\/g, '/').toLowerCase();
+  // Chromium GetArgs() omits --switches in this Electron version, so the
+  // returned args may be empty even for our --background Run command.
   return login.launchItems.some(item => item.name === 'PDFRoot Desktop Pro' && item.scope === 'user' &&
-    item.enabled && normalize(item.path) === normalize(executable) &&
-    item.args?.length === 1 && item.args[0] === '--background');
+    item.enabled && normalize(item.path) === normalize(executable));
 }
 function configureAutomaticStartup({ settings, hasSavedProfile, getLogin, setLogin, executable }) {
   const saved = settings.read();
@@ -61,7 +62,7 @@ function configureAutomaticStartup({ settings, hasSavedProfile, getLogin, setLog
   for (const item of login.launchItems || []) {
     if (item.scope === 'user' && item.name !== 'PDFRoot Desktop Pro' &&
         normalizeExe(item.path) === normalizeExe(executable) &&
-        item.args?.length === 1 && item.args[0] === '--background') {
+        (item.args?.length === 0 || item.args?.length === 1 && item.args[0] === '--background')) {
       setLogin({ name: item.name, openAtLogin: false, enabled: false, path: executable, args: ['--background'] });
     }
   }
