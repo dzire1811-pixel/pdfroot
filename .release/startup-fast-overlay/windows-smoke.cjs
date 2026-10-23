@@ -132,7 +132,7 @@ Start-Sleep -Milliseconds 300
   const saved = await evaluate(preparedCrop, `window.pdfrootDesktop.saveCrop(${JSON.stringify({ id: items[0].id, dataUrl: 'data:image/jpeg;base64,' + cropped.toString('base64') })})`);
   assert.equal(saved.ok, true);
   assert.deepEqual(fs.readFileSync(photo), cropped);
-  await evaluate(preparedCrop, 'window.pdfrootDesktop.closeCrop()');
+  await evaluate(preparedCrop, 'setTimeout(() => window.pdfrootDesktop.closeCrop(), 50); true');
   await waitFor('crop replacement ready', async () => (await invoke('shortcutEngineStatus')).ready.includes('crop'));
   const samplePdf = path.join(scratch, 'sample.pdf');
   const fixturePdf = await PDFDocument.create(); fixturePdf.addPage([100, 100]); fs.writeFileSync(samplePdf, await fixturePdf.save());
@@ -149,7 +149,7 @@ Start-Sleep -Milliseconds 300
     return state.lastOpen?.key === key && state.lastOpen.prepared && await evaluate(prepared, ready);
    });
    assert.equal((await page(name)).id, prepared.id);
-   await evaluate(prepared, `window.pdfrootDesktop.${cancel}(null)`);
+   await evaluate(prepared, `setTimeout(() => window.pdfrootDesktop.${cancel}(null), 50); true`);
    await waitFor(slug + ' replenished', async () => (await invoke('shortcutEngineStatus')).ready.includes(key));
   }
   // Changing Windows startup off is still respected after the one-time migration.
