@@ -40,6 +40,18 @@ async function repairContextMenu({ executable, resourcesPath, platform = process
     return true;
   } finally { await fs.promises.rm(directory, { recursive: true, force: true }); }
 }
+function startupLoginOptions(executable) {
+  // Electron 39 parses this lookup as a command line. Quote paths containing
+  // spaces (including the product's .exe name) before querying launch items.
+  return { path: '"' + executable + '"', args: ['--background'] };
+}
+function automaticStartupEnabled(login, executable) {
+  if (!Array.isArray(login.launchItems)) return Boolean(login.openAtLogin);
+  const normalize = value => String(value || '').replace(/^"|"$/g, '').replace(/\\/g, '/').toLowerCase();
+  return login.launchItems.some(item => item.name === 'PDFRoot Desktop Pro' && item.scope === 'user' &&
+    item.enabled && normalize(item.path) === normalize(executable) &&
+    item.args?.length === 1 && item.args[0] === '--background');
+}
 function configureAutomaticStartup({ settings, hasSavedProfile, getLogin, setLogin, executable }) {
   const saved = settings.read();
   const login = getLogin();
@@ -57,7 +69,7 @@ function configureAutomaticStartup({ settings, hasSavedProfile, getLogin, setLog
   // once for those legacy profiles; preserve choices made in this version.
   const enabled = saved.startupSetupVersion >= 2 && typeof saved.startupPreference === "boolean"
     ? saved.startupPreference : true;
-  if (login.openAtLogin !== enabled || enabled) setLogin({ name: "PDFRoot Desktop Pro", openAtLogin: enabled, enabled, path: executable, args: ["--background"] });
+  if (automaticStartupEnabled(login, executable) !== enabled || enabled) setLogin({ name: "PDFRoot Desktop Pro", openAtLogin: enabled, enabled, path: executable, args: ["--background"] });
   settings.update({ startupSetupVersion: 2, startupPreference: enabled });
   return enabled;
 }
@@ -68,4 +80,4 @@ function resolveLaunchSelection(explorerFiles, explicitFiles, exists = fs.exists
     ? explicit : explorer.length ? explorer : explicit;
   return [...new Map(selected.map(file => [file.toLowerCase(), file])).values()];
 }
-module.exports = { contextRegistry, repairContextMenu, configureAutomaticStartup, resolveLaunchSelection };
+module.exports = { startupLoginOptions, automaticStartupEnabled, contextRegistry, repairContextMenu, configureAutomaticStartup, resolveLaunchSelection };

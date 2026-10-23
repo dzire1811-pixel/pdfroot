@@ -78,3 +78,14 @@ test('migration removes only owned legacy startup duplicates', () => {
  assert.equal(writes[1].name, 'PDFRoot Desktop Pro');
  assert.equal(writes[1].openAtLogin, true);
 });
+
+test('startup status matches the named launch item even when Electron reports openAtLogin false', () => {
+ const { startupLoginOptions, automaticStartupEnabled } = require('./startup-setup.cjs');
+ const exe = 'C:\\Users\\Anand Joshi\\PDFRoot Desktop Pro.exe';
+ assert.deepEqual(startupLoginOptions(exe), { path: '"' + exe + '"', args: ['--background'] });
+ const entry = { name: 'PDFRoot Desktop Pro', scope: 'user', enabled: true, path: exe, args: ['--background'] };
+ assert.equal(automaticStartupEnabled({ openAtLogin: false, launchItems: [entry] }, exe), true);
+ assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, enabled: false }] }, exe), false);
+ assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, args: [] }] }, exe), false);
+ assert.equal(automaticStartupEnabled({ openAtLogin: true, launchItems: [{ ...entry, path: 'other.exe' }] }, exe), false);
+});

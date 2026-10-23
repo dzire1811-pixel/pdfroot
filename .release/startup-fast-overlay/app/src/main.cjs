@@ -34,7 +34,7 @@ const {
   stopExplorerSelectionService,
 } = require("./windows-explorer.cjs");
 const { DesktopSettings, PROCESSING_MODES } = require("./settings.cjs");
-const { repairContextMenu, configureAutomaticStartup, resolveLaunchSelection } = require("./startup-setup.cjs");
+const { startupLoginOptions, automaticStartupEnabled, repairContextMenu, configureAutomaticStartup, resolveLaunchSelection } = require("./startup-setup.cjs");
 const { automaticTools, nextAvailableOutputPath, validateAutomaticSelection } = require("./automatic-mode.cjs");
 const {
   LocalAutoUnavailableError,
@@ -1681,11 +1681,11 @@ function setupIpc() {
     automaticShortcutCount: quickShortcuts.filter((shortcut) => shortcut.slug && automaticTools[shortcut.slug]).length,
   }));
   ipcMain.on("desktop:auto-status", handleAutoStatus);
-  ipcMain.handle("desktop:startup", () => app.getLoginItemSettings({ path: process.execPath, args: ["--background"] }).openAtLogin);
+  ipcMain.handle("desktop:startup", () => automaticStartupEnabled(app.getLoginItemSettings(startupLoginOptions(process.execPath)), process.execPath));
   ipcMain.handle("desktop:set-startup", (_event, enabled) => {
     app.setLoginItemSettings({ name: "PDFRoot Desktop Pro", openAtLogin: Boolean(enabled), enabled: Boolean(enabled), path: process.execPath, args: ["--background"] });
     desktopSettings.update({ startupPreference: Boolean(enabled), startupSetupVersion: 2 });
-    return app.getLoginItemSettings({ path: process.execPath, args: ["--background"] }).openAtLogin;
+    return automaticStartupEnabled(app.getLoginItemSettings(startupLoginOptions(process.execPath)), process.execPath);
   });
   ipcMain.handle("desktop:open-support", () => shell.openExternal(WEB_APP_ORIGIN + "/contact"));
   ipcMain.handle("desktop:quit", () => { appIsQuitting = true; app.quit(); });
@@ -1783,7 +1783,7 @@ if (!hasSingleInstanceLock) {
     desktopSettings = new DesktopSettings({ userDataPath });
     if (app.isPackaged && process.platform === "win32") {
       try { configureAutomaticStartup({ settings: desktopSettings, hasSavedProfile,
-        getLogin: () => app.getLoginItemSettings({ path: process.execPath, args: ["--background"] }), setLogin: options => app.setLoginItemSettings(options), executable: process.execPath }); }
+        getLogin: () => app.getLoginItemSettings(startupLoginOptions(process.execPath)), setLogin: options => app.setLoginItemSettings(options), executable: process.execPath }); }
       catch (error) { console.error("PDFRoot startup setup:", error.message); }
       // Restore our own per-user menu automatically; never require elevation.
       void repairContextMenu({ executable: process.execPath, resourcesPath: process.resourcesPath })
