@@ -1688,7 +1688,7 @@ function setupIpc() {
     return automaticStartupEnabled(app.getLoginItemSettings(startupLoginOptions(process.execPath)), process.execPath);
   });
   ipcMain.handle("desktop:open-support", () => shell.openExternal(WEB_APP_ORIGIN + "/contact"));
-  ipcMain.handle("desktop:quit", () => { appIsQuitting = true; app.quit(); });
+  ipcMain.handle("desktop:quit", () => { appIsQuitting = true; setTimeout(() => app.quit(), 100); return true; });
 }
 
 async function createMainWindow() {

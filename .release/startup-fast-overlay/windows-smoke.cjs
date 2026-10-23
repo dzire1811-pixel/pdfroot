@@ -49,7 +49,7 @@ function launch(slug, files) { return spawn(executable, [`--context-tool=${slug}
 }
 async function page(name) { return waitFor(name, async () => (await targets()).find(x => x.url.includes(name))); }
 async function quit() {
-  await evaluate(await mainPage(), 'setTimeout(() => window.pdfrootDesktop.quit(), 50); true');
+  await invoke('quit');
   await waitFor('process exit', () => processHandle.exitCode !== null, 10000);
 }
 function start() { processHandle = spawn(executable, [`--remote-debugging-port=${port}`, '--disable-gpu', '--background'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
