@@ -1,6 +1,19 @@
-# PDFRoot Desktop Pro Beta 20 release
+# PDFRoot Desktop Pro Beta 23 release
 
-The production `/desktop-pro` page links to the verified Windows x64 Beta 20 installer, distributed as a GitHub Release asset. The installer is not part of the website static bundle.
+The production `/desktop-pro` download points to the verified Windows x64 Beta 23 installer. The source is tagged `v0.7.0-beta.23` at `f3df317ea621c7de094f83e3bf9e34993d3df1ac`.
+
+Free Transform places four independent handles on the photo itself. Dragging a corner warps the whole photo live, including inward/outward movement. Apply Transform retains the complete source in the output bounds; normal cropping and Save remain available. Reset restores the source. Normal Crop remains the default.
+
+Verified candidate run: https://github.com/dzire1811-pixel/pdfroot/actions/runs/40067867661
+Artifact: PDFRoot-Desktop-Pro-Beta23-Verified (12550301732).
+
+All 129 automated tests, Windows installation, the real local Worker, startup/shortcut checks and browser mouse/Apply/Reset/Save checks passed. The publish workflow promotes these exact bytes rather than rebuilding them, validates SHA-256 plus the update manifest's SHA-512, and checks the uploaded assets before making the release public.
+
+Installer: `PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe` (119,115,978 bytes).
+SHA-256: `7F6C7372B1BBDC46FAFD1B2593C83407CF3EAC1EB2EF0DD79DFC308CBECA5B03`.
+The release also provides `.blockmap` and `beta.yml` for the existing beta automatic update channel. Existing activation settings remain in the app profile.
+
+## Earlier compression and Exact KB PDF behavior
 
 Compress Image opens the same compact Normal / Low / Heavy chooser from the catalog, keyboard shortcut and Explorer menu. Native JPEG/WebP encoding replaces the old mild-recompression/copy behavior. Every level preserves dimensions; stronger levels are lossy. Transparent PNG stays PNG, with colour reduction only in Low/Heavy. Opaque PNG may become JPG, as disclosed before choosing a level. Already compact inputs are never enlarged, and results report original/output KB and percentage saved. Originals are kept as separate files.
 
