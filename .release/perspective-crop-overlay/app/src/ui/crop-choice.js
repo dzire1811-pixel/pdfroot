@@ -14,6 +14,8 @@ let perspectiveMode = false;
 let perspectivePoints = fullPerspectivePoints();
 let applyingPerspective = false;
 let cancelPerspective;
+let perspectiveView = {minX:-.15,minY:-.15,maxX:1.15,maxY:1.15};
+let perspectiveFrame;
 let items = [];
 let activeId;
 let loadToken = 0;
@@ -42,30 +44,38 @@ function setPerspectiveMode(enabled) {
   document.querySelector("#perspective-crop-controls").hidden = !enabled;
   selection.hidden = enabled;
   stage.classList.toggle("perspective", enabled);
+  fitPerspectiveView();
+  renderPreview();
   renderPerspective();
+}
+
+function fitPerspectiveView() {
+  perspectiveView = {minX:Math.min(0,...perspectivePoints.map(p=>p.x))-.15, minY:Math.min(0,...perspectivePoints.map(p=>p.y))-.15,
+    maxX:Math.max(1,...perspectivePoints.map(p=>p.x))+.15, maxY:Math.max(1,...perspectivePoints.map(p=>p.y))+.15};
 }
 
 function renderPerspective() {
   document.querySelector("#perspective-selection").hidden = !perspectiveMode;
   if (!perspectiveMode) return;
-  document.querySelector("#perspective-outline").setAttribute("points", perspectivePoints.map(p => `${p.x * 1000},${p.y * 1000}`).join(" "));
+  document.querySelector("#perspective-outline").setAttribute("points", perspectivePoints.map(p => `${(p.x-perspectiveView.minX)/(perspectiveView.maxX-perspectiveView.minX)*1000},${(p.y-perspectiveView.minY)/(perspectiveView.maxY-perspectiveView.minY)*1000}`).join(" "));
   for (let i = 0; i < 4; i++) {
     const handle = document.querySelector(`[data-corner="${i}"]`);
-    handle.style.left = `${perspectivePoints[i].x * 100}%`;
-    handle.style.top = `${perspectivePoints[i].y * 100}%`;
+    handle.style.left = `${(perspectivePoints[i].x-perspectiveView.minX)/(perspectiveView.maxX-perspectiveView.minX)*100}%`;
+    handle.style.top = `${(perspectivePoints[i].y-perspectiveView.minY)/(perspectiveView.maxY-perspectiveView.minY)*100}%`;
   }
 }
 
 function movePerspectiveCorner(index, point) {
   const next = perspectivePoints.map(p => ({ ...p }));
-  next[index] = { x: clamp(point.x, 0, 1), y: clamp(point.y, 0, 1) };
+  next[index] = { x: clamp(point.x, -2, 3), y: clamp(point.y, -2, 3) };
   // Do not permit crossed edges or a collapsed selection.
   if (!PerspectiveMath.validQuad(next)) return;
   perspectivePoints = next;
   renderPerspective();
+  if (!perspectiveFrame) perspectiveFrame = requestAnimationFrame(() => { perspectiveFrame = undefined; renderPreview(); });
 }
 
-async function applyPerspectiveCrop() {
+async function applyPerspectiveTransform() {
   if (!source || saving || applyingPerspective || !perspectiveMode) return false;
   const token = loadToken;
   const oldStatus = document.querySelector("#status").textContent;
@@ -81,10 +91,10 @@ async function applyPerspectiveCrop() {
     updateSaveLabel();
   };
   try {
-    PerspectiveMath.outputSize(perspectivePoints, image.naturalWidth, image.naturalHeight);
+    PerspectiveMath.transformSize(perspectivePoints, image.naturalWidth, image.naturalHeight);
     applyingPerspective = true;
     for (const [element] of controls) element.disabled = true;
-    document.querySelector("#status").textContent = "Applying Perspective Crop…";
+    document.querySelector("#status").textContent = "Applying Free Transform…";
     showError("");
     const full = transformedCanvas(0, 0, true);
     const pixels = full.getContext("2d").getImageData(0, 0, full.width, full.height);
@@ -92,7 +102,7 @@ async function applyPerspectiveCrop() {
       worker = new Worker("perspective-worker.js");
       cancelPerspective = () => { worker.terminate(); restore(); reject(new Error("Crop cancelled.")); };
       worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data);
-      worker.onerror = () => reject(new Error("Could not apply Perspective Crop. Try a smaller image."));
+      worker.onerror = () => reject(new Error("Could not apply Free Transform. Try a smaller image."));
       worker.postMessage({ buffer: pixels.data.buffer, width: full.width, height: full.height,
         points: perspectivePoints.map(p => ({ ...p })) }, [pixels.data.buffer]);
     });
@@ -105,7 +115,7 @@ async function applyPerspectiveCrop() {
     const corrected = new Image();
     await new Promise((resolve, reject) => {
       corrected.onload = resolve;
-      corrected.onerror = () => reject(new Error("Could not preview Perspective Crop."));
+      corrected.onerror = () => reject(new Error("Could not preview Free Transform."));
       corrected.src = canvas.toDataURL("image/png");
     });
     if (token !== loadToken) return false;
@@ -121,12 +131,12 @@ async function applyPerspectiveCrop() {
     setDrawing(true);
     renderPreview();
     rememberCurrent();
-    document.querySelector("#status").textContent = "Perspective Crop applied. Save when ready.";
+    document.querySelector("#status").textContent = "Free Transform applied. Save when ready.";
     return true;
   } catch (error) {
     if (token === loadToken) {
       document.querySelector("#status").textContent = oldStatus;
-      showError(error.message || "Could not apply Perspective Crop.");
+      showError(error.message || "Could not apply Free Transform.");
     }
     return false;
   } finally { worker?.terminate(); restore(); }
@@ -141,9 +151,10 @@ document.querySelector("#perspective-crop").addEventListener("click", () => {
 });
 document.querySelector("#perspective-reset").addEventListener("click", () => {
   perspectivePoints = fullPerspectivePoints();
-  renderPerspective();
+  fitPerspectiveView();
+  renderPreview();
 });
-document.querySelector("#apply-perspective").addEventListener("click", applyPerspectiveCrop);
+document.querySelector("#apply-perspective").addEventListener("click", applyPerspectiveTransform);
 for (let i = 0; i < 4; i++) {
   document.querySelector(`[data-corner="${i}"]`).addEventListener("keydown", event => {
     if (!source || saving || applyingPerspective || !perspectiveMode) return;
@@ -151,8 +162,10 @@ for (let i = 0; i < 4; i++) {
     event.preventDefault();
     const box = stage.getBoundingClientRect();
     const step = event.shiftKey ? 10 : 1;
-    movePerspectiveCorner(i, { x: perspectivePoints[i].x + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0) / box.width,
-      y: perspectivePoints[i].y + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0) / box.height });
+    movePerspectiveCorner(i, { x: perspectivePoints[i].x + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0) / box.width * (perspectiveView.maxX-perspectiveView.minX),
+      y: perspectivePoints[i].y + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0) / box.height * (perspectiveView.maxY-perspectiveView.minY) });
+    fitPerspectiveView();
+    renderPreview();
   });
 }
 
@@ -508,6 +521,23 @@ function renderCrop() {
 
 function renderPreview() {
   if (!source || !image.naturalWidth) return;
+  if (perspectiveMode) {
+    const spanX = perspectiveView.maxX-perspectiveView.minX, spanY = perspectiveView.maxY-perspectiveView.minY;
+    const base = transformedCanvas(Math.max(100,previewArea.clientWidth-30)/spanX, Math.max(100,previewArea.clientHeight-30)/spanY);
+    const displayWidth = Math.max(1,Math.round(base.width*spanX*zoom));
+    const displayHeight = Math.max(1,Math.round(base.height*spanY*zoom));
+    const scale = Math.min(1,650/displayWidth,450/displayHeight);
+    const raster = transformedCanvas(Math.max(2,displayWidth*scale/spanX),Math.max(2,displayHeight*scale/spanY));
+    const pixels = raster.getContext("2d").getImageData(0,0,raster.width,raster.height);
+    const result = PerspectiveMath.transform(pixels.data,raster.width,raster.height,perspectivePoints,perspectiveView);
+    preview.width = result.width;
+    preview.height = result.height;
+    preview.getContext("2d").putImageData(new ImageData(result.data,result.width,result.height),0,0);
+    stage.style.width = `${displayWidth}px`;
+    stage.style.height = `${displayHeight}px`;
+    renderCrop();
+    return;
+  }
   const base = transformedCanvas(
     Math.max(100, previewArea.clientWidth - 30),
     Math.max(100, previewArea.clientHeight - 30),
@@ -553,6 +583,12 @@ document.querySelector("#zoom-reset").addEventListener("click", () => {
 
 function pointerPosition(event) {
   const box = stage.getBoundingClientRect();
+  if (perspectiveMode) {
+    const frame = drag?.mode === "perspective" ? drag.frame : box;
+    const view = drag?.mode === "perspective" ? drag.view : perspectiveView;
+    return {x:clamp(view.minX+(event.clientX-frame.left)/frame.width*(view.maxX-view.minX),-2,3),
+      y:clamp(view.minY+(event.clientY-frame.top)/frame.height*(view.maxY-view.minY),-2,3)};
+  }
   return {
     x: clamp((event.clientX - box.left) / box.width, 0, 1),
     y: clamp((event.clientY - box.top) / box.height, 0, 1),
@@ -565,7 +601,7 @@ stage.addEventListener("pointerdown", (event) => {
   if (perspectiveMode) {
     const index = event.target.dataset.corner;
     if (index === undefined) return;
-    drag = { mode: "perspective", corner: Number(index) };
+    drag = { mode: "perspective", corner: Number(index), frame:stage.getBoundingClientRect(), view:{...perspectiveView} };
     stage.setPointerCapture(event.pointerId);
     event.preventDefault();
     return;
@@ -608,7 +644,9 @@ stage.addEventListener("pointermove", (event) => {
 });
 function finishDrag() {
   if (!drag) return;
+  const transformed = drag.mode === "perspective";
   drag = undefined;
+  if (transformed) { fitPerspectiveView(); renderPreview(); }
 }
 stage.addEventListener("pointerup", finishDrag);
 stage.addEventListener("pointercancel", finishDrag);
@@ -657,7 +695,7 @@ document.querySelector("#reset").addEventListener("click", () => {
 
 async function save() {
   if (!source || saving || applyingPerspective || activeItem()?.saved) return;
-  if (perspectiveMode && !(await applyPerspectiveCrop())) return;
+  if (perspectiveMode && !(await applyPerspectiveTransform())) return;
   const item = activeItem();
   saving = true;
   saveButton.disabled = true;

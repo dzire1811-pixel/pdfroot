@@ -1,4 +1,4 @@
-name: Build Desktop Pro Beta 22 Perspective Crop
+name: Build Desktop Pro Beta 23 Free Transform
 on:
   push:
     branches: [codex/perspective-crop-20261024]
@@ -49,7 +49,7 @@ jobs:
       - name: Verify installed Windows application
         run: |
           $appDir = (Resolve-Path '.release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app').Path
-          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.22-x64.exe'
+          $installer = Join-Path $appDir 'release/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe'
           $installDir = Join-Path $env:LOCALAPPDATA 'Programs/PDFRoot-Exact-KB-Test'
           $process = Start-Process $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Installer failed' }
@@ -65,7 +65,7 @@ jobs:
       - name: Save installer candidate
         uses: actions/upload-artifact@v4
         with:
-          name: PDFRoot-Desktop-Pro-Beta22-Verified
+          name: PDFRoot-Desktop-Pro-Beta23-Verified
           path: |
             .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.exe
             .release/work/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release/*.blockmap

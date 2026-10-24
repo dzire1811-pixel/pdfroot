@@ -1,36 +1,13 @@
-# PDFRoot Desktop Pro Beta 22 — optional Perspective Crop
+# PDFRoot Desktop Pro Beta 23 — live image corner Free Transform
 
-Assemble the verified Beta 21 source using the existing overlays, then run:
+Assemble the existing Beta 21 source, then run `node .release/perspective-crop-overlay/apply.cjs APP_PATH`.
 
-```sh
-node .release/perspective-crop-overlay/apply.cjs PATH_TO_ASSEMBLED_APP
-```
+Normal Crop remains the default. Free Transform places handles on the image's own four corners. Dragging any handle warps the entire photo into the destination quadrilateral immediately. Corners move independently, inward or outward. The preview includes space around the photo, refits after a drag, and retains mouse-wheel zoom and keyboard corner nudging. Invalid crossed/collapsed shapes are rejected.
 
-Normal Crop remains the default. Perspective Crop exposes four independent corners
-in clockwise order. Convexity and minimum-area checks prevent crossed or collapsed
-selections. Mouse dragging and arrow keys work in normalized preview coordinates;
-zoom does not change the selected image coordinates.
+This replaces the earlier Beta 22 document-boundary rectifier. The old selection-to-rectangle operation has been removed. A projective forward transform maps the complete source photo into the moved image corners; inverse sampling avoids holes. The bounding output includes every transformed corner, with transparency outside the image (white when saved to JPG). The original source is retained for Reset all edits.
 
-Apply Crop performs a projective transform at source resolution in a local Worker,
-using bilinear interpolation with premultiplied alpha. No network service or new
-runtime dependency is required. The existing 16,000 px / 50 MP limits are enforced.
-Output dimensions use the longer of the two opposing edges. Perspective alone
-cannot infer a document's physical aspect ratio; existing Fixed Size controls can
-set the required output dimensions.
+Apply Transform runs in a local Worker at full resolution. The live preview uses the same mapping at reduced resolution and coalesces drag updates with requestAnimationFrame. The existing 16,000 px / 50 MP limits apply to full-resolution output. No service calls or new app dependencies are used.
 
-Applying updates the working preview only. Save uses the existing file-replacement
-and copy workflow, original MIME type, Fixed Size and Exact KB settings. Save while
-the corner selection is open applies it first. Reset all edits restores the source
-photo. Each image retains its own working preview and crop mode while switching
-within a batch. A new shortcut batch resets Perspective Crop to Normal Crop.
+Apply changes the working image; Save uses the existing replace/copy, MIME type, Fixed Size and Exact KB behavior. Saving with Free Transform open applies it first. Normal Crop's selection is preserved when toggling modes. Applied images and draft corner positions persist per image. A new shortcut batch starts in Normal Crop.
 
-Validation:
-
-- `npm test` in the assembled app includes original crop regressions and independent
-  homography, pixel identity, corner resampling, alpha and malformed-selection tests.
-- `browser-smoke.cjs APP_PATH ARTIFACT_PATH` uses Playwright for real mouse drags,
-  normal crop/save, mode switching, zoom, local Worker, reset, batch state and save.
-- `windows-smoke.cjs INSTALLED_EXE APP_PATH` extends the Beta 21 installed-app
-  startup/shortcut checks with an installed Perspective Worker and source reset.
-- `test-perspective-crop.yml` builds a Windows x64 candidate and verifies it before
-  uploading artifacts. It does not publish a release or change customer downloads.
+Validation includes unit tests for pixel identity, analytic projective mapping, whole-source corner movement, outward translation, malformed quads and alpha interpolation. The Windows candidate workflow installs and tests the real Worker and existing startup/shortcuts, then checks live preview pixel changes during actual mouse drags, outward handles, independent corners, normal cropping, reset, per-image state and Save. It uploads a candidate installer and screenshots; it does not publish a release or update the live website.

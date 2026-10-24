@@ -54,44 +54,52 @@ let browser;
   await page.click('#perspective-crop');
   assert.equal(await page.locator('#selection').isVisible(), false);
   assert.equal(await page.locator('#perspective-selection').isVisible(), true);
-  const quad = [[.125,80/600],[.825,140/600],[.9,520/600],[.1,.8]];
+  const beforeDrag = await page.evaluate(() => preview.toDataURL());
+  const quad = [[-.1,-.1],[1.1,.05],[.95,1.1],[.05,.95]];
   for (let i = 0; i < 4; i++) {
     const box = await page.locator('#stage').boundingBox();
+    const view = await page.evaluate(() => ({...perspectiveView}));
+    const unchanged = await page.evaluate(() => perspectivePoints.map(p => ({...p})));
     const handle = page.locator(`[data-corner="${i}"]`);
     const pos = await handle.boundingBox();
     await page.mouse.move(pos.x + pos.width/2, pos.y + pos.height/2);
     await page.mouse.down();
-    await page.mouse.move(box.x + quad[i][0]*box.width, box.y + quad[i][1]*box.height, { steps:8 });
+    await page.mouse.move(box.x + (quad[i][0]-view.minX)/(view.maxX-view.minX)*box.width,
+      box.y + (quad[i][1]-view.minY)/(view.maxY-view.minY)*box.height, {steps:8});
     await page.mouse.up();
+    const changed = await page.evaluate(() => perspectivePoints.map(p => ({...p})));
+    for (let j = 0; j < 4; j++) if (i !== j) assert.deepEqual(changed[j],unchanged[j],'Other image corners moved');
   }
+  await page.waitForFunction(() => !perspectiveFrame);
   const points = await page.evaluate(() => perspectivePoints.map(p => ({...p})));
   for (let i = 0; i < 4; i++) {
     assert.ok(Math.abs(points[i].x - quad[i][0]) < .003);
     assert.ok(Math.abs(points[i].y - quad[i][1]) < .003);
   }
-  await page.screenshot({path:path.join(artifacts,'perspective-before.png')});
-  // Switching modes never changes the normal crop rectangle.
+  assert.notEqual(await page.evaluate(() => preview.toDataURL()),beforeDrag,'Photo pixels did not change while dragging');
+  assert.equal(await page.evaluate(() => window.__saves.length),0);
+  await page.screenshot({path:path.join(artifacts,'free-transform-live.png')});
   await page.click('#normal-crop');
-  assert.deepEqual(await page.evaluate(() => ({...crop})), normalCrop);
+  assert.deepEqual(await page.evaluate(() => ({...crop})),normalCrop);
   await page.click('#perspective-crop');
-  // Disallow dragging one corner through its opposite edge.
-  await page.evaluate(() => movePerspectiveCorner(0, {x:.99,y:.99}));
-  assert.deepEqual(await page.evaluate(() => perspectivePoints.map(p => ({...p}))), points);
-  // Wheel zoom changes presentation only, including positions of all corners.
+  await page.evaluate(() => movePerspectiveCorner(0,{x:2,y:2}));
+  assert.deepEqual(await page.evaluate(() => perspectivePoints.map(p => ({...p}))),points);
   const box = await page.locator('#stage').boundingBox();
-  await page.mouse.move(box.x + box.width/2, box.y + box.height/2);
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
   await page.mouse.wheel(0,-100);
   await page.waitForFunction(() => zoom > 1);
-  assert.deepEqual(await page.evaluate(() => perspectivePoints.map(p => ({...p}))), points);
+  assert.deepEqual(await page.evaluate(() => perspectivePoints.map(p => ({...p}))),points);
   await page.click('#zoom-reset');
+  const expected = await page.evaluate(() => { const s=PerspectiveMath.transformSize(perspectivePoints,800,600);return {width:s.width,height:s.height}; });
+  assert.ok(expected.width >= 959 && expected.width <= 962,JSON.stringify(expected));
+  assert.ok(expected.height >= 719 && expected.height <= 722,JSON.stringify(expected));
   await page.click('#apply-perspective');
   await page.waitForFunction(() => !applyingPerspective && !perspectiveMode);
   const corrected = await page.evaluate(() => ({width:image.naturalWidth,height:image.naturalHeight}));
-  assert.ok(corrected.width >= 639 && corrected.width <= 643, JSON.stringify(corrected));
-  assert.ok(corrected.height >= 399 && corrected.height <= 403, JSON.stringify(corrected));
-  assert.equal(await page.evaluate(() => window.__saves.length), 0, 'Apply overwrote the original');
-  assert.equal(await page.locator('#selection').isVisible(), true);
-  await page.screenshot({path:path.join(artifacts,'perspective-after.png')});
+  assert.deepEqual(corrected,expected);
+  assert.equal(await page.evaluate(() => window.__saves.length),0,'Apply overwrote the original');
+  assert.equal(await page.locator('#selection').isVisible(),true);
+  await page.screenshot({path:path.join(artifacts,'free-transform-applied.png')});
   // Per-image state restores the corrected working image.
   await page.getByRole('button', {name:'second.jpg Original',exact:true}).click();
   await page.waitForFunction(() => activeId === 'two' && source);
@@ -110,10 +118,10 @@ let browser;
     return { id:window.__saves[0].id,width:img.naturalWidth,height:img.naturalHeight };
   });
   assert.deepEqual(saved, {id:'one',width:480,height:360});
-  // Save while still in Perspective mode must apply the quad, never the hidden rectangle.
+  // Save while still in Free Transform mode must apply the quad, never the hidden rectangle.
   await page.waitForFunction(() => activeId === 'two' && source);
   await page.click('#perspective-crop');
-  await page.evaluate(points => { perspectivePoints = points; renderPerspective(); }, points);
+  await page.evaluate(points => { perspectivePoints = points; fitPerspectiveView(); renderPreview(); }, points);
   await page.click('#save');
   await page.waitForFunction(() => window.__saves.length === 2);
   const second = await page.evaluate(async () => {
@@ -126,5 +134,5 @@ let browser;
   assert.equal(await page.evaluate(() => perspectiveMode), false);
   assert.equal(await page.locator('#save').isDisabled(), false);
   assert.deepEqual(errors, []);
-  console.log('PASS: normal crop/save, real four-corner drags, invalid corners, zoom, worker apply, no save on Apply, per-image state, reset, direct perspective save and fresh shortcut batch.');
+  console.log('PASS: normal crop/save, live whole-image four-corner transform, outward drags, invalid corners, zoom, worker apply, no save on Apply, per-image state, reset, direct transform save and fresh shortcut batch.');
 })().finally(async () => { await browser?.close(); server.close(); }).catch(error => {console.error(error);process.exitCode=1;});

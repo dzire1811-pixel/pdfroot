@@ -22,7 +22,7 @@
           <div class="preview-area">
             <div class="stage" id="stage">
               <canvas id="preview" aria-label="Image preview"></canvas>
-              <div id="perspective-selection" hidden aria-label="Perspective crop corners">
+              <div id="perspective-selection" hidden aria-label="Image transform corners">
                 <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><polygon id="perspective-outline" points="0,0 1000,0 1000,1000 0,1000" /></svg>
                 <button type="button" data-corner="0" aria-label="Top left corner"></button>
                 <button type="button" data-corner="1" aria-label="Top right corner"></button>
@@ -51,15 +51,15 @@
           </section>
           <section>
             <h2>Crop area</h2>
-            <div class="button-row crop-mode" aria-label="Crop mode"><button id="normal-crop" type="button" class="active" aria-pressed="true">Normal Crop</button><button id="perspective-crop" type="button" aria-pressed="false">Perspective Crop</button></div>
+            <div class="button-row crop-mode" aria-label="Crop mode"><button id="normal-crop" type="button" class="active" aria-pressed="true">Normal Crop</button><button id="perspective-crop" type="button" aria-pressed="false">Free Transform</button></div>
             <div id="normal-crop-controls">
             <div class="button-row"><button id="draw" type="button" class="active" aria-pressed="true">Draw crop</button><button id="full" type="button">Full image</button></div>
             <p class="hint">Drag to draw a crop. Move the small corner dots to resize. Turn off Draw crop to move the area.</p>
             </div>
             <div id="perspective-crop-controls" hidden>
-              <p class="hint">Move the four corner dots onto the photo or document corners.</p>
-              <div class="button-row"><button id="perspective-reset" type="button">Reset corners</button><button id="apply-perspective" type="button">Apply Crop</button></div>
-              <p class="hint">Apply to preview, then Save. Reset all edits restores the source photo.</p>
+              <p class="hint">Drag any image corner to change its shape and perspective. The photo changes as you drag.</p>
+              <div class="button-row"><button id="perspective-reset" type="button">Reset corners</button><button id="apply-perspective" type="button">Apply Transform</button></div>
+              <p class="hint">Apply the transform, then crop or Save. Reset all edits restores the source photo.</p>
             </div>
           </section>
           <section>
