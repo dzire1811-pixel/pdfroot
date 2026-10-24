@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:;" />
+    <title>PDFRoot — Crop Image</title>
+    <link rel="stylesheet" href="crop-choice.css" />
+    <link rel="stylesheet" href="shortcut-theme.css" />
+    <link rel="stylesheet" href="perspective-crop.css" />
+  </head>
+  <body class="shortcut-dialog">
+    <main class="shell">
+      <header class="topbar">
+        <div class="shortcut-brand"><img src="pdfroot-logo.svg" alt="" /><span><strong><em>PDF</em>Root</strong><small>Desktop Pro</small></span></div>
+        <h1>Crop Image</h1>
+        <span class="mode">AUTO MODE</span>
+      </header>
+      <div class="workspace">
+        <section class="preview-panel" aria-label="Crop preview">
+          <button id="zoom-reset" class="zoom-badge" type="button" title="Reset zoom (mouse wheel to zoom)">100%</button>
+          <div class="preview-area">
+            <div class="stage" id="stage">
+              <canvas id="preview" aria-label="Image preview"></canvas>
+              <div id="perspective-selection" hidden aria-label="Image transform corners">
+                <svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"><polygon id="perspective-outline" points="0,0 1000,0 1000,1000 0,1000" /></svg>
+                <button type="button" data-corner="0" aria-label="Top left corner"></button>
+                <button type="button" data-corner="1" aria-label="Top right corner"></button>
+                <button type="button" data-corner="2" aria-label="Bottom right corner"></button>
+                <button type="button" data-corner="3" aria-label="Bottom left corner"></button>
+              </div>
+              <div id="selection" class="selection" aria-label="Crop selection">
+                <i data-handle="nw"></i><i data-handle="ne"></i>
+                <i data-handle="sw"></i><i data-handle="se"></i>
+              </div>
+            </div>
+          </div>
+        </section>
+        <aside class="controls" aria-label="Image adjustments">
+          <section class="files-section">
+            <div class="files-heading">
+              <h2>Images <small id="image-count"></small></h2>
+              <div class="queue-actions">
+                <button id="add-images" type="button" title="Add images" aria-label="Add images"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="15" height="15" rx="2"/><path d="m5 16 4-4 3 3 2-2 3 3M19 12v9M15 16.5h9"/></svg></button>
+                <button id="copy-image" type="button" title="Copy image" aria-label="Copy image" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg></button>
+              </div>
+            </div>
+            <p class="file-name" id="filename">Loading selected image…</p>
+            <p class="dimensions" id="dimensions"></p>
+            <div id="image-list" class="image-list" aria-label="Images to crop"></div>
+          </section>
+          <section>
+            <h2>Crop area</h2>
+            <div class="button-row crop-mode" aria-label="Crop mode"><button id="normal-crop" type="button" class="active" aria-pressed="true">Normal Crop</button><button id="perspective-crop" type="button" aria-pressed="false">Free Transform</button></div>
+            <div id="normal-crop-controls">
+            <div class="button-row"><button id="draw" type="button" class="active" aria-pressed="true">Draw crop</button><button id="full" type="button">Full image</button></div>
+            <p class="hint">Drag to draw a crop. Move the small corner dots to resize. Turn off Draw crop to move the area.</p>
+            </div>
+            <div id="perspective-crop-controls" hidden>
+              <p class="hint">Drag any image corner to change its shape and perspective. The photo changes as you drag.</p>
+              <div class="button-row"><button id="perspective-reset" type="button">Reset corners</button><button id="apply-perspective" type="button">Apply Transform</button></div>
+              <p class="hint">Apply the transform, then crop or Save. Reset all edits restores the source photo.</p>
+            </div>
+          </section>
+          <section>
+            <h2>Rotate & flip</h2>
+            <div class="button-row"><button id="rotate-left" type="button">↶ Rotate left</button><button id="rotate-right" type="button">↷ Rotate right</button></div>
+            <div class="button-row"><button id="flip-horizontal" type="button">↔ Flip H</button><button id="flip-vertical" type="button">↕ Flip V</button></div>
+          </section>
+          <section>
+            <div class="range-label"><h2>Straighten</h2><span class="range-value"><output id="angle-value">0°</output><button id="straighten-reset" class="range-reset" type="button" title="Reset straighten" aria-label="Reset straighten to zero">↺</button></span></div>
+            <input id="angle" type="range" min="-45" max="45" step="0.5" value="0" aria-label="Straighten angle" />
+            <div class="range-ends"><span>−45°</span><span>+45°</span></div>
+          </section>
+          <section>
+            <div class="range-label"><h2>Light / Dark</h2><output id="light-value">0</output></div>
+            <input id="light" type="range" min="-60" max="60" step="1" value="0" aria-label="Light or dark" />
+            <div class="range-ends"><span>Darker</span><span>Lighter</span></div>
+          </section>
+          <section>
+            <div class="range-label"><h2>Contrast</h2><output id="contrast-value">0</output></div>
+            <input id="contrast" type="range" min="-40" max="40" step="1" value="0" aria-label="Contrast" />
+          </section>
+          <button id="reset" class="reset" type="button">Reset all edits</button>
+        </aside>
+      </div>
+      <section class="size-toolbar" aria-label="Crop output size">
+        <strong><span id="ready-count">0</span> images ready</strong>
+        <div class="segmented size-mode" aria-label="Crop size mode">
+          <button id="free-size" class="active" type="button" aria-pressed="true">Free Size</button>
+          <button id="fixed-size" type="button" aria-pressed="false">Fixed Size</button>
+        </div>
+        <div class="segmented size-unit" aria-label="Size unit">
+          <button id="unit-pixel" class="active" type="button" aria-pressed="true">Pixel</button>
+          <button id="unit-cm" type="button" aria-pressed="false">CM</button>
+        </div>
+        <label class="size-field"><span>Width</span><input id="target-width" type="number" min="1" max="16000" step="1" inputmode="decimal" disabled /></label>
+        <label class="size-field"><span>Height</span><input id="target-height" type="number" min="1" max="16000" step="1" inputmode="decimal" disabled /></label>
+        <label class="size-field exact-kb"><span>Exact KB</span><input id="target-kb" type="number" min="1" max="5000" step="1" inputmode="numeric" /></label>
+      </section>
+      <footer>
+        <p id="save-note"><strong>Save replaces the original image.</strong> Copies save as separate files.</p>
+        <p id="status" role="status"></p>
+        <p id="error" role="alert" hidden></p>
+        <div class="actions"><button id="cancel" type="button">Close</button><button id="save" type="button" disabled>Save & Replace Original</button></div>
+      </footer>
+    </main>
+    <script src="perspective-math.js"></script>
+    <script src="crop-choice.js"></script>
+  </body>
+</html>

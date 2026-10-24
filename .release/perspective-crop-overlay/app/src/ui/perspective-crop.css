@@ -1,0 +1,11 @@
+[hidden] { display: none !important; }
+.stage.perspective, .stage.drawing.perspective { cursor: default; }
+#perspective-selection { position: absolute; inset: 0; pointer-events: none; }
+#perspective-selection svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+#perspective-outline { fill: #b91c1c0a; stroke: #b91c1c; stroke-width: 1; vector-effect: non-scaling-stroke; }
+#perspective-selection button { position: absolute; transform: translate(-50%, -50%); width: 11px; height: 11px; min-height: 0; padding: 0; border: 2px solid #b91c1c; border-radius: 50%; background: #fff; cursor: move; pointer-events: auto; touch-action: none; }
+#perspective-selection button::after { content: ""; position: absolute; inset: -7px; }
+#perspective-selection button:focus-visible { outline: 2px solid #111; outline-offset: 3px; }
+.crop-mode button { font-weight: 400; }
+#apply-perspective { background: #b91c1c; color: #fff; border-color: #b91c1c; }
+#apply-perspective:hover { background: #991b1b; }
