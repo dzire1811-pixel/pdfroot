@@ -1,0 +1,57 @@
+name: Publish verified Desktop Pro Beta 23
+on:
+  push:
+    branches: [codex/publish-desktop-beta23-20261024]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish-verified-installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm the tested source run succeeded
+        run: |
+          result=$(gh api repos/$GITHUB_REPOSITORY/actions/runs/40067867661 --jq '.conclusion + " " + .head_sha')
+          test "$result" = 'success f3df317ea621c7de094f83e3bf9e34993d3df1ac'
+      - uses: actions/download-artifact@v4
+        with:
+          name: PDFRoot-Desktop-Pro-Beta23-Verified
+          run-id: 40067867661
+          github-token: ${{ github.token }}
+          path: .release/beta23-publish
+      - name: Verify the exact tested installer and update files
+        run: |
+          python - <<'PY'
+          import pathlib,hashlib,base64
+          root=pathlib.Path('.release/beta23-publish/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release')
+          expected={
+            'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe':'7f6c7372b1bbdc46fafd1b2593c83407cf3eac1eb2ef0dd79dfc308cbeca5b03',
+            'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe.blockmap':'25f57a181cd41c8223bdbe9b4d32ff152d0c004e27d2db6ac9099b3583ce5e53',
+            'beta.yml':'8a8a2d66dc03b783c0a1a3df2411643aa3a88ecddc1bb5a2ad5a37244fa1dbdb'}
+          for name,digest in expected.items():
+            assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
+          data=(root/'PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe').read_bytes()
+          assert len(data)==119115978
+          manifest=(root/'beta.yml').read_text()
+          assert 'version: 0.7.0-beta.23' in manifest
+          assert 'size: 119115978' in manifest
+          assert manifest.count(base64.b64encode(hashlib.sha512(data).digest()).decode())==2
+          print('Exact tested Beta 23 installer, blockmap, SHA-256 and update SHA-512 verified.')
+          PY
+      - name: Publish the verified release and automatic update channel
+        run: |
+          releaseDir='.release/beta23-publish/PDFRoot-Desktop-Pro-Beta9-Tool-Icons-Right-Click-Build-Kit/desktop/resources/app/release'
+          tag='v0.7.0-beta.23'
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" "$releaseDir/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe" "$releaseDir/PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe.blockmap" "$releaseDir/beta.yml" --repo "$GITHUB_REPOSITORY" --target f3df317ea621c7de094f83e3bf9e34993d3df1ac --title 'PDFRoot Desktop Pro Beta 23 — Free Transform' --notes-file docs/desktop-beta23-release-notes.md --prerelease --draft
+          fi
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir .release/beta23-download-check --pattern '*.exe' --pattern '*.blockmap' --pattern 'beta.yml'
+          for name in PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe PDFRoot-Desktop-Pro-Setup-v0.7.0-beta.23-x64.exe.blockmap beta.yml; do
+            cmp "$releaseDir/$name" ".release/beta23-download-check/$name"
+          done
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,assets
