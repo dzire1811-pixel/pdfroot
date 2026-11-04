@@ -4,7 +4,6 @@
 import { ChangeEvent, DragEvent, MouseEvent, PointerEvent, TouchEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import JSZip from "jszip";
 import { CheckCircle2, Download, GripVertical, ImageUp, Plus, RefreshCw, RotateCcw, SlidersHorizontal, Trash2, UploadCloud, X } from "lucide-react";
-import { compressCanvasToExactKb } from "@/lib/exactKbImage";
 import { isStoredImage, readUploadSession } from "@/lib/uploadSession";
 import styles from "./RrbPhotoSignatureHelperTool.module.css";
 
@@ -29,12 +28,11 @@ type OutputSignature = {
   sizeKb: number;
 };
 
-const RRB_BOX_WIDTH_MM = 35;
-const RRB_BOX_HEIGHT_MM = 20;
-const RRB_TARGET_KB = 40;
+const RRB_WIDTH_PX = 140;
+const RRB_HEIGHT_PX = 60;
+const RRB_TARGET_BYTES = 40 * 1024;
+const RRB_MAX_BYTES = 49 * 1024;
 const RRB_DPI = 100;
-const RRB_WIDTH_PX = Math.max(140, Math.round((RRB_BOX_WIDTH_MM / 25.4) * RRB_DPI));
-const RRB_HEIGHT_PX = Math.max(60, Math.round((RRB_BOX_HEIGHT_MM / 25.4) * RRB_DPI));
 const RRB_INFO_TEXT = "JPG/JPEG • 30–49 KB • Min 140 × 60 px • 100 DPI";
 
 function formatKb(bytes: number) {
@@ -71,138 +69,75 @@ function loadImage(file: File) {
   });
 }
 
-function findSignatureBounds(canvas: HTMLCanvasElement) {
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support signature processing.");
-
-  const { width, height } = canvas;
-  const data = context.getImageData(0, 0, width, height).data;
-  let left = width;
-  let right = 0;
-  let top = height;
-  let bottom = 0;
-
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      const index = (y * width + x) * 4;
-      const red = data[index];
-      const green = data[index + 1];
-      const blue = data[index + 2];
-      const alpha = data[index + 3];
-      const isInk = alpha > 25 && (red < 238 || green < 238 || blue < 238);
-
-      if (isInk) {
-        left = Math.min(left, x);
-        right = Math.max(right, x);
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y);
-      }
-    }
-  }
-
-  if (left >= right || top >= bottom) return { x: 0, y: 0, width, height };
-
-  const padding = Math.max(6, Math.round(Math.min(width, height) * 0.05));
-  return {
-    x: Math.max(0, left - padding),
-    y: Math.max(0, top - padding),
-    width: Math.min(width, right - left + padding * 2),
-    height: Math.min(height, bottom - top + padding * 2),
-  };
-}
-
-function imageToCanvas(image: HTMLImageElement) {
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support image processing.");
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0);
-  return canvas;
-}
-
-async function applyJpegDpi(blob: Blob, dpi: number) {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const density = Math.max(1, Math.min(65535, Math.round(dpi)));
-  const densityHigh = (density >> 8) & 255;
-  const densityLow = density & 255;
-
-  for (let index = 2; index < bytes.length - 17; ) {
-    if (bytes[index] !== 255) break;
-    const marker = bytes[index + 1];
-    const length = (bytes[index + 2] << 8) | bytes[index + 3];
-    if (marker === 224 && bytes[index + 4] === 0x4a && bytes[index + 5] === 0x46 && bytes[index + 6] === 0x49 && bytes[index + 7] === 0x46 && bytes[index + 8] === 0) {
-      bytes[index + 11] = 1;
-      bytes[index + 12] = densityHigh;
-      bytes[index + 13] = densityLow;
-      bytes[index + 14] = densityHigh;
-      bytes[index + 15] = densityLow;
-      return new Blob([bytes], { type: "image/jpeg" });
-    }
-    if (length < 2) break;
-    index += 2 + length;
-  }
-
-  return blob;
-}
-
 function drawRrbSignature(image: HTMLImageElement) {
-  const source = imageToCanvas(image);
-  const bounds = findSignatureBounds(source);
   const canvas = document.createElement("canvas");
   canvas.width = RRB_WIDTH_PX;
   canvas.height = RRB_HEIGHT_PX;
   const context = canvas.getContext("2d");
-  if (!context) throw new Error("Your browser does not support image processing.");
+  if (!context) throw new Error("Your browser does not support signature processing.");
 
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
-  context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
 
-  const targetRatio = RRB_WIDTH_PX / RRB_HEIGHT_PX;
-  const sourceRatio = bounds.width / bounds.height;
-  let drawWidth = RRB_WIDTH_PX;
-  let drawHeight = RRB_HEIGHT_PX;
-  let drawX = 0;
-  let drawY = 0;
+  const scale = Math.min(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const x = Math.floor((canvas.width - width) / 2);
+  const y = Math.floor((canvas.height - height) / 2);
+  context.drawImage(image, x, y, width, height);
+  return canvas;
+}
 
-  if (sourceRatio > targetRatio) {
-    drawHeight = Math.round(RRB_WIDTH_PX / sourceRatio);
-    drawY = Math.round((RRB_HEIGHT_PX - drawHeight) / 2);
-  } else {
-    drawWidth = Math.round(RRB_HEIGHT_PX * sourceRatio);
-    drawX = Math.round((RRB_WIDTH_PX - drawWidth) / 2);
+async function encodeRrbJpeg(canvas: HTMLCanvasElement) {
+  for (let quality = 100; quality >= 10; quality -= 10) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality / 100));
+    if (!blob || blob.type !== "image/jpeg") break;
+
+    const jpeg = new Uint8Array(await blob.arrayBuffer());
+    if (jpeg[0] !== 0xff || jpeg[1] !== 0xd8 || jpeg.at(-2) !== 0xff || jpeg.at(-1) !== 0xd9) break;
+
+    // Keep the existing JFIF header when present, or add one for 100 DPI.
+    const hasJfif = jpeg[2] === 0xff && jpeg[3] === 0xe0 &&
+      jpeg[4] === 0 && jpeg[5] >= 16 &&
+      jpeg[6] === 0x4a && jpeg[7] === 0x46 && jpeg[8] === 0x49 && jpeg[9] === 0x46 && jpeg[10] === 0;
+    const jfif = hasJfif
+      ? jpeg.subarray(2, 4 + jpeg[5])
+      : Uint8Array.of(0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0);
+    jfif.set([1, 0, RRB_DPI, 0, RRB_DPI], 11);
+
+    const imageData = jpeg.subarray(hasJfif ? 2 + jfif.length : 2);
+    const size = 2 + jfif.length + imageData.length;
+    if (size > RRB_MAX_BYTES) continue;
+
+    // Match Desktop Pro's JPEG comment padding. Keep EOI at the end of the file.
+    const padding = size < RRB_TARGET_BYTES ? new Uint8Array(Math.max(4, RRB_TARGET_BYTES - size)) : new Uint8Array(0);
+    if (padding.length) {
+      const length = padding.length - 2;
+      padding.set([0xff, 0xfe, length >> 8, length & 0xff]);
+      padding.fill(0x20, 4);
+    }
+    return new Blob([jpeg.subarray(0, 2), jfif, padding, imageData], { type: "image/jpeg" });
   }
 
-  context.drawImage(source, bounds.x, bounds.y, bounds.width, bounds.height, drawX, drawY, drawWidth, drawHeight);
-  return canvas;
+  throw new Error("Could not create a JPG signature within the RRB file size limit.");
 }
 
 async function resizeForRrb(signature: SelectedSignature, index: number, total: number) {
   const image = await loadImage(signature.file);
   const canvas = drawRrbSignature(image);
-  const result = await compressCanvasToExactKb(canvas, RRB_TARGET_KB, {
-    allowDimensionGrowth: false,
-    allowDimensionShrink: false,
-    marker: "\nPDFRoot_RRB_SIGNATURE_PADDING\n",
-    mimeType: "image/jpeg",
-  });
-  const dpiBlob = await applyJpegDpi(result.blob, RRB_DPI);
+  const blob = await encodeRrbJpeg(canvas);
   const baseName = cleanFileName(signature.file.name);
 
   return {
     id: signature.id,
-    blob: dpiBlob,
-    url: URL.createObjectURL(dpiBlob),
+    blob,
+    url: URL.createObjectURL(blob),
     fileName: `${baseName}-rrb-signature${total > 1 ? `-${index + 1}` : ""}.jpg`,
     sourceName: signature.file.name,
-    width: result.width,
-    height: result.height,
-    sizeKb: dpiBlob.size / 1024,
+    width: canvas.width,
+    height: canvas.height,
+    sizeKb: blob.size / 1024,
   };
 }
 
@@ -944,7 +879,7 @@ export function RrbPhotoSignatureHelperTool() {
         <div>
           <RefreshCw className="mx-auto h-9 w-9 animate-spin text-[#FF2D2D]" aria-hidden="true" />
           <p className="mt-4 text-base font-black text-slate-950">Resizing RRB signature...</p>
-          <p className="mt-2 text-sm font-semibold text-slate-500">Preparing JPG/JPEG signature at 35 mm × 20 mm, 100 DPI, and 30–49 KB</p>
+          <p className="mt-2 text-sm font-semibold text-slate-500">Preparing a 140 × 60 px JPG signature at 100 DPI and approximately 40 KB</p>
         </div>
       </section>
     );
