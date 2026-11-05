@@ -16,7 +16,7 @@ import { hasReliableUnicodeMapping, repairIndicText, validateGujaratiText } from
 type PdfGlyph = { originalCharCode?: number; unicode?: string; width?: number };
 type OperatorList = { fnArray: number[]; argsArray: unknown[][] };
 type Ops = { setFont: number; showText: number };
-type GlyphRecord = { original: string; corrected: string; zeroWidthBase: boolean };
+type GlyphRecord = { original: string; corrected: string; width?: number; zeroWidthBase: boolean };
 
 export type PageGlyphStreams = Map<string, GlyphRecord[]>;
 
@@ -120,7 +120,17 @@ function streamBytes(stream: PDFStream) {
 }
 
 type MarkedContent = { type: "beginMarkedContent" | "beginMarkedContentProps" | "endMarkedContent"; tag?: string; actualText?: string };
-type TextGeometry = { str: string; width: number; height: number; transform: number[]; hasEOL?: boolean; unicodeReliable?: boolean };
+type TextGeometry = {
+  str: string;
+  fontName: string;
+  width: number;
+  height: number;
+  transform: number[];
+  hasEOL?: boolean;
+  unicodeReliable?: boolean;
+  originalGlyphText?: string;
+  widthRecovered?: boolean;
+};
 
 class ContentTokens extends PDFObjectParser {
   next() {
@@ -202,6 +212,7 @@ export function applyPdfActualText<T extends TextGeometry>(items: Array<T | { ty
     const right = Math.max(...span.map(text => text.transform[4] + text.width));
     parent.items.push(...group.items.slice(0, first), {
       ...lead, str: actualText, width: right - lead.transform[4], hasEOL: group.items[last].hasEOL, unicodeReliable: true,
+      originalGlyphText: span.every(text => text.fontName === lead.fontName) ? span.map(text => text.originalGlyphText ?? text.str).join("") : undefined,
     }, ...group.items.slice(last + 1));
   }
   return groups.length === 1 && markerIndex === markers.length ? groups[0].items : unmarked;
@@ -279,6 +290,7 @@ function pageGlyphStreams(
       records.push({
         original: glyph.unicode,
         corrected: mapped,
+        width: glyph.width,
         // A zero-advance glyph mapped to a base letter is structurally
         // suspicious: base letters advance, while marks/ligature components
         // may not. This detects damaged shaped-font CMaps without assuming a
@@ -329,6 +341,25 @@ function matchGlyphs(records: GlyphRecord[], start: number, target: string) {
     }
   }
   return undefined;
+}
+
+/** Recover shaped glyph advances that PDF.js can assign to the following space. */
+export function recoverPdfGlyphWidths<T extends TextGeometry>(items: T[], streams: PageGlyphStreams) {
+  const affectedFonts = new Set(items.filter(item => item.width === 0 && item.height > 0 && item.str.trim()).map(item => item.fontName));
+  const cursors = new Map<string, number>();
+  return items.map((item, index) => {
+    const records = streams.get(item.fontName);
+    const text = (item.originalGlyphText ?? item.str).trim();
+    if (!affectedFonts.has(item.fontName) || !records?.length || !text) return item;
+    const match = matchGlyphs(records, cursors.get(item.fontName) ?? 0, text);
+    if (!match) return item;
+    cursors.set(item.fontName, match.end);
+    const next = items[index + 1];
+    if (item.height <= 0 || item.width !== 0 && !(next?.str && !next.str.trim())) return item;
+    const advance = records.slice(match.start, match.end).reduce((sum, record) => sum + (record.width ?? 0), 0);
+    const width = advance * Math.hypot(item.transform[0], item.transform[1]) / 1000;
+    return Number.isFinite(width) && width > item.width + 0.75 ? { ...item, width, widthRecovered: true } : item;
+  });
 }
 
 /** Applies cmap corrections to PDF.js TextItems while retaining PDF.js geometry and item grouping. */
