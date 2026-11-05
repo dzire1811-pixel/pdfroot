@@ -8,6 +8,7 @@ import {
   Document,
   HorizontalPositionRelativeFrom,
   ImageRun,
+  type ISectionOptions,
   Packer,
   PageOrientation,
   Paragraph,
@@ -20,13 +21,12 @@ import {
 import JSZip from "jszip";
 import { loadPdfJs } from "@/lib/pdfjsClient";
 import { analyzePdfPage, PdfPageAnalysis } from "@/lib/pdfToWord/pageAnalyzer";
-import { classifyDocumentRegions, LayoutLine } from "@/lib/pdfToWord/layoutAnalyzer";
-import { createLocalOcrEngine, LocalOcrResult, OcrWord } from "@/lib/pdfToWord/localOcr";
+import { createLocalOcrEngine, LocalOcrResult, OcrWord, planScanTextCleanup, ScanLanguage, scanLanguages } from "@/lib/pdfToWord/localOcr";
 import { selectPdfToWordEngine } from "@/lib/pdfToWord/engine";
-import { correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver } from "@/lib/pdfToWord/pdfGlyphUnicode";
-import { createReflowContent, createAnchoredPageContent, createStructuredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
+import { applyPdfActualText, correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver } from "@/lib/pdfToWord/pdfGlyphUnicode";
+import { createReflowContent, createAnchoredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
 import { validateConvertedPages, validateGeneratedDocumentXml } from "@/lib/pdfToWord/validator";
-import { compatibleWordFont, hasReliableUnicodeMapping, reconstructGujaratiFragments, validateGujaratiText } from "@/lib/pdfToWord/unicode";
+import { compatibleWordFont, hasReliableUnicodeMapping, reconstructGujaratiFragments } from "@/lib/pdfToWord/unicode";
 
 type WordResult = {
   blob: Blob;
@@ -168,9 +168,14 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: "image/png" | "image/jpeg
   });
 }
 
+function pdfRenderAssets(version: string) {
+  const base = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${version}/`;
+  return { cMapUrl: `${base}cmaps/`, standardFontDataUrl: `${base}standard_fonts/`, wasmUrl: `${base}wasm/`, iccUrl: `${base}iccs/` };
+}
+
 async function renderFirstPageThumbnail(file: File) {
   const pdfjsLib = await loadPdfJs();
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()), ...pdfRenderAssets(pdfjsLib.version) });
   const pdf = await loadingTask.promise;
   let page: Awaited<ReturnType<typeof pdf.getPage>> | null = null;
   const canvas = document.createElement("canvas");
@@ -253,7 +258,18 @@ function buildPositionedLines(
   styles: Record<string, PdfTextStyle>,
   viewport: { transform: number[]; width: number; height: number },
 ) {
-  const positioned = items
+  const fragments: PdfTextItem[] = [];
+  for (const [index, item] of items.entries()) {
+    const previous = fragments.at(-1);
+    const next = items[index + 1];
+    if (item.str.trim()) fragments.push(item);
+    else if (previous && next?.str.trim() && item.str && !previous.hasEOL && !/\s$/u.test(previous.str)
+      && Math.abs(next.transform[5] - previous.transform[5]) < 2
+      && Math.abs(next.transform[4] - previous.transform[4] - previous.width) < Math.max(12, previous.height * 1.5)) {
+      fragments[fragments.length - 1] = { ...previous, str: `${previous.str}${item.str}` };
+    }
+  }
+  const positioned = fragments
     .filter((item) => item.str.trim() && item.height > 0 && item.transform.length >= 6)
     .map<PositionedTextItem>((item, sourceOrder) => {
       const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
@@ -331,16 +347,23 @@ function buildPositionedLines(
 }
 
 function buildOcrLines(words: OcrWord[], sourceScale: number, pageWidth: number) {
+  const measurement = document.createElement("canvas").getContext("2d");
   const items = words.map<PositionedTextItem>((word) => {
     const x = word.bbox.x0 / sourceScale;
     const top = word.bbox.y0 / sourceScale;
     const width = Math.max(0.5, (word.bbox.x1 - word.bbox.x0) / sourceScale);
     const height = Math.max(6, (word.bbox.y1 - word.bbox.y0) / sourceScale);
-    const fontSize = Math.max(6, height * 0.82);
+    const fontFamily = compatibleWordFont("", "OCR", word.text);
+    if (measurement) measurement.font = `100px "${fontFamily}", sans-serif`;
+    const metrics = measurement?.measureText(word.text);
+    const inkHeight = (metrics?.actualBoundingBoxAscent ?? 0) + (metrics?.actualBoundingBoxDescent ?? 0);
+    const heightBasedSize = inkHeight ? height * 100 / inkHeight : height * 1.2;
+    const widthBasedSize = metrics?.width ? width * 100 / metrics.width : heightBasedSize;
+    const fontSize = Math.max(4, Math.min(heightBasedSize, widthBasedSize));
     return {
       text: `${word.text} `, x, top, width, height, fontSize,
       baseline: top + height * 0.82, fontAscent: 0.8, fontDescent: 0.2,
-      fontFamily: compatibleWordFont("Arial", "OCR-Arial", word.text, true), fontName: "OCR-Arial", sourceFontFamily: "Arial", sourceIsSystemFont: true, bold: false, italic: false,
+      fontFamily, fontName: "OCR", bold: false, italic: false, sourceFontFamily: "", sourceIsSystemFont: false,
       rotation: 0, horizontalScale: 1,
       sourceOrder: 0,
       unicodeReliable: true,
@@ -351,8 +374,17 @@ function buildOcrLines(words: OcrWord[], sourceScale: number, pageWidth: number)
     const row = rows.find((candidate) => Math.abs(candidate[0].baseline - item.baseline) <= Math.max(3, item.height * 0.45));
     if (row) row.push(item); else rows.push([item]);
   });
-  return rows.map((row) => {
+  return rows.flatMap((row) => {
     row.sort((a, b) => a.x - b.x);
+    const groups: PositionedTextItem[][] = [];
+    for (const item of row) {
+      const group = groups.at(-1);
+      const last = group?.at(-1);
+      if (group && last && item.x - last.x - last.width < Math.max(28, last.fontSize * 2.5)) group.push(item);
+      else groups.push([item]);
+    }
+    return groups;
+  }).map((row) => {
     const x = Math.min(...row.map((item) => item.x));
     const top = Math.min(...row.map((item) => item.top));
     row.forEach((item) => { item.top = top; item.baseline = top + item.height * 0.82; });
@@ -360,30 +392,6 @@ function buildOcrLines(words: OcrWord[], sourceScale: number, pageWidth: number)
     const bottom = Math.max(...row.map((item) => item.top + item.height));
     return { items: row, x, top, width: right - x, height: bottom - top, centered: Math.abs((x + right) / 2 - pageWidth / 2) < pageWidth * 0.04, color: "000000" };
   }).sort((a, b) => a.top - b.top || a.x - b.x);
-}
-
-async function recognizeScannedPage(
-  pdfjsLib: Awaited<ReturnType<typeof loadPdfJs>>,
-  page: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjsLib.getDocument>["promise"]>["getPage"]>>,
-  engine: Awaited<ReturnType<typeof createLocalOcrEngine>>,
-  onProgress?: (progress: number) => void,
-) {
-  const scale = 300 / 72;
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) throw new Error("OCR could not create a local page canvas.");
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  try {
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    return { result: await engine.recognize(canvas, onProgress), scale };
-  } finally {
-    canvas.width = 0;
-    canvas.height = 0;
-  }
 }
 
 async function resolvePageFontStyles(
@@ -1012,12 +1020,15 @@ async function renderPdfPage(
   page: Awaited<ReturnType<Awaited<ReturnType<typeof pdfjsLib.getDocument>["promise"]>["getPage"]>>,
   mode: ConversionMode,
   analysis: PdfPageAnalysis,
-  ocr?: { result: LocalOcrResult; scale: number },
   extractedText?: { items: PdfTextItem[]; styles: Record<string, PdfTextStyle> },
   getOcrEngine?: () => Promise<Awaited<ReturnType<typeof createLocalOcrEngine>>>,
 ) {
   const layoutViewport = page.getViewport({ scale: 1 });
-  const renderScale = mode === "preserve" ? 2.5 : analysis.kinds.includes("simple-flowing-text") && !analysis.imageCount && analysis.vectorCount === 0 ? 1.5 : 2.25;
+  const needsPageOcr = analysis.needsOcr || analysis.kinds.includes("vector-outlines");
+  const preferredScale = mode === "preserve" ? 2.5 : needsPageOcr ? 300 / 72
+    : analysis.kinds.includes("simple-flowing-text") && !analysis.imageCount && analysis.vectorCount === 0 ? 1.5 : 2.25;
+  const renderScale = Math.min(preferredScale, 4096 / Math.max(layoutViewport.width, layoutViewport.height),
+    Math.sqrt(8_500_000 / (layoutViewport.width * layoutViewport.height)));
   const renderViewport = page.getViewport({ scale: renderScale });
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d", { alpha: false, willReadFrequently: mode !== "preserve" });
@@ -1030,13 +1041,56 @@ async function renderPdfPage(
     context.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvas, canvasContext: context, viewport: renderViewport }).promise;
 
+    const pageBounds = { left: 0, top: 0, right: layoutViewport.width, bottom: layoutViewport.height };
+    const pageImage = async () => new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer());
+    const preservePage = async (reason?: string): Promise<ConvertedPage> => ({
+      width: layoutViewport.width, height: layoutViewport.height,
+      image: await pageImage(), warnings: reason ? [reason] : [],
+      lines: [], images: [], shapes: [], contentBounds: pageBounds, analysis,
+    });
+    if (mode === "preserve") return await preservePage();
+
     const warnings: string[] = [];
     let lines: PositionedLine[] = [];
-    let tableLayoutLines: PositionedLine[] | undefined;
     const images: ConvertedPage["images"] = [];
     let shapes: PdfVectorShape[] = [];
-    let shapeFallbacks: ConvertedPage["images"] = [];
-    if (mode !== "preserve") {
+    let ocr: LocalOcrResult | undefined;
+    const recognize = async (image: HTMLCanvasElement, singleLine = false) => {
+      if (!getOcrEngine) return undefined;
+      try {
+        return await (await getOcrEngine()).recognize(image, singleLine);
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") console.warn("PDFRoot OCR failed", error);
+        return undefined;
+      }
+    };
+    if (needsPageOcr) {
+      ocr = await recognize(canvas);
+      if (!ocr) return await preservePage("The selected OCR engine or language model could not load.");
+      const words = ocr.words.filter(word => word.confidence >= 55 && hasReliableUnicodeMapping(word.text));
+      if (ocr.confidence < 65 || !words.length) return await preservePage("OCR could not reliably read the text.");
+      const cleanup = planScanTextCleanup(context, words);
+      if (!cleanup.words.length) return await preservePage("Scan text overlaps graphics or a textured background.");
+      lines = buildOcrLines(cleanup.words, renderScale, layoutViewport.width);
+      for (const line of lines) {
+        line.color = detectTextColor(context, line, renderScale);
+      }
+      cleanup.apply();
+      // Keep rules, stamps, pictures, and unreadable text in the scan's
+      // original positions. Only reliably recognized words become Word text.
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let hasResidualInk = false;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (pixels[index] < 245 || pixels[index + 1] < 245 || pixels[index + 2] < 245) {
+          hasResidualInk = true;
+          break;
+        }
+      }
+      if (hasResidualInk) {
+        images.push({ data: await pageImage(), x: 0, top: 0, width: layoutViewport.width, height: layoutViewport.height, background: true });
+      }
+      warnings.push(`Scanned text was read using OCR (${Math.round(ocr.confidence)}% confidence). Review spelling and check any text retained in the scan image.`);
+    } else {
       // ToUnicode is the primary mapping. When it conflicts with the embedded
       // TrueType cmap, extracted glyphs are repaired before layout grouping.
       const rawContent = extractedText ?? await page.getTextContent({ disableNormalization: true });
@@ -1055,7 +1109,9 @@ async function renderPdfPage(
         resolvedStyles,
         layoutViewport,
       );
-      if (ocr?.result.words.length) lines = buildOcrLines(ocr.result.words, ocr.scale, layoutViewport.width);
+      if (mode === "fixed" && lines.some(line => line.items.some(item => Math.abs(item.rotation) > 2))) {
+        return await preservePage("The page has rotated or vertical text.");
+      }
       for (const line of lines) {
         line.color = detectTextColor(context, line, renderScale);
       }
@@ -1070,20 +1126,29 @@ async function renderPdfPage(
       // OCR is scoped to uncertain regions; reliable native neighbours are never
       // passed to OCR and never repainted over a full-page screenshot.
       for (const unsafe of unsafeLines) {
-        if (!getOcrEngine) throw new Error("An incomplete character mapping requires regional OCR.");
         const region = document.createElement("canvas");
-        const left = Math.max(0, unsafe.x - 2), top = Math.max(0, unsafe.top - 3);
-        region.width = Math.ceil(Math.min(layoutViewport.width - left, unsafe.width + 4) * renderScale);
-        region.height = Math.ceil(Math.min(layoutViewport.height - top, unsafe.height + 6) * renderScale);
-        region.getContext("2d")!.drawImage(canvas, left * renderScale, top * renderScale, region.width, region.height, 0, 0, region.width, region.height);
-        const recognized = await (await getOcrEngine()).recognize(region);
+        const left = Math.max(0, unsafe.x - 4), top = Math.max(0, unsafe.top - 5);
+        const width = Math.min(layoutViewport.width - left, unsafe.x + unsafe.width + 4 - left);
+        const height = Math.min(layoutViewport.height - top, unsafe.top + unsafe.height + 5 - top);
+        if (width <= 0 || height <= 0) return await preservePage("Some PDF text falls outside the page.");
+        const ocrScale = Math.max(3.5, renderScale);
+        region.width = Math.ceil(width * ocrScale);
+        region.height = Math.ceil(height * ocrScale);
+        const regionContext = region.getContext("2d");
+        if (!regionContext) return await preservePage("Regional OCR could not render.");
+        regionContext.drawImage(canvas, left * renderScale, top * renderScale, width * renderScale, height * renderScale, 0, 0, region.width, region.height);
+        const recognized = await recognize(region, true);
         region.width = region.height = 0;
-        if (!recognized.words.length) throw new Error("Text with an unusable Unicode mapping could not be recovered. No screenshot-based editable file was produced.");
-        const recovered = buildOcrLines(recognized.words, renderScale, layoutViewport.width);
+        if (!recognized || recognized.confidence < 75 || !recognized.words.length
+          || recognized.words.some(word => word.confidence < 55 || !hasReliableUnicodeMapping(word.text))) {
+          return await preservePage("The PDF's font mapping is damaged and OCR could not recover the wording reliably.");
+        }
+        const recovered = buildOcrLines(recognized.words, ocrScale, layoutViewport.width);
         recovered.forEach(line => { line.x += left; line.top += top; line.items.forEach(item => { item.x += left; item.top += top; item.baseline += top; }); });
         // Keep safe native fragments of the same line and discard overlapping OCR.
         const safeItems = unsafe.items.filter(safeEditableText);
         const remaining = recovered.flatMap(line => line.items).filter(item => !safeItems.some(native => item.x < native.x + native.width && item.x + item.width > native.x));
+        if (!remaining.length) return await preservePage("The PDF's font mapping is damaged and OCR could not recover every region.");
         lines = lines.filter(line => line !== unsafe);
         if (safeItems.length) lines.push({ ...unsafe, items: safeItems });
         for (const item of remaining) lines.push({ items: [item], x: item.x, top: item.top, width: item.width, height: item.height, centered: false, color: unsafe.color });
@@ -1091,40 +1156,40 @@ async function renderPdfPage(
       }
       const vectorGraphics = await extractVectorShapes(pdfjsLib, page, layoutViewport);
       shapes = vectorGraphics.shapes;
-      shapeFallbacks = vectorGraphics.fallbacks;
-      if (ocr) {
-        warnings.push(`Scanned text is OCR-derived (${Math.round(ocr.result.confidence)}% confidence). Fonts, scan graphics, and unrecognized text require review.`);
-        if (!ocr.result.words.length) throw new Error("OCR found no editable text. The scan language may be unsupported; no image-only Word file was produced.");
-        // Do not retain the scan behind the recognized words. Vector objects
-        // remain separately owned; raster-only graphics cannot yet be separated reliably.
-      } else {
-        const embedded = await extractEmbeddedImages(pdfjsLib, page, layoutViewport);
-        for (const original of embedded) {
-          const x = original.x ?? 0, top = original.top ?? 0;
-          const width = original.displayWidth ?? 0, height = original.displayHeight ?? 0;
-          if (!(width > 0 && height > 0)) { warnings.push("An image has unsupported placement and was omitted."); continue; }
-          const nativeCoverage = lines.flatMap(line => line.items).reduce((area, item) => area + Math.max(0, Math.min(x + width, item.x + item.width) - Math.max(x, item.x)) * Math.max(0, Math.min(top + height, item.top + item.height) - Math.max(top, item.top)), 0) / (width * height);
-          // Inspect meaningful image regions for scan text, including mixed pages.
-          if (getOcrEngine && width > 60 && height > 24 && nativeCoverage < 0.08) {
-            const region = document.createElement("canvas");
-            region.width = Math.ceil(width * renderScale); region.height = Math.ceil(height * renderScale);
-            region.getContext("2d")!.drawImage(canvas, x * renderScale, top * renderScale, region.width, region.height, 0, 0, region.width, region.height);
-            const recognized = await (await getOcrEngine()).recognize(region);
-            region.width = region.height = 0;
-            if (recognized.words.length >= 2 && recognized.confidence >= 65) {
-              const recovered = buildOcrLines(recognized.words, renderScale, layoutViewport.width);
-              recovered.forEach(line => { line.x += x; line.top += top; line.items.forEach(item => { item.x += x; item.top += top; item.baseline += top; }); });
-              lines.push(...recovered);
-              warnings.push(`Image region converted with OCR (${Math.round(recognized.confidence)}% confidence). Non-text raster graphics in that region could not be separated; review the source.`);
-              continue;
+      const embedded = await extractEmbeddedImages(pdfjsLib, page, layoutViewport);
+      for (const original of embedded) {
+        const x = original.x ?? 0, top = original.top ?? 0;
+        const width = original.displayWidth ?? 0, height = original.displayHeight ?? 0;
+        if (!(width > 0 && height > 0)) return await preservePage("An image has an unsupported placement.");
+        let data = original.data;
+        const nativeOverlap = lines.some(line => line.items.some(item =>
+          item.x < x + width && item.x + item.width > x && item.top < top + height && item.top + item.height > top));
+        if (width > 60 && height > 24 && !nativeOverlap) {
+          const region = document.createElement("canvas");
+          region.width = Math.ceil(width * renderScale);
+          region.height = Math.ceil(height * renderScale);
+          const regionContext = region.getContext("2d");
+          if (regionContext) {
+            regionContext.drawImage(canvas, x * renderScale, top * renderScale, region.width, region.height, 0, 0, region.width, region.height);
+            const recognized = await recognize(region);
+            if (recognized && recognized.words.length >= 2 && recognized.confidence >= 75) {
+              const cleanup = planScanTextCleanup(regionContext, recognized.words.filter(word => word.confidence >= 55 && hasReliableUnicodeMapping(word.text)));
+              if (cleanup.words.length >= 2) {
+                const recovered = buildOcrLines(cleanup.words, renderScale, layoutViewport.width);
+                recovered.forEach(line => { line.x += x; line.top += top; line.items.forEach(item => { item.x += x; item.top += top; item.baseline += top; }); });
+                lines.push(...recovered);
+                cleanup.apply();
+                data = new Uint8Array(await (await canvasToBlob(region, "image/png")).arrayBuffer());
+                warnings.push(`Image region read using OCR (${Math.round(recognized.confidence)}% confidence). Review the recovered text.`);
+              }
             }
-            warnings.push("An image region was retained as an image; OCR did not reliably identify editable text in it. Scan language coverage is limited to English, Hindi and Gujarati.");
           }
-          images.push({ data: original.data, x, top, width, height });
+          region.width = region.height = 0;
         }
+        images.push({ data, x, top, width, height, background: data !== original.data });
       }
-      images.push(...shapeFallbacks);
-      if (shapeFallbacks.length) warnings.push("Some vector artwork remains rasterized; its text content, if any, is not editable.");
+      images.push(...vectorGraphics.fallbacks);
+      if (vectorGraphics.fallbacks.length) warnings.push("Some vector artwork is retained as an image.");
       if (analysis.kinds.includes("rotated-text")) warnings.push("Rotated or vertical text is not yet faithfully reconstructed.");
       lines.sort((a, b) => a.top - b.top || a.x - b.x);
 
@@ -1151,14 +1216,13 @@ async function renderPdfPage(
       width: layoutViewport.width,
       height: layoutViewport.height,
       warnings: [...new Set(warnings)],
-      image: mode === "preserve" ? new Uint8Array(await (await canvasToBlob(canvas, "image/png")).arrayBuffer()) : new Uint8Array(),
+      image: new Uint8Array(),
       lines,
-      tableLayoutLines,
       images,
       shapes,
       contentBounds,
       analysis,
-      ocr: ocr ? { confidence: ocr.result.confidence, lowConfidenceWords: ocr.result.lowConfidenceWords } : undefined,
+      ocr: ocr ? { confidence: ocr.confidence, lowConfidenceWords: ocr.lowConfidenceWords } : undefined,
     } satisfies ConvertedPage;
   } finally {
     canvas.width = 0;
@@ -1284,65 +1348,56 @@ function editableVectorPageXml(page: ConvertedPage) {
   return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${shapes}</w:p>`;
 }
 
+function wordPageSize(page: ConvertedPage) {
+  const landscape = page.width > page.height;
+  return {
+    width: Math.round((landscape ? page.height : page.width) * 20),
+    height: Math.round((landscape ? page.width : page.height) * 20),
+    orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+  };
+}
+
 function createDocx(pages: ConvertedPage[], sourceName: string, mode: ConversionMode) {
-  if (mode === "reflow") {
-    const page = pages[0];
-    const landscape = page.width > page.height;
-    return new Document({
-      creator: "PDFRoot",
-      title: `${sourceName} converted to editable Word`,
-      description: "Locally reconstructed flowing Word paragraphs for major editing.",
-      sections: [{
-        properties: {
-          page: {
-            size: { width: Math.round((landscape ? page.height : page.width) * 20), height: Math.round((landscape ? page.width : page.height) * 20), orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT },
-            margin: { top: 720, right: 720, bottom: 720, left: 720, header: 360, footer: 360, gutter: 0 },
-          },
+  const sections: ISectionOptions[] = [];
+  const noMargins = { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 };
+  let flowingPages: ConvertedPage[] = [];
+  const flushFlowingPages = () => {
+    if (!flowingPages.length) return;
+    sections.push({
+      properties: {
+        type: SectionType.NEXT_PAGE,
+        page: {
+          size: wordPageSize(flowingPages[0]),
+          margin: { top: 720, right: 720, bottom: 720, left: 720, header: 360, footer: 360, gutter: 0 },
         },
-        children: createReflowContent(pages),
-      }],
+      },
+      children: createReflowContent(flowingPages),
     });
-  }
+    flowingPages = [];
+  };
+
+  pages.forEach((page, pageIndex) => {
+    if (mode === "reflow" && !page.image.length) {
+      flowingPages.push(page);
+      return;
+    }
+    flushFlowingPages();
+    const imageLayer = page.image.length ? undefined : anchoredImages(page);
+    sections.push({
+      properties: {
+        type: SectionType.NEXT_PAGE,
+        page: { size: wordPageSize(page), margin: noMargins },
+      },
+      children: page.image.length
+        ? [createVisualLayer(page, `Original PDF page ${pageIndex + 1}`)]
+        : [new Paragraph({ children: [new TextRun(`PDFROOT_VECTOR_PAGE_${pageIndex}`)] }), ...(imageLayer ? [imageLayer] : []), ...createAnchoredPageContent(page)],
+    });
+  });
+  flushFlowingPages();
   return new Document({
     creator: "PDFRoot",
     title: `${sourceName} converted to Word`,
-    description: mode === "fixed"
-      ? "Editable Word file reconstructed locally with page-relative PDF coordinates."
-      : "Original PDF appearance preserved locally as one full-page image per Word page.",
-    sections: pages.map((page, pageIndex) => {
-      const landscape = page.width > page.height;
-      const imageLayer = mode === "fixed" ? anchoredImages(page) : undefined;
-      const margins = mode === "fixed" ? {
-        // Fixed-layout objects share one page-relative coordinate system.
-        // Source x/y offsets are represented by paragraph/table indents and
-        // vertical spacers; section margins would apply that origin a second
-        // time and shrink the usable body in Word/WPS.
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
-        header: 0,
-        footer: 0,
-        gutter: 0,
-      } : { top: 0, right: 0, bottom: 0, left: 0, header: 0, footer: 0, gutter: 0 };
-      const structuredContent = mode === "fixed" ? createAnchoredPageContent(page) : [];
-      return {
-        properties: {
-          type: mode === "fixed" ? SectionType.NEXT_PAGE : pageIndex === pages.length - 1 ? SectionType.CONTINUOUS : SectionType.NEXT_PAGE,
-          page: {
-            size: {
-              width: Math.round((landscape ? page.height : page.width) * 20),
-              height: Math.round((landscape ? page.width : page.height) * 20),
-              orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
-            },
-            margin: margins,
-          },
-        },
-        children: mode === "fixed"
-          ? [new Paragraph({ children: [new TextRun(`PDFROOT_VECTOR_PAGE_${pageIndex}`)] }), ...(imageLayer ? [imageLayer] : []), ...structuredContent]
-          : [createVisualLayer(page, `Original PDF page ${pageIndex + 1}`)],
-      };
-    }),
+    sections,
   });
 }
 
@@ -1362,6 +1417,7 @@ async function finalizeDocx(documentFile: Document, pages: ConvertedPage[], mode
       documentXml = documentXml.replace("<w:document ", '<w:document xmlns:o="urn:schemas-microsoft-com:office:office" ');
     }
     pages.map((page, pageIndex) => ({ page, pageIndex })).reverse().forEach(({ page, pageIndex }) => {
+      if (page.image.length) return;
       const token = `PDFROOT_VECTOR_PAGE_${pageIndex}`;
       const paragraphPattern = new RegExp(`<w:p(?: [^>]*)?>(?:(?!<\\/w:p>)[\\s\\S])*?<w:t(?: [^>]*)?>${token}<\\/w:t>(?:(?!<\\/w:p>)[\\s\\S])*?<\\/w:p>`);
       documentXml = documentXml.replace(paragraphPattern, editableVectorPageXml(page));
@@ -1408,6 +1464,7 @@ async function finalizeDocx(documentFile: Document, pages: ConvertedPage[], mode
 export function PdfToWordTool() {
   const [files, setFiles] = useState<File[]>([]);
   const [conversionMode, setConversionMode] = useState<ConversionMode>("fixed");
+  const [scanLanguage, setScanLanguage] = useState<ScanLanguage>("auto");
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [result, setResult] = useState<WordResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1463,6 +1520,7 @@ export function PdfToWordTool() {
     setWorkflowStep("arrange");
     setDraggedIndex(null);
     setConversionMode("fixed");
+    setScanLanguage("auto");
     setIsSettingsDrawerOpen(false);
     setIsSettingsDrawerClosing(false);
     setIsSettingsDrawerDragging(false);
@@ -1647,11 +1705,11 @@ export function PdfToWordTool() {
     setProgress(0);
     scrollToolStageIntoView();
 
-    let ocrEngine: Awaited<ReturnType<typeof createLocalOcrEngine>> | undefined;
+    let ocrEngine: Promise<Awaited<ReturnType<typeof createLocalOcrEngine>>> | undefined;
+    const getOcrEngine = () => ocrEngine ??= createLocalOcrEngine(scanLanguage);
     const conversionIssues = new Set<string>();
+    const visualFallbacks: string[] = [];
     let lowConfidenceWords = 0;
-    let lowestQualityScore = 100;
-    let hasQualityWarning = false;
     try {
       // The current product is browser-local. Official WPS cloud conversion is
       // deliberately unavailable until a licensed server adapter and explicit
@@ -1667,8 +1725,9 @@ export function PdfToWordTool() {
         const currentFile = files[fileIndex];
         setStatus(`Reading ${currentFile.name}...`);
         const sourceBytes = new Uint8Array(await currentFile.arrayBuffer());
-        const glyphResolver = conversionMode === "preserve" ? undefined : await createPdfGlyphUnicodeResolver(sourceBytes);
-        const loadingTask = pdfjsLib.getDocument({ data: sourceBytes.slice(), fontExtraProperties: true });
+        const glyphResolver = conversionMode === "preserve" ? undefined
+          : await createPdfGlyphUnicodeResolver(sourceBytes).catch(() => undefined);
+        const loadingTask = pdfjsLib.getDocument({ data: sourceBytes.slice(), fontExtraProperties: true, ...pdfRenderAssets(pdfjsLib.version) });
         const pdf = await loadingTask.promise;
         const pages: ConvertedPage[] = [];
         let wordCount = 0;
@@ -1677,29 +1736,47 @@ export function PdfToWordTool() {
           for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
             setStatus(`${conversionMode === "preserve" ? "Rendering" : "Analyzing"} ${currentFile.name} page ${pageNumber} of ${pdf.numPages}...`);
             const page = await pdf.getPage(pageNumber);
-            const [content, operators] = await Promise.all([page.getTextContent({ disableNormalization: true }), page.getOperatorList()]);
-            const textItems = glyphResolver
-              ? correctTextItemsFromGlyphStreams(
-                content.items as PdfTextItem[],
-                glyphResolver.pageStreams(pageNumber - 1, operators, pdfjsLib.OPS),
-              )
-              : content.items as PdfTextItem[];
+            let actualText: ReturnType<NonNullable<typeof glyphResolver>["pageActualText"]>;
+            try {
+              actualText = glyphResolver?.pageActualText(pageNumber - 1);
+            } catch {
+              actualText = undefined;
+            }
+            const [content, operators] = await Promise.all([
+              page.getTextContent({ disableNormalization: true, includeMarkedContent: Boolean(actualText) }),
+              page.getOperatorList(),
+            ]);
+            let textItems = actualText ? applyPdfActualText<PdfTextItem>(content.items, actualText) : content.items as PdfTextItem[];
+            let mappingReadFailed = false;
+            if (glyphResolver) {
+              try {
+                textItems = correctTextItemsFromGlyphStreams(textItems, glyphResolver.pageStreams(pageNumber - 1, operators, pdfjsLib.OPS));
+              } catch {
+                mappingReadFailed = true;
+              }
+            }
             const viewport = page.getViewport({ scale: 1 });
             const analysis = analyzePdfPage(textItems, operators, pdfjsLib.OPS, viewport.width);
-            let ocr: { result: LocalOcrResult; scale: number } | undefined;
             if (analysis.needsOcr && conversionMode !== "preserve") {
-              setStatus(`OCR is required because page ${pageNumber} of ${pdf.numPages} is scanned.`);
-              ocrEngine ??= await createLocalOcrEngine();
-              ocr = await recognizeScannedPage(pdfjsLib, page, ocrEngine, (ocrProgress) => {
-                const pageProgress = (pageNumber - 1 + ocrProgress * 0.8) / pdf.numPages;
-                setProgress(Math.round(((fileIndex + pageProgress) / files.length) * 85));
-              });
-              lowConfidenceWords += ocr.result.lowConfidenceWords;
+              setStatus(`Reading scanned text in ${currentFile.name}, page ${pageNumber} of ${pdf.numPages}...`);
             }
-            const convertedPage = await renderPdfPage(pdfjsLib, page, conversionMode, analysis, ocr, {
+            let convertedPage = await renderPdfPage(pdfjsLib, page, mappingReadFailed ? "preserve" : conversionMode, analysis, {
               items: textItems,
               styles: content.styles as Record<string, PdfTextStyle>,
-            }, async () => ocrEngine ??= await createLocalOcrEngine());
+            }, getOcrEngine);
+            if (mappingReadFailed) convertedPage.warnings.push("The PDF's font mapping could not be read.");
+            if (conversionMode !== "preserve" && !convertedPage.image.length) {
+              try {
+                validateConvertedPages([convertedPage], 1, false);
+              } catch {
+                convertedPage = await renderPdfPage(pdfjsLib, page, "preserve", analysis);
+                convertedPage.warnings.push("Editable reconstruction could not keep the page content within its original layout.");
+              }
+            }
+            if (conversionMode !== "preserve" && convertedPage.image.length) {
+              visualFallbacks.push(`${files.length > 1 ? `${currentFile.name}, page` : "page"} ${pageNumber}`);
+            }
+            lowConfidenceWords += convertedPage.ocr?.lowConfidenceWords ?? 0;
             pages.push(convertedPage);
             wordCount += convertedPage.lines
               .flatMap((line) => line.items.map((item) => item.text))
@@ -1710,10 +1787,8 @@ export function PdfToWordTool() {
             if (pageNumber % analysis.batchSize === 0) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
           }
 
-          const quality = validateConvertedPages(pages, pdf.numPages, conversionMode !== "preserve");
-          quality.issues.forEach(issue => conversionIssues.add(issue));
-          lowestQualityScore = Math.min(lowestQualityScore, quality.score);
-          hasQualityWarning ||= quality.warning;
+          const quality = validateConvertedPages(pages, pdf.numPages, false);
+          if (conversionMode !== "preserve") quality.issues.forEach(issue => conversionIssues.add(issue));
 
           setStatus(`Creating Word file for ${currentFile.name}...`);
           const blob = await finalizeDocx(createDocx(pages, currentFile.name, conversionMode), pages, conversionMode);
@@ -1739,9 +1814,14 @@ export function PdfToWordTool() {
 
       if (blob.size < 1024) throw new Error("The generated download is empty or incomplete.");
 
-      const conversionWarning = conversionMode === "preserve" ? "Page content is image-only and is not editable."
-        : [...conversionIssues, ...(lowConfidenceWords ? [`${lowConfidenceWords} OCR words have low confidence.`] : []),
-          "Layout and editability are reconstructed estimates. Review the Word file against the PDF; rendering and fonts vary by application."].join(" ");
+      const fallbackList = visualFallbacks.slice(0, 8).join("; ");
+      const fallbackSummary = visualFallbacks.length === 1 ? "1 page was kept as an image" : `${visualFallbacks.length} pages were kept as images`;
+      const conversionWarning = conversionMode === "preserve" ? "Pages are preserved as images for visual fidelity."
+        : [
+          ...(visualFallbacks.length ? [`Fidelity warning. ${fallbackSummary} with no editable text (${fallbackList}${visualFallbacks.length > 8 ? ", and more" : ""}).`] : []),
+          ...conversionIssues,
+          ...(lowConfidenceWords ? [`OCR found ${lowConfidenceWords} words with low confidence.`] : []),
+        ].join(" ");
       setResult({
         blob,
         url: URL.createObjectURL(blob),
@@ -1755,9 +1835,7 @@ export function PdfToWordTool() {
       setProgress(100);
       setStatus(conversionWarning
         ? conversionWarning
-        : conversionMode === "fixed" ? "Original pages preserved with editable text."
-          : conversionMode === "reflow" ? "Easy-editing Word document generated. Page breaks and spacing may change."
-            : "Original page appearance preserved in Word.");
+        : "Word document generated.");
       setWorkflowStep("download");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not convert this PDF to Word. Please try another file.");
@@ -1765,7 +1843,7 @@ export function PdfToWordTool() {
       setProgress(0);
       setWorkflowStep("arrange");
     } finally {
-      await ocrEngine?.terminate();
+      if (ocrEngine) await ocrEngine.then(engine => engine.terminate()).catch(() => undefined);
       setIsProcessing(false);
     }
   }
@@ -2062,7 +2140,7 @@ export function PdfToWordTool() {
             onChange={() => setConversionMode("fixed")}
             className="mt-0.5 accent-[#FF2D2D]"
           />
-          <span><span className="block font-black text-slate-950">Keep Original Pages</span><span className="block font-bold text-slate-700">Best for minor editing</span><span className="block font-semibold text-slate-500">Preserves the original page layout while keeping text editable. Large text changes may affect the layout.</span></span>
+          <span><span className="block font-black text-slate-950">Keep Original Pages</span><span className="block font-bold text-slate-700">Best for minor editing</span><span className="block font-semibold text-slate-500">Rebuilds the original layout with editable text where possible. Difficult pages keep their appearance as images.</span></span>
         </label>
         <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-white px-2.5 py-2 shadow-sm ring-1 ring-slate-200">
           <input
@@ -2084,7 +2162,7 @@ export function PdfToWordTool() {
             onChange={() => setConversionMode("preserve")}
             className="mt-0.5 accent-[#FF2D2D]"
           />
-          <span><span className="block font-black text-slate-950">Preserve Exact Appearance</span><span className="block font-semibold text-slate-500">Preserves the original visual appearance. Page content may not be editable.</span></span>
+          <span><span className="block font-black text-slate-950">Preserve Exact Appearance</span><span className="block font-semibold text-slate-500">Keeps each original page as an image in Word.</span></span>
         </label>
       </fieldset>
     );
@@ -2092,9 +2170,9 @@ export function PdfToWordTool() {
 
   function renderDesktopModeControls() {
     const modes: Array<{ value: ConversionMode; label: string; short: string; description: string }> = [
-      { value: "fixed", label: "Keep Original Pages", short: "Minor editing", description: "Preserves the original page layout while keeping text editable. Large text changes may affect the layout." },
+      { value: "fixed", label: "Keep Original Pages", short: "Minor editing", description: "Rebuilds the original layout with editable text where possible. Difficult pages keep their appearance as images." },
       { value: "reflow", label: "Easy Editing", short: "Major changes", description: "Creates normal Word paragraphs, headings, tables, and page flow. Page breaks and spacing may differ from the PDF." },
-      { value: "preserve", label: "Preserve Exact Appearance", short: "Not editable", description: "Preserves the original visual appearance. Page content may not be editable." },
+      { value: "preserve", label: "Preserve Exact Appearance", short: "Not editable", description: "Keeps each original page as an image in Word." },
     ];
 
     return (
@@ -2120,11 +2198,31 @@ export function PdfToWordTool() {
       <div ref={workAreaRef} data-merge-preview-area="true" data-workflow-step={workflowStep} className="relative min-h-[calc(100vh-9rem)] min-w-0 bg-slate-100 p-4 text-left sm:p-6">
         <div className="transition duration-300">
           {workflowStep === "arrange" && (
-            <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-44 sm:gap-5 xl:pb-28">
-              {files.map((pdfFile, index) => (
-                <div key={previewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderPdfCard(pdfFile, index)}</div>
-              ))}
-            </div>
+            <>
+              {conversionMode !== "preserve" && (
+                <div className="mx-auto mb-4 grid max-w-sm gap-1.5 rounded-xl border border-slate-200 bg-white p-3">
+                  <label htmlFor="pdf-to-word-scan-language" className="text-sm font-bold text-slate-900">Scan language (OCR)</label>
+                  <select
+                    id="pdf-to-word-scan-language"
+                    className="min-h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                    value={scanLanguage}
+                    onChange={(event) => setScanLanguage(event.target.value as ScanLanguage)}
+                    aria-describedby="pdf-to-word-scan-language-help"
+                  >
+                    <option value="auto">Auto (English, Hindi, Gujarati)</option>
+                    {Object.entries(scanLanguages).sort((left, right) => left[1].localeCompare(right[1])).map(([code, language]) => (
+                      <option key={code} value={code}>{language}</option>
+                    ))}
+                  </select>
+                  <p id="pdf-to-word-scan-language-help" className="text-xs text-slate-600">Choose another language for scanned pages. Selectable PDF text keeps its original language.</p>
+                </div>
+              )}
+              <div data-merge-card-grid="true" className="grid w-full grid-cols-[repeat(auto-fit,minmax(14rem,14rem))] items-start justify-center gap-4 pb-44 sm:gap-5 xl:pb-28">
+                {files.map((pdfFile, index) => (
+                  <div key={previewUrls[index] ?? `${pdfFile.name}-${pdfFile.size}-${pdfFile.lastModified}-${index}`}>{renderPdfCard(pdfFile, index)}</div>
+                ))}
+              </div>
+            </>
           )}
           {workflowStep === "convert" && renderProcessingCard()}
           {workflowStep === "download" && renderSuccessCard()}

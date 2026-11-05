@@ -77,7 +77,7 @@ async function createFixturePdfs() {
   }
   await fs.writeFile(path.join(fixtureDir, "long-book-50.pdf"), await longBook.save());
 
-  const scanSvg = Buffer.from('<svg width="1200" height="1600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><text x="100" y="240" font-family="Arial" font-size="86" fill="black">SCANNED ENGLISH PAGE</text><text x="100" y="390" font-family="Arial" font-size="58" fill="black">Local OCR keeps this text editable.</text></svg>');
+  const scanSvg = Buffer.from('<svg width="1200" height="1600" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><text x="100" y="240" font-family="Arial" font-size="86" fill="black">SCANNED ENGLISH PAGE</text><text x="100" y="390" font-family="Arial" font-size="58" fill="black">Local OCR keeps this text editable.</text><rect x="100" y="500" width="1000" height="8" fill="#a02020"/></svg>');
   const scanPng = await sharp(scanSvg).png().toBuffer();
   const scanPdf = await PDFDocument.create();
   const scanImage = await scanPdf.embedPng(scanPng);
@@ -94,13 +94,6 @@ async function createFixturePdfs() {
   placedImagePage.drawText("PLACED_IMAGE_MARKER", { x: 54, y: 730, size: 12, font: placedImageFont });
   placedImagePage.drawImage(placedImage, { x: 100, y: 600, width: 80, height: 40 });
   await fs.writeFile(path.join(fixtureDir, "placed-image.pdf"), await placedImagePdf.save());
-
-  const mixedScanSvg = Buffer.from('<svg width="1800" height="2200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="white"/><text x="120" y="320" font-family="Nirmala UI" font-size="120" fill="black">ENGLISH LANGUAGE</text><text x="120" y="620" font-family="Nirmala UI" font-size="120" fill="black">हिंदी भाषा</text><text x="120" y="920" font-family="Nirmala UI" font-size="120" fill="black">ગુજરાતી ભાષા</text></svg>');
-  const mixedScanPng = await sharp(mixedScanSvg).png().toBuffer();
-  const mixedScanPdf = await PDFDocument.create();
-  const mixedScanImage = await mixedScanPdf.embedPng(mixedScanPng);
-  mixedScanPdf.addPage([648, 792]).drawImage(mixedScanImage, { x: 0, y: 0, width: 648, height: 792 });
-  await fs.writeFile(path.join(fixtureDir, "scanned-mixed-language.pdf"), await mixedScanPdf.save());
 
   const unicodeFontPath = "C:\\Windows\\Fonts\\ARIALUNI.TTF";
   if (await fs.stat(unicodeFontPath).then(() => true).catch(() => false)) {
@@ -153,7 +146,7 @@ async function createFixturePdfs() {
   }
 }
 
-async function downloadEditable(page: import("@playwright/test").Page, pdfPath: string, outputName: string, mode: "fixed" | "reflow" = "fixed") {
+async function downloadEditable(page: import("@playwright/test").Page, pdfPath: string, outputName: string, mode: "fixed" | "reflow" = "fixed", scanLanguage?: string) {
   await page.goto("/pdf-to-word");
   await page.waitForFunction(() => {
     const input = document.querySelector("#pdf-word-upload");
@@ -162,6 +155,7 @@ async function downloadEditable(page: import("@playwright/test").Page, pdfPath: 
   await page.locator("#pdf-word-upload").setInputFiles(pdfPath);
   await expect(page.locator('[data-pdf-to-word-action-bar="true"]')).toBeVisible();
   if (mode === "reflow") await page.locator('[data-pdf-to-word-desktop-modes="true"]').getByText("Easy Editing", { exact: true }).click();
+  if (scanLanguage) await page.getByLabel("Scan language (OCR)").selectOption(scanLanguage);
   await page.getByRole("button", { name: "Convert to Word" }).click();
   await expect(page.getByRole("heading", { name: "Your Word file is ready!" })).toBeVisible({ timeout: 60_000 });
   const link = page.getByRole("link", { name: "Download DOCX" });
@@ -219,9 +213,9 @@ async function uploadPdf(page: import("@playwright/test").Page, pdfPath = path.j
   const modeScope = isMobile ? page.getByRole("dialog", { name: "PDF to Word settings" }) : page.locator('[data-pdf-to-word-desktop-modes="true"]');
   await expect(modeScope.getByRole("radio", { name: /Keep Original Pages/ })).toBeChecked();
   const descriptions = [
-    "Preserves the original page layout while keeping text editable. Large text changes may affect the layout.",
+    "Rebuilds the original layout with editable text where possible. Difficult pages keep their appearance as images.",
     "Creates normal Word paragraphs, headings, tables, and page flow. Page breaks and spacing may differ from the PDF.",
-    "Preserves the original visual appearance. Page content may not be editable.",
+    "Keeps each original page as an image in Word.",
   ];
   for (const description of descriptions) {
     if (isMobile) await expect(modeScope.getByText(description, { exact: true })).toBeVisible();
@@ -352,7 +346,7 @@ test("responsive action bar and mobile conversion drawer stay compact and access
   await expect(actionBar).toBeVisible();
   await expect(desktopModes).toBeVisible();
   await expect(page.locator('[data-pdf-to-word-desktop-settings="true"]')).toHaveCount(0);
-  await expect(actionBar.getByText("Preserves the original page layout while keeping text editable. Large text changes may affect the layout.", { exact: true })).toHaveCount(0);
+  await expect(actionBar.getByText("Rebuilds the original layout with editable text where possible. Difficult pages keep their appearance as images.", { exact: true })).toHaveCount(0);
   const desktopBarBox = await actionBar.boundingBox();
   expect(desktopBarBox?.height).toBeLessThanOrEqual(90);
   expect(desktopBarBox?.y).toBeCloseTo(900 - (desktopBarBox?.height ?? 0), 0);
@@ -533,18 +527,107 @@ test("scanned English page runs local OCR and produces editable text", async ({ 
   expect(xml).not.toContain("pdfroot_text_");
   expect(xml).not.toContain("<w:txbxContent");
   expect(xml.match(/<w:p[ >]/g)?.length).toBeGreaterThanOrEqual(2);
+  const archive = await JSZip.loadAsync(await fs.readFile(outputPath));
+  const backgroundPath = Object.keys(archive.files).find(name => /^word\/media\/.*\.png$/i.test(name));
+  expect(backgroundPath).toBeTruthy();
+  const { data, info } = await sharp(await archive.file(backgroundPath!)!.async("nodebuffer")).raw().toBuffer({ resolveWithObject: true });
+  const borderPixel = (Math.floor(info.height * 504 / 1600) * info.width + Math.floor(info.width / 2)) * info.channels;
+  expect([...data.subarray(borderPixel, borderPixel + 3)]).toEqual([160, 32, 32]);
 });
 
 test("scanned mixed-language pages keep English, Hindi, and Gujarati scripts", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chromium", "Mixed-language OCR regression runs once on desktop.");
   test.setTimeout(180_000);
   await page.addInitScript(() => localStorage.setItem("pdfroot_analytics_consent", "rejected"));
-  const outputPath = await downloadEditable(page, path.join(fixtureDir, "scanned-mixed-language.pdf"), "scanned-mixed-language.docx");
+  await page.goto("/pdf-to-word");
+  const image = await page.evaluate(async () => {
+    for (const [script, asset] of [
+      ["Devanagari", "noto-sans-devanagari-devanagari-400-normal.ttf"],
+      ["Gujarati", "noto-sans-gujarati-gujarati-400-normal.ttf"],
+    ]) {
+      document.fonts.add(await new FontFace(script, `url(/fonts/edit-pdf/${asset})`).load());
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = 1800;
+    canvas.height = 2200;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "white";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "black";
+    for (const [font, text, y] of [
+      ["sans-serif", "ENGLISH LANGUAGE", 320],
+      ["Devanagari", "हिंदी भाषा", 620],
+      ["Gujarati", "ગુજરાતી ભાષા", 920],
+    ] as const) {
+      context.font = `120px ${font}`;
+      context.fillText(text, 120, y);
+    }
+    return canvas.toDataURL();
+  });
+  const scan = await PDFDocument.create();
+  const png = await scan.embedPng(image);
+  scan.addPage([648, 792]).drawImage(png, { x: 0, y: 0, width: 648, height: 792 });
+  const fixture = path.join(fixtureDir, "scanned-mixed-language.pdf");
+  await fs.writeFile(fixture, await scan.save());
+  const outputPath = await downloadEditable(page, fixture, "scanned-mixed-language.docx");
   const xml = await documentXml(outputPath);
   expect(xml).toMatch(/ENGLISH/i);
   expect(xml).toMatch(/[\u0900-\u097F]/u);
   expect(xml).toMatch(/[\u0A80-\u0AFF]/u);
   expect(xml).toContain('w:val="hi-IN"');
+  expect(xml).toContain('w:val="gu-IN"');
+});
+
+test("a scan with an unavailable language model keeps its page image and adjacent editable text", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "Mixed-page fallback runs once on desktop.");
+  const input = await PDFDocument.create();
+  const font = await input.embedFont(StandardFonts.Helvetica);
+  input.addPage([595, 842]).drawText("EDITABLE_BEFORE_SCAN", { x: 50, y: 760, font });
+  const scan = await PDFDocument.load(await fs.readFile(path.join(fixtureDir, "scanned-english.pdf")));
+  const [scanPage] = await input.copyPages(scan, [0]);
+  input.addPage(scanPage);
+  input.addPage([842, 595]).drawText("EDITABLE_AFTER_SCAN", { x: 50, y: 500, font });
+  const inputPath = path.join(fixtureDir, "mixed-page-ocr-fallback.pdf");
+  await fs.writeFile(inputPath, await input.save());
+
+  const model = "**/tessdata_fast@4.1.0/tam.traineddata";
+  let modelRequested = false;
+  await page.route(model, (route) => {
+    modelRequested = true;
+    return route.abort();
+  });
+
+  for (const mode of ["fixed", "reflow"] as const) {
+    const output = await downloadEditable(page, inputPath, `mixed-page-ocr-fallback-${mode}.docx`, mode, "tam");
+    const xml = await documentXml(output);
+    expect(xml).toContain("EDITABLE_BEFORE_SCAN");
+    expect(xml).toContain("EDITABLE_AFTER_SCAN");
+    expect(xml).toContain('name="Original PDF page 2"');
+    expect(xml.match(/<w:sectPr(?:\s|>)/g)).toHaveLength(3);
+    expect(xml).toContain('w:orient="landscape"');
+    await expect(page.getByRole("status").filter({ hasText: /page 2.*OCR engine/ })).toBeVisible();
+  }
+  expect(modelRequested).toBe(true);
+});
+
+test("native Gujarati from a shaped browser PDF stays editable", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "Gujarati Unicode regression runs once on desktop.");
+  await page.goto("/pdf-to-word");
+  await page.evaluate(async () => {
+    const font = await new FontFace("Gujarati fixture", "url(/fonts/edit-pdf/noto-sans-gujarati-gujarati-400-normal.ttf)").load();
+    document.fonts.add(font);
+    document.body.replaceChildren();
+    const text = document.createElement("p");
+    text.style.fontFamily = "Gujarati fixture";
+    text.style.fontSize = "18pt";
+    text.textContent = "ગુજરાતી ભાષા અને વિદ્યાર્થી";
+    document.body.append(text);
+  });
+  const input = path.join(fixtureDir, "native-gujarati-shaped.pdf");
+  await page.pdf({ path: input, format: "A4", margin: { top: "20mm", left: "20mm" } });
+  const output = await downloadEditable(page, input, "native-gujarati-shaped.docx");
+  const xml = await documentXml(output);
+  expect(xml).toContain("ગુજરાતી ભાષા અને વિદ્યાર્થી");
   expect(xml).toContain('w:val="gu-IN"');
 });
 

@@ -253,7 +253,8 @@ export function isRtlText(text: string) {
 export function hasReliableUnicodeMapping(text: string) {
   for (const character of text) {
     const codePoint = character.codePointAt(0) ?? 0;
-    if (codePoint === 0xfffd
+    if (codePoint <= 0x08 || codePoint === 0x0b || codePoint === 0x0c || codePoint >= 0x0e && codePoint <= 0x1f
+      || codePoint >= 0xd800 && codePoint <= 0xdfff || codePoint >= 0xfffd && codePoint <= 0xffff
       || codePoint >= 0xe000 && codePoint <= 0xf8ff
       || codePoint >= 0xf0000 && codePoint <= 0xffffd
       || codePoint >= 0x100000 && codePoint <= 0x10fffd) return false;
