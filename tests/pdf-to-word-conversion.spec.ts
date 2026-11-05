@@ -612,17 +612,12 @@ test("a scan with an unavailable language model keeps its page image and adjacen
 
 test("native Gujarati from a shaped browser PDF stays editable", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chromium", "Gujarati Unicode regression runs once on desktop.");
-  await page.goto("/pdf-to-word");
-  await page.evaluate(async () => {
-    const font = await new FontFace("Gujarati fixture", "url(/fonts/edit-pdf/noto-sans-gujarati-gujarati-400-normal.ttf)").load();
-    document.fonts.add(font);
-    document.body.replaceChildren();
-    const text = document.createElement("p");
-    text.style.fontFamily = "Gujarati fixture";
-    text.style.fontSize = "18pt";
-    text.textContent = "ગુજરાતી ભાષા અને વિદ્યાર્થી";
-    document.body.append(text);
-  });
+  const font = await fs.readFile("public/fonts/edit-pdf/noto-sans-gujarati-gujarati-400-normal.ttf", "base64");
+  await page.setContent(`<style>
+    @font-face { font-family: GujaratiFixture; src: url(data:font/ttf;base64,${font}); }
+    p { font: 18pt GujaratiFixture; }
+  </style><p>ગુજરાતી ભાષા અને વિદ્યાર્થી</p>`);
+  await page.evaluate(async () => { await document.fonts.ready; });
   const input = path.join(fixtureDir, "native-gujarati-shaped.pdf");
   await page.pdf({ path: input, format: "A4", margin: { top: "20mm", left: "20mm" } });
   const output = await downloadEditable(page, input, "native-gujarati-shaped.docx");
