@@ -20,7 +20,7 @@ type ReflowLine = { items: ReflowItem[]; x: number; top: number; width: number; 
 type ReflowImage = { data: Uint8Array; x?: number; width: number; height: number; top: number; background?: boolean };
 type ReflowShape = { kind: "rectangle" | "line" | "path"; x: number; top: number; width: number; height: number; strokeWidth: number; strokeColor?: string; fillColor?: string };
 
-export type ReliableTable = { x: number; top: number; xs: number[]; ys: number[]; color: string; strokeWidth: number };
+export type ReliableTable = { x: number; top: number; xs: number[]; ys: number[]; rowColumns: number[][]; color: string; strokeWidth: number };
 
 function textRuns(item: ReflowItem, color: string) {
   return splitTextByScript(item.text).map((segment) => {
@@ -118,11 +118,16 @@ export function detectReliableTables(lines: ReflowLine[], shapes: ReflowShape[])
       if (provisionalXs.length < 2 || ys.length < 2) continue;
       const minY = ys[0];
       const maxY = ys.at(-1)!;
-      const xs = uniqueCoordinates(sameVertical
-        .filter((shape) => shape.x >= minX - 2.5 && shape.x <= maxX + 2.5 && shape.top <= minY + 2.5 && shape.top + shape.height >= maxY - 2.5)
-        .map((shape) => shape.x));
+      const verticals = sameVertical.filter(shape => shape.x >= minX - 2.5 && shape.x <= maxX + 2.5);
+      if (![minX, maxX].every(x => verticals.some(shape => Math.abs(shape.x - x) <= 2.5
+        && spansCoordinate(shape.top, shape.height, minY) && spansCoordinate(shape.top, shape.height, maxY)))) continue;
+      const rowBoundaries = ys.slice(1).map((bottom, rowIndex) => uniqueCoordinates(verticals
+        .filter(shape => spansCoordinate(shape.top, shape.height, ys[rowIndex]) && spansCoordinate(shape.top, shape.height, bottom))
+        .map(shape => shape.x)));
+      const xs = uniqueCoordinates(rowBoundaries.flat());
       if (xs.length < 2) continue;
-      const cellCount = (xs.length - 1) * (ys.length - 1);
+      const rowColumns = rowBoundaries.map(boundaries => xs.flatMap((x, index) => boundaries.some(boundary => Math.abs(boundary - x) <= 2) ? [index] : []));
+      const cellCount = rowColumns.reduce((count, columns) => count + columns.length - 1, 0);
       if (cellCount < 2) continue;
       const populatedCells = lines.filter((line) => {
         const centerX = line.x + line.width / 2;
@@ -135,7 +140,7 @@ export function detectReliableTables(lines: ReflowLine[], shapes: ReflowShape[])
       // fidelity and useful structure without inventing cell text.
       if (populatedCells < Math.min(2, cellCount) && cellCount < 4) continue;
       const relevant = [...crossingHorizontals, ...crossingVerticals];
-      candidates.push({ x: xs[0], top: minY, xs, ys, color, strokeWidth: relevant.reduce((sum, shape) => sum + shape.strokeWidth, 0) / relevant.length });
+      candidates.push({ x: xs[0], top: minY, xs, ys, rowColumns, color, strokeWidth: relevant.reduce((sum, shape) => sum + shape.strokeWidth, 0) / relevant.length });
     }
   }
   return candidates
@@ -147,7 +152,7 @@ export function detectReliableTables(lines: ReflowLine[], shapes: ReflowShape[])
     .sort((a, b) => a.top - b.top || a.x - b.x);
 }
 
-function createEditableTable(table: ReliableTable, lines: ReflowLine[], leftBoundary = table.x, anchored = false) {
+function createEditableTable(table: ReliableTable, lines: ReflowLine[], shapes: ReflowShape[], leftBoundary = table.x, anchored = false) {
   const border = { style: BorderStyle.SINGLE, color: table.color, size: Math.max(1, Math.round(table.strokeWidth * 8)) };
   const columnWidths = table.xs.slice(1).map((x, index) => Math.max(1, Math.round((x - table.xs[index]) * 20)));
   return new Table({
@@ -160,25 +165,34 @@ function createEditableTable(table: ReliableTable, lines: ReflowLine[], leftBoun
     borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
     rows: table.ys.slice(1).map((bottom, rowIndex) => new TableRow({
       height: { value: Math.max(1, Math.round((bottom - table.ys[rowIndex]) * 20)), rule: HeightRule.EXACT },
-      children: table.xs.slice(1).map((right, columnIndex) => {
-        const left = table.xs[columnIndex];
+      children: table.rowColumns[rowIndex].slice(1).map((rightIndex, cellIndex) => {
+        const leftIndex = table.rowColumns[rowIndex][cellIndex];
+        const left = table.xs[leftIndex];
+        const right = table.xs[rightIndex];
         const top = table.ys[rowIndex];
+        const fill = shapes.find(shape => shape.kind === "rectangle" && shape.fillColor && !shape.strokeColor
+          && shape.x <= left + 2 && shape.x + shape.width >= right - 2 && shape.top <= top + 2 && shape.top + shape.height >= bottom - 2)?.fillColor;
         const cellLines = lines.filter((line) => {
           const centerX = line.x + line.width / 2;
           const centerY = line.top + line.height / 2;
           return centerX > left && centerX < right && centerY > top && centerY < bottom;
         }).sort((a, b) => a.top - b.top || a.x - b.x);
         return new TableCell({
-          width: { size: columnWidths[columnIndex], type: WidthType.DXA },
+          width: { size: Math.round((right - left) * 20), type: WidthType.DXA },
+          columnSpan: rightIndex - leftIndex > 1 ? rightIndex - leftIndex : undefined,
+          shading: fill ? { fill } : undefined,
           verticalAlign: VerticalAlign.TOP,
           margins: { top: 0, right: 0, bottom: 0, left: 0 },
-          children: cellLines.length ? cellLines.map((line, index) => new Paragraph({
-            bidirectional: isRtlText(line.items.map(item => item.text).join("")),
-            alignment: isRtlText(line.items.map(item => item.text).join("")) ? "right" : "left",
-            indent: { left: Math.max(0, Math.round((line.x - left) * 20)), right: Math.max(0, Math.round((right - line.x - line.width) * 20)) },
-            spacing: { before: Math.max(0, Math.round((line.top - (index ? cellLines[index - 1].top + cellLines[index - 1].height : top)) * 20)), after: 0, line: Math.max(1, Math.round(line.height * 20)), lineRule: "atLeast" },
-            children: line.items.flatMap((item) => textRuns(item, line.color)),
-          })) : [new Paragraph({ spacing: { before: 0, after: 0 } })],
+          children: cellLines.length ? cellLines.map((line, index) => {
+            const rtl = isRtlText(line.items.map(item => item.text).join(""));
+            return new Paragraph({
+              bidirectional: rtl,
+              alignment: rtl ? "right" : "left",
+              indent: rtl ? { right: Math.max(0, Math.round((right - line.x - line.width) * 20)) } : { left: Math.max(0, Math.round((line.x - left) * 20)) },
+              spacing: { before: Math.max(0, Math.round((line.top - (index ? cellLines[index - 1].top + cellLines[index - 1].height : top)) * 20)), after: 0, line: Math.max(1, Math.round(line.height * 20)), lineRule: "atLeast" },
+              children: line.items.flatMap((item) => textRuns(item, line.color)),
+            });
+          }) : [new Paragraph({ spacing: { before: 0, after: 0 } })],
         });
       }),
     })),
@@ -195,7 +209,8 @@ function partitionTableLines(lines: ReflowLine[], tables: ReliableTable[]) {
       const y = line.top + line.height / 2;
       const tableIndex = tables.findIndex(table => x > table.x && x < table.xs.at(-1)! && y > table.top && y < table.ys.at(-1)!);
       const table = tables[tableIndex];
-      const column = table ? table.xs.findIndex((right, index) => index > 0 && x < right) : -1;
+      const rowIndex = (table?.ys.findIndex(bottom => y < bottom) ?? 0) - 1;
+      const column = table?.rowColumns[rowIndex]?.slice(1).find(index => x < table.xs[index]);
       const key = `${tableIndex}:${column}`;
       groups.set(key, [...(groups.get(key) ?? []), item]);
     }
@@ -212,13 +227,18 @@ function partitionTableLines(lines: ReflowLine[], tables: ReliableTable[]) {
 export function createAnchoredPageContent(page: StructuredPage) {
   const tables = detectReliableTables(page.lines, page.shapes);
   const lines = partitionTableLines(page.lines, tables);
-  const children: Array<Paragraph | Table> = tables.map(table => createEditableTable(table, lines, table.x, true));
+  const children: Array<Paragraph | Table> = tables.map(table => createEditableTable(table, lines, page.shapes, table.x, true));
   for (const line of lines.filter(line => !tables.some(table => lineInsideTable(line, table)))) {
     const rtl = isRtlText(line.items.map(item => item.text).join(""));
     const items = [...line.items].sort((a, b) => rtl ? (b.x ?? line.x) - (a.x ?? line.x) : (a.x ?? line.x) - (b.x ?? line.x));
+    // Word's substitute font may be wider than the embedded PDF font. Leave
+    // room for shaping without extending into the next frame on the same row.
+    const nextFrame = lines.reduce((right, other) => other.x > line.x && other.top < line.top + line.height
+      && other.top + other.height > line.top ? Math.min(right, other.x) : right, page.width ?? line.x + line.width + 20);
+    const width = rtl ? line.width + 2 : Math.max(line.width + 2, Math.min(nextFrame - line.x - 2, line.width * 1.2 + 6));
     children.push(new Paragraph({
       frame: { type: "absolute", position: { x: Math.round(line.x * 20), y: Math.round(line.top * 20) },
-        width: Math.max(1, Math.round((line.width + 2) * 20)), height: Math.max(1, Math.round(line.height * 20)),
+        width: Math.max(1, Math.round(width * 20)), height: Math.max(1, Math.round(line.height * 20)),
         anchor: { horizontal: "page", vertical: "page" }, wrap: "none", rule: HeightRule.ATLEAST },
       bidirectional: rtl,
       alignment: rtl ? "right" : "left",
@@ -439,8 +459,9 @@ export function createStructuredPageContent(page: StructuredPage, options: { fix
     const topBoundary = options.top ?? Math.min(...page.lines.map((line) => line.top), 36);
     const blocks: Array<{ top: number; bottom: number; content: Paragraph | Table }> = [];
     const tables = detectReliableTables(page.tableLayoutLines ?? page.lines, page.shapes);
-    tables.forEach((table) => blocks.push({ top: table.top, bottom: table.ys.at(-1)!, content: createEditableTable(table, page.lines, leftBoundary) }));
-    const flowingLines = page.lines.filter((line) => !tables.some((table) => lineInsideTable(line, table)));
+    const lines = partitionTableLines(page.lines, tables);
+    tables.forEach((table) => blocks.push({ top: table.top, bottom: table.ys.at(-1)!, content: createEditableTable(table, lines, page.shapes, leftBoundary) }));
+    const flowingLines = lines.filter((line) => !tables.some((table) => lineInsideTable(line, table)));
     const pageWidth = page.width ?? Math.max(...[...page.lines.map((line) => line.x + line.width), ...page.shapes.map((shape) => shape.x + shape.width), 612]);
     const pageHeight = page.height ?? Math.max(...[...page.lines.map((line) => line.top + line.height), ...page.shapes.map((shape) => shape.top + shape.height), 792]);
     const analysis = classifyDocumentRegions({

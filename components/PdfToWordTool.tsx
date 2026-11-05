@@ -23,7 +23,7 @@ import { loadPdfJs } from "@/lib/pdfjsClient";
 import { analyzePdfPage, PdfPageAnalysis } from "@/lib/pdfToWord/pageAnalyzer";
 import { createLocalOcrEngine, LocalOcrResult, OcrWord, planScanTextCleanup, ScanLanguage, scanLanguages } from "@/lib/pdfToWord/localOcr";
 import { selectPdfToWordEngine } from "@/lib/pdfToWord/engine";
-import { applyPdfActualText, correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver } from "@/lib/pdfToWord/pdfGlyphUnicode";
+import { applyPdfActualText, correctTextItemsFromGlyphStreams, createPdfGlyphUnicodeResolver, recoverPdfGlyphWidths } from "@/lib/pdfToWord/pdfGlyphUnicode";
 import { createReflowContent, createAnchoredPageContent, detectReliableTables } from "@/lib/pdfToWord/reflowRenderer";
 import { validateConvertedPages, validateGeneratedDocumentXml } from "@/lib/pdfToWord/validator";
 import { compatibleWordFont, hasReliableUnicodeMapping, reconstructGujaratiFragments } from "@/lib/pdfToWord/unicode";
@@ -49,6 +49,8 @@ type PdfTextItem = {
   fontName: string;
   transform: number[];
   unicodeReliable?: boolean;
+  originalGlyphText?: string;
+  widthRecovered?: boolean;
 };
 
 type PdfTextStyle = {
@@ -264,9 +266,11 @@ function buildPositionedLines(
     const next = items[index + 1];
     if (item.str.trim()) fragments.push(item);
     else if (previous && next?.str.trim() && item.str && !previous.hasEOL && !/\s$/u.test(previous.str)
-      && Math.abs(next.transform[5] - previous.transform[5]) < 2
-      && Math.abs(next.transform[4] - previous.transform[4] - previous.width) < Math.max(12, previous.height * 1.5)) {
-      fragments[fragments.length - 1] = { ...previous, str: `${previous.str}${item.str}` };
+      && Math.abs(next.transform[5] - previous.transform[5]) < 2) {
+      const gap = next.transform[4] - previous.transform[4] - previous.width;
+      if (Math.abs(gap) < Math.max(12, previous.height * 1.5) && (!previous.widthRecovered || gap > previous.height * 0.12)) {
+        fragments[fragments.length - 1] = { ...previous, str: `${previous.str}${item.str}` };
+      }
     }
   }
   const positioned = fragments
@@ -277,7 +281,10 @@ function buildPositionedLines(
       const horizontalScale = Math.max(0.01, Math.hypot(transform[0], transform[1]));
       const fontSize = verticalScale;
       const style = styles[item.fontName] ?? {};
-      const ascent = style.ascent ?? 0.8;
+      const { ascent = 0.8, descent = 0.2 } = style;
+      // Some PDF font styles report NaN metrics, including synthetic bold faces.
+      const fontAscent = Number.isFinite(ascent) ? ascent : 0.8;
+      const fontDescent = Number.isFinite(descent) ? Math.abs(descent) : 0.2;
       const sourceFontFamily = normalizePdfFontName(style.sourceFontFamily ?? style.fontFamily ?? "");
       const sourceIsSystemFont = Boolean(style.sourceIsSystemFont);
       const fontFamily = compatibleWordFont(sourceFontFamily, item.fontName, item.str, sourceIsSystemFont);
@@ -285,13 +292,13 @@ function buildPositionedLines(
       return {
         text: item.str,
         x: transform[4],
-        top: transform[5] - fontSize * ascent,
+        top: transform[5] - fontSize * fontAscent,
         baseline: transform[5],
         width: Math.max(0.5, item.width),
         height: fontSize,
         fontSize,
-        fontAscent: ascent,
-        fontDescent: Math.abs(style.descent ?? 0.2),
+        fontAscent,
+        fontDescent,
         fontFamily,
         sourceFontFamily,
         sourceIsSystemFont,
@@ -1750,7 +1757,8 @@ export function PdfToWordTool() {
             let mappingReadFailed = false;
             if (glyphResolver) {
               try {
-                textItems = correctTextItemsFromGlyphStreams(textItems, glyphResolver.pageStreams(pageNumber - 1, operators, pdfjsLib.OPS));
+                const glyphStreams = glyphResolver.pageStreams(pageNumber - 1, operators, pdfjsLib.OPS);
+                textItems = correctTextItemsFromGlyphStreams(recoverPdfGlyphWidths(textItems, glyphStreams), glyphStreams);
               } catch {
                 mappingReadFailed = true;
               }

@@ -610,19 +610,33 @@ test("a scan with an unavailable language model keeps its page image and adjacen
   expect(modelRequested).toBe(true);
 });
 
-test("native Gujarati from a shaped browser PDF stays editable", async ({ page }, testInfo) => {
+test("native Gujarati headings, shaped text, and table values stay editable", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-chromium", "Gujarati Unicode regression runs once on desktop.");
   const font = await fs.readFile("public/fonts/edit-pdf/noto-sans-gujarati-gujarati-400-normal.ttf", "base64");
   await page.setContent(`<style>
     @font-face { font-family: GujaratiFixture; src: url(data:font/ttf;base64,${font}); }
-    p { font: 18pt GujaratiFixture; }
-  </style><p>ગુજરાતી ભાષા અને વિદ્યાર્થી</p>`);
+    body { font: 13pt GujaratiFixture; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid black; padding: 8px 12px; }
+  </style>
+  <h1>શાળા ગ્રંથાલયની નોંધ</h1>
+  <p>ગુજરાતી ભાષા અને વિદ્યાર્થી</p>
+  <p>પુસ્તકોનું પ્રદર્શન યોજાયું. શિક્ષકોએ વાંચનનું મહત્ત્વ સમજાવ્યું.</p>
+  <table><tr><th>ક્રમ</th><th>પુસ્તકનો પ્રકાર</th><th>સંખ્યા</th></tr>
+  <tr><td>૧</td><td>વિજ્ઞાન અને પર્યાવરણ</td><td>૩૫</td></tr>
+  <tr><td colspan="2">કુલ પુસ્તકો</td><td>૩૫</td></tr></table>
+  <h2>અક્ષરો અને અંકોની ચકાસણી</h2><p>વિદ્યાર્થી, શિક્ષક, પ્રશ્ન, શ્રદ્ધા, દૃષ્ટિ</p>`);
   await page.evaluate(async () => { await document.fonts.ready; });
   const input = path.join(fixtureDir, "native-gujarati-shaped.pdf");
   await page.pdf({ path: input, format: "A4", margin: { top: "20mm", left: "20mm" } });
   const output = await downloadEditable(page, input, "native-gujarati-shaped.docx");
   const xml = await documentXml(output);
-  expect(xml).toContain("ગુજરાતી ભાષા અને વિદ્યાર્થી");
+  const text = [...xml.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g)].map(([, run]) => run).join("");
+  for (const phrase of ["શાળા ગ્રંથાલયની નોંધ", "ગુજરાતી ભાષા અને વિદ્યાર્થી", "પુસ્તકોનું પ્રદર્શન", "શિક્ષકોએ વાંચનનું મહત્ત્વ", "પુસ્તકનો પ્રકાર", "૩૫", "અક્ષરો અને અંકોની ચકાસણી", "પ્રશ્ન, શ્રદ્ધા, દૃષ્ટિ"]) {
+    expect(text).toContain(phrase);
+  }
+  expect(xml).not.toContain('name="Original PDF page');
+  expect(xml).toContain('<w:gridSpan w:val="2"/>');
   expect(xml).toContain('w:val="gu-IN"');
 });
 
