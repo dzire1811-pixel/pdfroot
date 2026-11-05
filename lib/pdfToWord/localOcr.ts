@@ -112,29 +112,14 @@ export async function createLocalOcrEngine(language: ScanLanguage = "auto") {
   const { createWorker, PSM } = await import("tesseract.js");
   const local = ["eng", "hin", "guj"];
   const codes = language === "auto" ? local : [...new Set([language, "eng"])];
-  let languages: string[] | Array<{ code: string; data: Uint8Array }> = codes;
-  if (codes.some(code => !local.includes(code))) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
-    try {
-      languages = await Promise.all(codes.map(async (code) => {
-        const url = local.includes(code) ? `/ocr/${code}.traineddata.gz`
-          : `https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@4.1.0/${code}.traineddata`;
-        const response = await fetch(url, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Could not load the ${code} OCR language model.`);
-        return { code, data: new Uint8Array(await response.arrayBuffer()) };
-      }));
-    } finally {
-      controller.abort();
-      clearTimeout(timeout);
-    }
-  }
+  const bundled = codes.every(code => local.includes(code));
   let rejectInitialization: (reason: unknown) => void = () => {};
   const initializationError = new Promise<never>((_, reject) => { rejectInitialization = reject; });
-  const startingWorker = createWorker(languages, undefined, {
+  const startingWorker = createWorker(codes, undefined, {
     workerPath: "/ocr/worker.min.js",
     corePath: "/ocr/",
-    langPath: "/ocr/",
+    langPath: bundled ? "/ocr/" : "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@4.1.0/",
+    gzip: bundled,
     errorHandler: rejectInitialization,
   });
   const worker = await withOcrTimeout(Promise.race([startingWorker, initializationError]), 30_000).catch(error => {
