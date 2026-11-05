@@ -320,10 +320,10 @@ const guides: Record<string, Guide> = {
     summary: "Convert a PDF into a downloadable Word document using the browser-based conversion workspace, then check the output before editing or submitting it.",
     bestFor: "Updating a document when you have permission to edit it or reusing text from a readable PDF.",
     supports: "PDF files (.pdf); output is a Word document (.docx).",
-    workflow: ["Add a PDF to the conversion workspace.", "Run the conversion and download the DOCX output.", "Open the file in a compatible editor and review layout, text and tables."],
+    workflow: ["Add a PDF to the conversion workspace.", "Choose the scan language if needed, then convert and download the DOCX.", "Open the file in a compatible editor and review layout, text and tables."],
     example: "Convert a simple text-based PDF letter to DOCX so you can update a date or contact detail with permission.",
-    limits: "PDF layout and Word layout are different. Scanned PDFs, unusual fonts, complex tables and multi-column layouts can require manual cleanup after conversion.",
-    faqs: [["Can I convert a scanned PDF?", "The tool can process the file, but scanned pages and complex layouts may need additional editing."], ["What is the output format?", "DOCX, which can be opened in Word-compatible editors."], ["Will the layout be identical?", "Not always. Check page breaks, tables, fonts and text flow."], ["Should I retain the original PDF?", "Yes. Keep the original for reference."], ["Where does conversion run?", browserPrivacy]],
+    limits: "Keep Original Pages reconstructs the layout where possible. If a page cannot be reconstructed reliably, the download identifies it and preserves it as an image in Word.",
+    faqs: [["Can I convert a scanned PDF?", "Yes. OCR reads English, Hindi and Gujarati by default. For other languages, choose the scan language before converting. The browser downloads that OCR model as needed."], ["What is the output format?", "DOCX, which can be opened in Word-compatible editors."], ["How do I keep the original appearance?", "Use Preserve Exact Appearance to keep each PDF page as an image in Word. Choose Keep Original Pages for editable text where possible."], ["Should I retain the original PDF?", "Yes. Keep the original for reference."], ["Where does conversion run?", browserPrivacy]],
     related: pdfRelated,
   },
   "resize-image": {

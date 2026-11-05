@@ -32,7 +32,7 @@ export type ConversionQualityReport = {
 };
 
 // Squares and checkboxes can be intentional source characters.
-const UNSAFE_CHARACTER = /[\uFFFD\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/u;
+const UNSAFE_CHARACTER = /[\x00-\x08\x0B\x0C\x0E-\x1F\uD800-\uDFFF\uE000-\uF8FF\uFFFD-\uFFFF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/u;
 const ORPHAN_MARK = /(?:^|\s)\p{Mark}/u;
 
 export function evaluateConversionQuality(pages: ValidatablePage[]): ConversionQualityReport {
@@ -57,9 +57,10 @@ export function evaluateConversionQuality(pages: ValidatablePage[]): ConversionQ
     ? ocrPages.reduce((sum, page) => sum + Math.max(0, Math.min(1, (page.ocr?.confidence ?? 0) / 100)), 0) / ocrPages.length
     : 1;
   if (ocrConfidence < 0.65) issues.push("Scanned text recognition confidence is low; visual content should be reviewed.");
-  const unicodeConfidence = pages.length
-    ? pages.reduce((sum, page) => sum + (page.analysis?.unicodeConfidence ?? 1), 0) / pages.length
-    : 0;
+  const nativePages = pages.filter(page => page.analysis?.hasSelectableText);
+  const unicodeConfidence = nativePages.length
+    ? nativePages.reduce((sum, page) => sum + (page.analysis?.unicodeConfidence ?? 1), 0) / nativePages.length
+    : 1;
   if (unicodeConfidence < 0.98) issues.push("The source contains incomplete Unicode mappings. Recovered text requires comparison with the PDF.");
   const signals = { textIntegrity, glyphCoverage, layoutPreservation, tablePreservation, imagePreservation, pageGeometry, ocrConfidence };
   const score = Math.round((textIntegrity * 0.25 + glyphCoverage * 0.2 + layoutPreservation * 0.15

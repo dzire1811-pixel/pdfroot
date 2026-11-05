@@ -3,11 +3,15 @@ import {
   PDFArray,
   PDFDict,
   PDFDocument,
+  PDFHexString,
   PDFName,
+  PDFObjectParser,
   PDFRawStream,
   PDFStream,
+  PDFString,
 } from "pdf-lib";
-import { repairIndicText, validateGujaratiText } from "./unicode";
+import ByteStream from "pdf-lib/cjs/core/parser/ByteStream";
+import { hasReliableUnicodeMapping, repairIndicText, validateGujaratiText } from "./unicode";
 
 type PdfGlyph = { originalCharCode?: number; unicode?: string; width?: number };
 type OperatorList = { fnArray: number[]; argsArray: unknown[][] };
@@ -115,6 +119,94 @@ function streamBytes(stream: PDFStream) {
   return stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
 }
 
+type MarkedContent = { type: "beginMarkedContent" | "beginMarkedContentProps" | "endMarkedContent"; tag?: string; actualText?: string };
+type TextGeometry = { str: string; width: number; height: number; transform: number[]; hasEOL?: boolean; unicodeReliable?: boolean };
+
+class ContentTokens extends PDFObjectParser {
+  next() {
+    this.skipWhitespaceAndComments();
+    if (this.bytes.done()) return undefined;
+    if ([40, 47, 60, 91].includes(this.bytes.peek())) return this.parseObject();
+    let token = "";
+    while (!this.bytes.done() && !/[\0\t\n\f\r ()<>\[\]{}/%]/.test(String.fromCharCode(this.bytes.peek()))) {
+      token += String.fromCharCode(this.bytes.next());
+    }
+    if (!token) this.bytes.next();
+    return token;
+  }
+}
+
+function pageActualText(document: PDFDocument, pageIndex: number) {
+  const page = document.getPages()[pageIndex];
+  const contents = page?.node.Contents();
+  if (!contents) return undefined;
+  const streams = contents instanceof PDFArray ? contents.asArray().map(ref => document.context.lookup(ref)) : [contents];
+  const buffers = streams.filter((stream): stream is PDFStream => stream instanceof PDFStream).map(streamBytes);
+  const properties = page.node.Resources()?.lookupMaybe(PDFName.of("Properties"), PDFDict);
+  if (!properties && !buffers.some(buffer => new TextDecoder().decode(buffer).includes("ActualText"))) return undefined;
+  const markers: MarkedContent[] = [];
+  for (const buffer of buffers) {
+    const tokens = new ContentTokens(ByteStream.of(buffer), document.context);
+    let operands: Array<Exclude<ReturnType<ContentTokens["next"]>, string | undefined>> = [];
+    for (let token = tokens.next(); token !== undefined; token = tokens.next()) {
+      if (typeof token !== "string") {
+        operands.push(token);
+        continue;
+      }
+      if (token === "BI") return undefined; // Inline image bytes are not PDF tokens.
+      if (token === "EMC") markers.push({ type: "endMarkedContent" });
+      if (token === "BMC" || token === "BDC") {
+        const [tag, reference] = operands;
+        if (!(tag instanceof PDFName)) return undefined;
+        const dictionary = reference instanceof PDFName ? properties?.lookupMaybe(reference, PDFDict) : reference;
+        const actual = dictionary instanceof PDFDict ? dictionary.lookup(PDFName.of("ActualText")) : undefined;
+        const actualText = actual instanceof PDFString || actual instanceof PDFHexString ? actual.decodeText() : undefined;
+        markers.push({ type: token === "BMC" ? "beginMarkedContent" : "beginMarkedContentProps", tag: tag.decodeText(), actualText });
+      }
+      operands = [];
+    }
+  }
+  return markers.some(marker => marker.actualText !== undefined) ? markers : undefined;
+}
+
+/** PDF.js exposes marked-content boundaries but omits their ActualText values. */
+export function applyPdfActualText<T extends TextGeometry>(items: Array<T | { type: string; tag?: string }>, markers: MarkedContent[]) {
+  const unmarked = items.filter((item): item is T => "str" in item);
+  const groups: Array<{ marker?: MarkedContent; items: T[] }> = [{ items: [] }];
+  let markerIndex = 0;
+  for (const item of items) {
+    const group = groups.at(-1)!;
+    if ("str" in item) {
+      group.items.push(item);
+      continue;
+    }
+    const marker = markers[markerIndex++];
+    if (!marker || marker.type !== item.type || marker.tag !== item.tag) return unmarked;
+    if (marker.type !== "endMarkedContent") {
+      groups.push({ marker, items: [] });
+      continue;
+    }
+    if (groups.length === 1) return unmarked;
+    groups.pop();
+    const parent = groups.at(-1)!;
+    const actualText = group.marker?.actualText;
+    const first = group.items.findIndex(text => text.height > 0 && text.str.trim());
+    const last = group.items.findLastIndex(text => text.height > 0 && text.str.trim());
+    const lead = group.items[first];
+    const span = group.items.slice(first, last + 1);
+    if (!actualText || !hasReliableUnicodeMapping(actualText) || !lead || span.some(text =>
+      Math.abs(text.transform[5] - lead.transform[5]) > 1 || text.transform[4] < lead.transform[4])) {
+      parent.items.push(...group.items);
+      continue;
+    }
+    const right = Math.max(...span.map(text => text.transform[4] + text.width));
+    parent.items.push(...group.items.slice(0, first), {
+      ...lead, str: actualText, width: right - lead.transform[4], hasEOL: group.items[last].hasEOL, unicodeReliable: true,
+    }, ...group.items.slice(last + 1));
+  }
+  return groups.length === 1 && markerIndex === markers.length ? groups[0].items : unmarked;
+}
+
 function descendantFont(font: PDFDict, document: PDFDocument) {
   const descendants = document.context.lookup(font.get(PDFName.of("DescendantFonts"))!) as PDFArray | undefined;
   return descendants?.size() ? document.context.lookup(descendants.get(0)) as PDFDict : undefined;
@@ -210,6 +302,7 @@ function pageGlyphStreams(
 export async function createPdfGlyphUnicodeResolver(pdfBytes: Uint8Array) {
   const document = await PDFDocument.load(pdfBytes, { ignoreEncryption: true, updateMetadata: false });
   return {
+    pageActualText: (pageIndex: number) => pageActualText(document, pageIndex),
     pageStreams(pageIndex: number, operatorList: OperatorList, ops: Ops) {
       return pageGlyphStreams(document, pageIndex, operatorList, ops);
     },
@@ -239,7 +332,7 @@ function matchGlyphs(records: GlyphRecord[], start: number, target: string) {
 }
 
 /** Applies cmap corrections to PDF.js TextItems while retaining PDF.js geometry and item grouping. */
-export function correctTextItemsFromGlyphStreams<T extends { str: string; fontName: string }>(items: T[], streams: PageGlyphStreams) {
+export function correctTextItemsFromGlyphStreams<T extends { str: string; fontName: string; unicodeReliable?: boolean }>(items: T[], streams: PageGlyphStreams) {
   const cursors = new Map<string, number>();
   const unreliableFonts = new Set(items
     .filter((item) => validateGujaratiText(item.str).length > 0)
@@ -248,6 +341,7 @@ export function correctTextItemsFromGlyphStreams<T extends { str: string; fontNa
     .filter(([, records]) => records.some((record) => record.zeroWidthBase))
     .map(([fontName]) => fontName));
   return items.map((item) => {
+    if (item.unicodeReliable === true) return item;
     const records = streams.get(item.fontName);
     if (!records?.length || !item.str.trim()) return item;
     if (structurallyUnsafeFonts.has(item.fontName)) return { ...item, unicodeReliable: false };
