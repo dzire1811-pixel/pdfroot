@@ -16,7 +16,6 @@ type ExportModalView = "choice" | "separate";
 type SeparateExportLocationMode = "file" | "directory";
 
 const cropImageDirectoryTool = imageTools.find((tool) => tool.slug === "crop-image")!;
-const maxCopiesPerAction = 50;
 
 type CropBox = {
   x: number;
@@ -1603,12 +1602,7 @@ export function CropImageTool() {
     setActiveId(id);
   }
 
-  function uniqueOutputFileName(candidate: string, imageId: string, images = selectedImages) {
-    const occupied = new Set(
-      images
-        .filter((image) => image.id !== imageId)
-        .map((image) => image.outputFileName.toLocaleLowerCase()),
-    );
+  function uniqueOutputFileName(candidate: string, occupied: ReadonlySet<string>) {
     if (!occupied.has(candidate.toLocaleLowerCase())) return candidate;
 
     const extensionMatch = candidate.match(/(\.[^.]+)$/);
@@ -1623,23 +1617,11 @@ export function CropImageTool() {
     return uniqueName;
   }
 
-  function uniqueDuplicateSourceName(sourceFile: File, images = selectedImages) {
-    const extensionMatch = sourceFile.name.match(/(\.[^.]+)$/);
-    const extension = extensionMatch?.[1] ?? "";
-    const stem = extension ? sourceFile.name.slice(0, -extension.length) : sourceFile.name;
-    const occupied = new Set(images.map((image) => image.file.name.toLocaleLowerCase()));
-    let candidate = `${stem}-copy${extension}`;
-    let suffix = 2;
-
-    while (occupied.has(candidate.toLocaleLowerCase())) {
-      candidate = `${stem}-copy-${suffix}${extension}`;
-      suffix += 1;
-    }
-    return candidate;
-  }
-
   function duplicateOriginalImage(sourceImage: SelectedImage, count: number) {
-    if (!Number.isInteger(count) || count < 1 || count > maxCopiesPerAction) return;
+    if (!Number.isSafeInteger(count) || count < 1) {
+      setError("Enter a positive whole number of copies.");
+      return;
+    }
 
     invalidateRedoHistory();
     setError(null);
@@ -1651,30 +1633,41 @@ export function CropImageTool() {
       deviceSaveNoticeTimeoutRef.current = null;
     }
 
-    const occupiedImages = [...selectedImages];
-    const duplicates = Array.from({ length: count }, () => {
+    const sourceName = sourceImage.file.name;
+    const extension = sourceName.match(/(\.[^.]+)$/)?.[1] ?? "";
+    const stem = extension ? sourceName.slice(0, -extension.length) : sourceName;
+    const occupiedSources = new Set(selectedImages.map((image) => image.file.name.toLocaleLowerCase()));
+    const occupiedOutputs = new Set(selectedImages.map((image) => image.outputFileName.toLocaleLowerCase()));
+    const duplicates: SelectedImage[] = [];
+    let copyNumber = 1;
+
+    for (let index = 0; index < count; index += 1) {
+      let copyName: string;
+      do {
+        const suffix = copyNumber === 1 ? "" : `-${copyNumber}`;
+        copyName = `${stem}-copy${suffix}${extension}`;
+        copyNumber += 1;
+      } while (occupiedSources.has(copyName.toLocaleLowerCase()));
+
       const id = createImageId("copy");
-      const file = new File([sourceImage.file], uniqueDuplicateSourceName(sourceImage.file, occupiedImages), {
+      const file = new File([sourceImage.file], copyName, {
         type: sourceImage.file.type,
         lastModified: sourceImage.file.lastModified,
       });
-      const duplicate: SelectedImage = {
+      const outputIndex = selectedImages.length + index;
+      const outputFileName = uniqueOutputFileName(defaultOutputFileName(file, outputIndex, outputIndex + 1), occupiedOutputs);
+      occupiedOutputs.add(outputFileName.toLocaleLowerCase());
+      duplicates.push({
         ...sourceImage,
         id,
         file,
-        outputFileName: uniqueOutputFileName(
-          defaultOutputFileName(file, occupiedImages.length, occupiedImages.length + 1),
-          id,
-          occupiedImages,
-        ),
+        outputFileName,
         previewUrl: URL.createObjectURL(file),
         dimensions: { ...sourceImage.dimensions },
         cropBox: sourceImage.cropBox ? { ...sourceImage.cropBox } : null,
         adjustments: { ...sourceImage.adjustments },
-      };
-      occupiedImages.push(duplicate);
-      return duplicate;
-    });
+      });
+    }
 
     setSelectedImages((current) => {
       const sourceIndex = current.findIndex((image) => image.id === sourceImage.id);
@@ -1687,9 +1680,7 @@ export function CropImageTool() {
       while (insertionIndex < current.length && current[insertionIndex].copyGroupId === copyGroupId) {
         insertionIndex += 1;
       }
-      const next = [...current];
-      next.splice(insertionIndex, 0, ...duplicates);
-      return next;
+      return current.slice(0, insertionIndex).concat(duplicates, current.slice(insertionIndex));
     });
     setDragState(null);
     setPanState(null);
@@ -1719,7 +1710,6 @@ export function CropImageTool() {
             type="number"
             inputMode="numeric"
             min={1}
-            max={maxCopiesPerAction}
             step={1}
             defaultValue={1}
             required
@@ -1745,7 +1735,10 @@ export function CropImageTool() {
       sourceOutputExtension(image.file),
       `${safeBaseName(image.file.name)}-cropped`,
     );
-    const outputFileName = uniqueOutputFileName(sanitized, image.id);
+    const occupiedOutputs = new Set(selectedImages
+      .filter((selectedImage) => selectedImage.id !== image.id)
+      .map((selectedImage) => selectedImage.outputFileName.toLocaleLowerCase()));
+    const outputFileName = uniqueOutputFileName(sanitized, occupiedOutputs);
     setSelectedImages((current) => current.map((item) => (item.id === image.id ? { ...item, outputFileName } : item)));
     setResults((current) => current.map((result) => (
       result.id === image.id
