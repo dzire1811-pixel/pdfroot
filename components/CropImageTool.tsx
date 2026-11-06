@@ -16,6 +16,7 @@ type ExportModalView = "choice" | "separate";
 type SeparateExportLocationMode = "file" | "directory";
 
 const cropImageDirectoryTool = imageTools.find((tool) => tool.slug === "crop-image")!;
+const maxCopiesPerAction = 50;
 
 type CropBox = {
   x: number;
@@ -1637,7 +1638,9 @@ export function CropImageTool() {
     return candidate;
   }
 
-  function duplicateOriginalImage(sourceImage: SelectedImage) {
+  function duplicateOriginalImage(sourceImage: SelectedImage, count: number) {
+    if (!Number.isInteger(count) || count < 1 || count > maxCopiesPerAction) return;
+
     invalidateRedoHistory();
     setError(null);
     setEditingOutputId(null);
@@ -1648,43 +1651,35 @@ export function CropImageTool() {
       deviceSaveNoticeTimeoutRef.current = null;
     }
 
-    const duplicateId = createImageId("copy");
-    const duplicateFileName = uniqueDuplicateSourceName(sourceImage.file, selectedImages);
-    const originalFile = new File(
-      [sourceImage.file.slice(0, sourceImage.file.size, sourceImage.file.type)],
-      duplicateFileName,
-      {
+    const occupiedImages = [...selectedImages];
+    const duplicates = Array.from({ length: count }, () => {
+      const id = createImageId("copy");
+      const file = new File([sourceImage.file], uniqueDuplicateSourceName(sourceImage.file, occupiedImages), {
         type: sourceImage.file.type,
         lastModified: sourceImage.file.lastModified,
-      },
-    );
-    const duplicate: SelectedImage = {
-      id: duplicateId,
-      copyGroupId: sourceImage.copyGroupId,
-      file: originalFile,
-      outputFileName: uniqueOutputFileName(
-        defaultOutputFileName(originalFile, selectedImages.length, selectedImages.length + 1),
-        duplicateId,
-        selectedImages,
-      ),
-      previewUrl: URL.createObjectURL(originalFile),
-      dimensions: { ...sourceImage.dimensions },
-      cropBox: sourceImage.cropBox ? { ...sourceImage.cropBox } : null,
-      cropModeEnabled: sourceImage.cropModeEnabled,
-      rotation: sourceImage.rotation,
-      fineRotation: sourceImage.fineRotation,
-      flipHorizontal: sourceImage.flipHorizontal,
-      flipVertical: sourceImage.flipVertical,
-      zoom: sourceImage.zoom,
-      panX: sourceImage.panX,
-      panY: sourceImage.panY,
-      adjustments: { ...sourceImage.adjustments },
-    };
+      });
+      const duplicate: SelectedImage = {
+        ...sourceImage,
+        id,
+        file,
+        outputFileName: uniqueOutputFileName(
+          defaultOutputFileName(file, occupiedImages.length, occupiedImages.length + 1),
+          id,
+          occupiedImages,
+        ),
+        previewUrl: URL.createObjectURL(file),
+        dimensions: { ...sourceImage.dimensions },
+        cropBox: sourceImage.cropBox ? { ...sourceImage.cropBox } : null,
+        adjustments: { ...sourceImage.adjustments },
+      };
+      occupiedImages.push(duplicate);
+      return duplicate;
+    });
 
     setSelectedImages((current) => {
       const sourceIndex = current.findIndex((image) => image.id === sourceImage.id);
       if (sourceIndex < 0) {
-        URL.revokeObjectURL(duplicate.previewUrl);
+        duplicates.forEach((duplicate) => URL.revokeObjectURL(duplicate.previewUrl));
         return current;
       }
       const copyGroupId = current[sourceIndex].copyGroupId;
@@ -1693,12 +1688,54 @@ export function CropImageTool() {
         insertionIndex += 1;
       }
       const next = [...current];
-      next.splice(insertionIndex, 0, duplicate);
+      next.splice(insertionIndex, 0, ...duplicates);
       return next;
     });
     setDragState(null);
     setPanState(null);
     setActiveId(sourceImage.id);
+  }
+
+  function renderCopyControl(image: SelectedImage, standalone = false) {
+    return (
+      <form
+        key={image.id}
+        className={standalone ? "mb-2 flex items-center justify-end gap-1 lg:hidden" : undefined}
+        onClick={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const form = event.currentTarget;
+          const count = Number(new FormData(form).get("copies"));
+          duplicateOriginalImage(image, count);
+          form.reset();
+        }}
+      >
+        <label className={`flex items-center gap-1 text-[0.65rem] font-medium leading-none text-slate-600 ${standalone ? "" : "absolute bottom-1 right-1.5"}`}>
+          Copies
+          <input
+            aria-label={`Number of copies for ${image.file.name}`}
+            name="copies"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={maxCopiesPerAction}
+            step={1}
+            defaultValue={1}
+            required
+            className="h-5 w-8 appearance-none rounded border border-slate-200 bg-white px-1 text-center text-xs focus:border-[#FF2D2D] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+        </label>
+        <button
+          type="submit"
+          aria-label={`Duplicate original image ${image.file.name}`}
+          title="Duplicate original image"
+          className="grid h-7 w-7 shrink-0 place-items-center overflow-visible rounded-md text-slate-400 transition hover:bg-white hover:text-[#FF2D2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
+        >
+          <Copy className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      </form>
+    );
   }
 
   function commitOutputName(image: SelectedImage) {
@@ -3893,6 +3930,7 @@ export function CropImageTool() {
           <div data-crop-image-preview-card="true" className="relative min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-3 sm:shadow-sm">
             {renderMobilePreviewActions()}
             <div className="lg:hidden">{renderDesktopPreviewActions()}</div>
+            {activeImage && selectedImages.length === 1 && renderCopyControl(activeImage, true)}
             <div data-crop-image-preview-container="true" className="relative grid min-h-[20rem] place-items-center overflow-hidden rounded-lg border border-slate-200 bg-slate-200 p-4 pb-16">
               <div
                 ref={setCropFrameNode}
@@ -4023,7 +4061,7 @@ export function CropImageTool() {
                           {completed ? `Completed - ${formatResultSize(completed.sizeKb)}` : "Pending"}
                         </span>
                       </span>
-                      <span data-crop-image-card-actions="true" className="absolute right-1.5 top-1.5 flex shrink-0 flex-row items-center gap-[5px] overflow-visible lg:static lg:col-start-3 lg:row-start-1 lg:self-start lg:justify-self-end">
+                      <div data-crop-image-card-actions="true" className="absolute right-1.5 top-1.5 flex shrink-0 flex-row items-center gap-[5px] overflow-visible lg:static lg:col-start-3 lg:row-start-1 lg:self-start lg:justify-self-end">
                         {editingOutputId !== image.id && (
                           <button
                             type="button"
@@ -4038,18 +4076,7 @@ export function CropImageTool() {
                             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          aria-label={`Duplicate original image ${image.file.name}`}
-                          title="Duplicate original image"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            duplicateOriginalImage(image);
-                          }}
-                          className="grid h-7 w-7 shrink-0 place-items-center overflow-visible rounded-md text-slate-400 transition hover:bg-white hover:text-[#FF2D2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200"
-                        >
-                          <Copy className="h-4 w-4" strokeWidth={2.1} aria-hidden="true" />
-                        </button>
+                        {renderCopyControl(image)}
                         <button
                           type="button"
                           aria-label={`Delete image ${image.file.name}`}
@@ -4062,7 +4089,7 @@ export function CropImageTool() {
                         >
                           <Trash2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
                         </button>
-                      </span>
+                      </div>
                     </div>
                   );
                 })}
