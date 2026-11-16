@@ -106,7 +106,7 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
       value: async function (this: Window, options: {
         suggestedName: string;
         types?: Array<{ description: string; accept: Record<string, string[]> }>;
-      }) => {
+      }) {
         const call: {
           suggestedName: string;
           description?: string;
