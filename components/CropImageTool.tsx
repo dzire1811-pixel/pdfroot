@@ -174,7 +174,7 @@ type SaveDirectoryHandle = {
 };
 
 type CropPickerWindow = Window & {
-  showDirectoryPicker?: (options: { mode: "readwrite" }) => Promise<SaveDirectoryHandle>;
+  showDirectoryPicker?: (options: { id: string; mode: "readwrite" }) => Promise<SaveDirectoryHandle>;
   showSaveFilePicker?: (options: {
     suggestedName: string;
     types: Array<{ description: string; accept: Record<string, string[]> }>;
@@ -1324,21 +1324,35 @@ export function CropImageTool() {
     setDeviceSaveNotice(null);
   }
 
-  async function chooseSeparateExportDirectory() {
-    if (exportInProgressRef.current) return;
+  async function pickSeparateExportDirectory() {
     const pickerWindow: CropPickerWindow = window;
     if (!pickerWindow.showDirectoryPicker) return;
 
+    try {
+      const directory = await pickerWindow.showDirectoryPicker({ id: "pdfroot-crop-output", mode: "readwrite" });
+      setSeparateExportDirectory(directory);
+      setDeviceSaveNotice(null);
+      return directory;
+    } catch (error) {
+      const errorName = (error as { name?: string } | null)?.name;
+      if (errorName === "SecurityError") {
+        showDeviceSaveNotice("Open PDFRoot directly in desktop Chrome or Edge to choose a folder.", false);
+      } else if (errorName === "AbortError") {
+        if (!separateExportDirectory) {
+          showDeviceSaveNotice("Choose a writable folder to save your crops.", false);
+        }
+      } else {
+        showDeviceSaveNotice("The folder could not be opened. Choose a folder you can write to.", false);
+      }
+    }
+  }
+
+  async function changeSeparateExportDirectory() {
+    if (exportInProgressRef.current) return;
     exportInProgressRef.current = true;
     setIsChoosingOutputFolder(true);
     try {
-      const directory = await pickerWindow.showDirectoryPicker({ mode: "readwrite" });
-      setSeparateExportDirectory(directory);
-      setDeviceSaveNotice(null);
-    } catch (error) {
-      if ((error as { name?: string } | null)?.name !== "AbortError") {
-        showDeviceSaveNotice("The folder could not be opened. Choose a folder you can write to.");
-      }
+      await pickSeparateExportDirectory();
     } finally {
       exportInProgressRef.current = false;
       setIsChoosingOutputFolder(false);
@@ -1388,18 +1402,22 @@ export function CropImageTool() {
     }
   }
 
-  async function exportSeparateCrops() {
+  async function exportSeparateCrops(destination: "folder" | "download") {
     if (!exportQueue.length || exportInProgressRef.current) return;
     exportInProgressRef.current = true;
     setIsSavingToDevice(true);
     setDeviceSaveNotice(null);
     const failedResults: CropResult[] = [];
     const failureMessages: string[] = [];
-    const directory = separateExportDirectory;
     const exportOrder = separateExportOrderRef.current;
     let completedCount = 0;
 
     try {
+      const directory = destination === "folder"
+        ? separateExportDirectory ?? await pickSeparateExportDirectory()
+        : null;
+      if (destination === "folder" && !directory) return;
+
       for (const result of exportQueue) {
         try {
           const blob = await encodeSeparateCrop(result, separateExportFormat);
@@ -4135,10 +4153,29 @@ export function CropImageTool() {
 
   function renderExportModal() {
     if (!isExportModalOpen || !exportQueue.length) return null;
-    const canSaveSingleFile = exportQueue.length === 1 && isSaveFilePickerSupported && !separateExportDirectory;
-    const canChooseDestination = canSaveSingleFile || isDirectoryPickerSupported;
+    const canSaveToFolder = Boolean(separateExportDirectory) || isDirectoryPickerSupported;
+    const canSaveSingleFile = separateExportOrderRef.current.size === 1 && isSaveFilePickerSupported && !separateExportDirectory;
+    const canChooseDestination = canSaveToFolder || canSaveSingleFile;
+    const exportCountLabel = `${exportQueue.length} file${exportQueue.length === 1 ? "" : "s"}`;
+    const exportAction = canSaveToFolder ? () => exportSeparateCrops("folder")
+      : canSaveSingleFile ? saveSingleSeparateCropAs
+      : () => exportSeparateCrops("download");
     const isExportBusy = isSavingToDevice || isChoosingOutputFolder;
     const isTargetSizeExport = exportQueue.some((result) => result.targetKb !== null);
+    let exportActionLabel = `Download ${exportCountLabel}`;
+    if (canSaveToFolder) {
+      exportActionLabel = separateExportDirectory ? `Save ${exportCountLabel}` : `Choose folder & save ${exportCountLabel}`;
+    } else if (canSaveSingleFile) {
+      exportActionLabel = "Save as...";
+    }
+    if (isSeparateExportComplete) {
+      exportActionLabel = `Saved ${exportCountLabel}`;
+    } else if (isSavingToDevice) {
+      exportActionLabel = canSaveToFolder && !separateExportDirectory
+        ? "Choose a folder..."
+        : isTargetSizeExport ? "Optimizing…"
+        : canChooseDestination ? "Saving..." : "Downloading...";
+    }
     const closeModal = () => {
       setIsExportModalOpen(false);
       setExportQueue([]);
@@ -4248,56 +4285,36 @@ export function CropImageTool() {
                   </select>
                 </label>
                 <div className="grid gap-2">
-                  <span className="text-sm font-bold text-slate-800">Save location (optional)</span>
+                  <span className="text-sm font-bold text-slate-800">Save location</span>
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <span className={`text-sm ${separateExportDirectory ? "font-black text-slate-950" : "font-semibold text-slate-700"}`}>
-                      {separateExportDirectory
-                        ? `Selected folder: ${separateExportDirectory.name}`
-                        : "No folder selected"}
+                    <span className="min-w-0 break-words text-sm font-semibold text-slate-700">
+                      {separateExportDirectory ? `Selected folder: ${separateExportDirectory.name}`
+                        : canChooseDestination ? "No folder selected" : "Browser download location"}
                     </span>
-                    {canSaveSingleFile && (
+                    {canSaveToFolder && canSaveSingleFile && (
                       <button
                         type="button"
                         onClick={() => void saveSingleSeparateCropAs()}
                         disabled={isExportBusy || isSeparateExportComplete}
                         className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
                       >
-                        {isSavingToDevice
-                          ? (isTargetSizeExport ? "Optimizing…" : "Saving...")
-                          : "Save as..."}
+                        Save as...
                       </button>
                     )}
-                    {isDirectoryPickerSupported && (
+                    {separateExportDirectory && isDirectoryPickerSupported && !isSeparateExportComplete && (
                       <button
                         type="button"
-                        onClick={() => void chooseSeparateExportDirectory()}
-                        disabled={isExportBusy || isSeparateExportComplete}
-                        className={`min-h-9 rounded-lg px-3 py-2 text-sm font-bold transition disabled:opacity-50 ${
-                          separateExportDirectory || canSaveSingleFile
-                            ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                            : "bg-[#FF2D2D] text-white hover:bg-red-600"
-                        }`}
+                        onClick={() => void changeSeparateExportDirectory()}
+                        disabled={isExportBusy}
+                        className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
                       >
-                        {separateExportDirectory ? "Change folder" : "Choose output folder"}
+                        Change folder
                       </button>
                     )}
                   </div>
-                  {separateExportDirectory && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSeparateExportDirectory(null);
-                        setDeviceSaveNotice(null);
-                      }}
-                      disabled={isExportBusy || isSeparateExportComplete}
-                      className="w-fit text-sm font-bold text-[#FF2D2D] transition hover:text-red-700 disabled:opacity-50"
-                    >
-                      Use Downloads instead
-                    </button>
-                  )}
                   {!canChooseDestination && (
                     <p className="text-sm font-medium leading-5 text-slate-600">
-                      Folder selection is not supported in this browser. Files will use the browser&apos;s normal download location.
+                      To save to a selected folder, open PDFRoot in desktop Chrome or Edge.
                     </p>
                   )}
                 </div>
@@ -4318,24 +4335,14 @@ export function CropImageTool() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void exportSeparateCrops()}
+                  onClick={() => void exportAction()}
                   disabled={isExportBusy || isSeparateExportComplete}
-                  className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition disabled:opacity-60 ${
-                    separateExportDirectory || !canChooseDestination
-                      ? "bg-[#FF2D2D] text-white hover:bg-red-600"
-                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:opacity-60"
                 >
-                  {separateExportDirectory
+                  {canChooseDestination
                     ? <Save className="h-5 w-5" aria-hidden="true" />
                     : <Download className="h-5 w-5" aria-hidden="true" />}
-                  {isSavingToDevice
-                    ? (isTargetSizeExport
-                        ? "Optimizing…"
-                        : (separateExportDirectory ? "Saving..." : "Downloading..."))
-                    : (isSeparateExportComplete
-                        ? `Saved ${exportQueue.length} file${exportQueue.length === 1 ? "" : "s"}`
-                        : `${separateExportDirectory ? "Save" : "Download"} ${exportQueue.length} file${exportQueue.length === 1 ? "" : "s"}`)}
+                  {exportActionLabel}
                 </button>
               </div>
             </>
