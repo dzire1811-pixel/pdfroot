@@ -103,7 +103,7 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
     };
     Object.defineProperty(window, "showSaveFilePicker", {
       configurable: true,
-      value: async (options: {
+      value: async function (this: Window, options: {
         suggestedName: string;
         types?: Array<{ description: string; accept: Record<string, string[]> }>;
       }) => {
@@ -119,6 +119,7 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
           description: options.types?.[0]?.description,
           accept: options.types?.[0]?.accept,
         };
+        if (this !== window) throw new TypeError("Save picker must be called on window");
         pickerCalls.save.push(call);
         const testWindow = window as typeof window & { __cropCancelSavePicker?: boolean };
         if (testWindow.__cropCancelSavePicker) {
@@ -141,23 +142,35 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
     if (directoryPickerSupported) {
       Object.defineProperty(window, "showDirectoryPicker", {
         configurable: true,
-        value: async () => {
+        value: async function (this: Window) {
+          if (this !== window) throw new TypeError("Folder picker must be called on window");
           pickerCalls.directory += 1;
           const testWindow = window as typeof window & {
             __cropCancelDirectoryPicker?: boolean;
             __cropDirectoryName?: string;
+            __cropExistingDirectoryFiles?: string[];
+            __cropFailDirectoryFile?: string;
           };
           if (testWindow.__cropCancelDirectoryPicker) {
             testWindow.__cropCancelDirectoryPicker = false;
             throw new DOMException("Folder selection cancelled", "AbortError");
           }
+          const folderFiles = new Set(testWindow.__cropExistingDirectoryFiles);
           return {
             name: testWindow.__cropDirectoryName ?? "Customer Images",
             getFileHandle: async (name: string, pickerOptions?: { create?: boolean }) => {
               if (!pickerOptions?.create) {
-                throw new DOMException("File does not exist", "NotFoundError");
+                if (!folderFiles.has(name)) {
+                  throw new DOMException("File does not exist", "NotFoundError");
+                }
+              } else {
+                if (testWindow.__cropFailDirectoryFile === name) {
+                  testWindow.__cropFailDirectoryFile = undefined;
+                  throw new DOMException("Write access denied", "NotAllowedError");
+                }
+                folderFiles.add(name);
+                pickerCalls.directoryFiles.push(name);
               }
-              pickerCalls.directoryFiles.push(name);
               return {
                 createWritable: async () => ({
                   write: async (blob: Blob) => {
@@ -244,7 +257,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await expect(formatSelector).toHaveValue("jpg");
     await expect(formatSelector.locator("option")).toHaveText(["JPG / JPEG", "PNG"]);
     await expect(singleModal.getByText("Save location (optional)", { exact: true })).toBeVisible();
-    await expect(singleModal.getByText("Default Downloads", { exact: true })).toBeVisible();
+    await expect(singleModal.getByText("No folder selected", { exact: true })).toBeVisible();
     await expect(singleModal.getByRole("button", { name: "Save as..." })).toBeVisible();
     await expect(singleModal.getByRole("button", { name: "Download 1 file" })).toBeVisible();
     await expect(singleModal.getByText("Filename preview", { exact: true })).toHaveCount(0);
@@ -295,7 +308,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
       expect.objectContaining({ fileName: "pending-crop-01.jpg", mimeType: "image/jpeg" }),
     ]);
     await expect(page.getByText(
-      "1 crop image downloaded successfully. Check your browser downloads.",
+      "Download started for 1 crop image. Check your browser downloads.",
       { exact: true },
     )).toBeVisible();
   });
@@ -368,7 +381,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await expect(baseName).toBeVisible();
     await expect(modal.getByRole("combobox", { name: "Output format" })).toBeVisible();
     await expect(modal.getByText("Save location (optional)", { exact: true })).toBeVisible();
-    await expect(modal.getByText("Default Downloads", { exact: true })).toBeVisible();
+    await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Choose output folder" })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Cancel" })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Download 2 files" })).toBeVisible();
@@ -389,6 +402,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
       ],
     });
     await expect(page.locator('[data-crop-image-upload-card="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-crop-image-panel-save-device="true"]')).toContainText("Save 2 Images");
   });
 
   test("a chosen folder receives ordered JPG files without triggering browser downloads", async ({ page }) => {
@@ -431,6 +445,50 @@ test.describe("Crop Image isolated Save and crop history", () => {
     expect(calls.save).toEqual([]);
   });
 
+  test("a folder write failure keeps the destination and retries only the failed crop", async ({ page }) => {
+    await openCropTool(page);
+    await page.locator("#crop-image-upload").setInputFiles([
+      await image("folder-retry-one.png", "#dc2626"),
+      await image("folder-retry-two.png", "#16a34a"),
+    ]);
+    await completeCurrentImage(page);
+    await completeCurrentImage(page);
+    await page.evaluate(() => {
+      const testWindow = window as typeof window & {
+        __cropExistingDirectoryFiles?: string[];
+        __cropFailDirectoryFile?: string;
+      };
+      testWindow.__cropExistingDirectoryFiles = ["customer-01.jpg"];
+      testWindow.__cropFailDirectoryFile = "customer-02.jpg";
+    });
+
+    await page.getByRole("button", { name: "Save 2 Images" }).click();
+    const modal = page.getByRole("dialog");
+    await modal.getByRole("button", { name: "Save separately" }).click();
+    await modal.getByRole("textbox", { name: "Base filename" }).fill("customer");
+    await modal.getByRole("button", { name: "Choose output folder" }).click();
+    await modal.getByRole("button", { name: "Save 2 files" }).click();
+
+    await expect(modal.getByText("Selected folder: Customer Images")).toBeVisible();
+    await expect(modal.getByRole("status")).toHaveText(
+      "1 image saved to Customer Images. 1 crop remains ready to retry.",
+    );
+    expect(await pickerCalls(page)).toMatchObject({
+      directoryFiles: ["customer-01-2.jpg"],
+      downloads: [],
+    });
+
+    await modal.getByRole("button", { name: "Save 1 file" }).click();
+    await expect(modal.getByRole("status")).toHaveText("1 crop image saved to: Customer Images");
+    await modal.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
+    expect(await pickerCalls(page)).toMatchObject({
+      directory: 1,
+      directoryFiles: ["customer-01-2.jpg", "customer-02.jpg"],
+      downloads: [],
+    });
+  });
+
   test("folder cancellation preserves the current destination and Downloads can be restored", async ({ page }) => {
     await openCropTool(page);
     await page.locator("#crop-image-upload").setInputFiles([
@@ -447,7 +505,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
       (window as typeof window & { __cropCancelDirectoryPicker?: boolean }).__cropCancelDirectoryPicker = true;
     });
     await modal.getByRole("button", { name: "Choose output folder" }).click();
-    await expect(modal.getByText("Default Downloads", { exact: true })).toBeVisible();
+    await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Download 2 files" })).toBeVisible();
 
     await modal.getByRole("button", { name: "Choose output folder" }).click();
@@ -460,7 +518,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await expect(modal.getByRole("button", { name: "Save 2 files" })).toBeVisible();
 
     await modal.getByRole("button", { name: "Use Downloads instead" }).click();
-    await expect(modal.getByText("Default Downloads", { exact: true })).toBeVisible();
+    await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
     await modal.getByRole("button", { name: "Download 2 files" }).click();
     await expect(modal).toHaveCount(0);
 
@@ -564,7 +622,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
 
     await modal.getByRole("button", { name: "Download 2 files" }).click();
     await expect(modal.getByRole("status")).toHaveText(
-      "1 image downloaded. 1 crop remains ready to retry.",
+      "Download started for 1 image. 1 crop remains ready to retry.",
     );
     expect((await pickerCalls(page)).downloads).toHaveLength(1);
     await expect(modal.getByRole("button", { name: "Download 1 file" })).toBeEnabled();
