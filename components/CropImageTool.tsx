@@ -13,7 +13,6 @@ type OutputSizeMode = "free" | "fixed";
 type OutputUnit = "pixel" | "cm";
 type SeparateExportFormat = "png" | "jpg";
 type ExportModalView = "choice" | "separate";
-type SeparateExportLocationMode = "file" | "directory";
 
 const cropImageDirectoryTool = imageTools.find((tool) => tool.slug === "crop-image")!;
 
@@ -171,8 +170,53 @@ type SaveFileHandle = {
 
 type SaveDirectoryHandle = {
   name: string;
-  getFileHandle: (name: string, options: { create: true }) => Promise<SaveFileHandle>;
+  getFileHandle: (name: string, options?: { create: boolean }) => Promise<SaveFileHandle>;
 };
+
+type CropPickerWindow = Window & {
+  showDirectoryPicker?: (options: { mode: "readwrite" }) => Promise<SaveDirectoryHandle>;
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<SaveFileHandle>;
+};
+
+async function pickCropSaveFile(suggestedName: string, description: string, accept: Record<string, string[]>) {
+  const pickerWindow: CropPickerWindow = window;
+  try {
+    return await pickerWindow.showSaveFilePicker?.({ suggestedName, types: [{ description, accept }] });
+  } catch (error) {
+    if ((error as { name?: string } | null)?.name !== "AbortError") throw error;
+  }
+}
+
+async function writeCropBlob(fileHandle: SaveFileHandle, blob: Blob) {
+  const writable = await fileHandle.createWritable();
+  try {
+    await writable.write(blob);
+    await writable.close();
+  } catch (error) {
+    await writable.abort?.().catch(() => undefined);
+    throw error;
+  }
+}
+
+async function createCropFileInFolder(directory: SaveDirectoryHandle, fileName: string) {
+  const extensionIndex = fileName.lastIndexOf(".");
+  const stem = fileName.slice(0, extensionIndex);
+  const extension = fileName.slice(extensionIndex);
+  for (let suffix = 1; ; suffix += 1) {
+    const candidate = suffix === 1 ? fileName : `${stem}-${suffix}${extension}`;
+    try {
+      await directory.getFileHandle(candidate);
+    } catch (error) {
+      const name = (error as { name?: string } | null)?.name;
+      if (name === "NotFoundError") return directory.getFileHandle(candidate, { create: true });
+      // A subfolder with this name also occupies the filename.
+      if (name !== "TypeMismatchError") throw error;
+    }
+  }
+}
 
 const standardDpi = 300;
 
@@ -991,6 +1035,7 @@ export function CropImageTool() {
   const resultsRef = useRef<CropResult[]>([]);
   const cropInProgressRef = useRef(false);
   const exportInProgressRef = useRef(false);
+  const separateExportOrderRef = useRef(new Map<string, number>());
   const downloadInProgressRef = useRef(false);
   const cropRevisionRef = useRef(0);
   const savedCropKeysRef = useRef<Set<string>>(new Set());
@@ -1012,7 +1057,7 @@ export function CropImageTool() {
   const [separateExportBaseName, setSeparateExportBaseName] = useState("cropped-image");
   const [separateExportFormat, setSeparateExportFormat] = useState<SeparateExportFormat>("jpg");
   const [separateExportDirectory, setSeparateExportDirectory] = useState<SaveDirectoryHandle | null>(null);
-  const [separateExportLocationMode, setSeparateExportLocationMode] = useState<SeparateExportLocationMode>("directory");
+  const [isChoosingOutputFolder, setIsChoosingOutputFolder] = useState(false);
   const [isSeparateExportComplete, setIsSeparateExportComplete] = useState(false);
   const [isSaveFilePickerSupported, setIsSaveFilePickerSupported] = useState(false);
   const [isDirectoryPickerSupported, setIsDirectoryPickerSupported] = useState(false);
@@ -1121,7 +1166,7 @@ export function CropImageTool() {
     setSeparateExportBaseName("cropped-image");
     setSeparateExportFormat("jpg");
     setSeparateExportDirectory(null);
-    setSeparateExportLocationMode("directory");
+    separateExportOrderRef.current.clear();
     setIsSeparateExportComplete(false);
     setDeviceSaveNotice(null);
     if (deviceSaveNoticeTimeoutRef.current !== null) {
@@ -1227,47 +1272,6 @@ export function CropImageTool() {
     }, 700);
   }
 
-  async function writeBlobWithSaveAs(
-    blob: Blob,
-    suggestedName: string,
-    description: string,
-    extensions: string[],
-  ) {
-    const pickerWindow = window as typeof window & {
-      showSaveFilePicker?: (options: {
-        suggestedName: string;
-        types: Array<{ description: string; accept: Record<string, string[]> }>;
-      }) => Promise<SaveFileHandle>;
-    };
-
-    if (!pickerWindow.showSaveFilePicker) {
-      triggerBlobDownload(blob, suggestedName);
-      return true;
-    }
-
-    try {
-      const fileHandle = await pickerWindow.showSaveFilePicker({
-        suggestedName,
-        types: [{
-          description,
-          accept: { [blob.type || "application/octet-stream"]: extensions },
-        }],
-      });
-      const writable = await fileHandle.createWritable();
-      try {
-        await writable.write(blob);
-        await writable.close();
-      } catch (error) {
-        await writable.abort?.();
-        throw error;
-      }
-      return true;
-    } catch (error) {
-      if ((error as { name?: string } | null)?.name === "AbortError") return false;
-      throw error;
-    }
-  }
-
   async function encodeSeparateCrop(result: CropResult, format: SeparateExportFormat) {
     const image = await loadImage(new File(
       [result.exportSourceBlob],
@@ -1314,66 +1318,42 @@ export function CropImageTool() {
     const firstResult = queuedResults[0];
     setSeparateExportBaseName(firstResult ? `${safeBaseName(firstResult.sourceName)}-crop` : "cropped-image");
     setSeparateExportFormat("jpg");
-    setSeparateExportDirectory(null);
-    setSeparateExportLocationMode(queuedResults.length === 1 ? "file" : "directory");
+    separateExportOrderRef.current = new Map(queuedResults.map((result, index) => [cropResultKey(result), index]));
     setIsSeparateExportComplete(false);
     setExportModalView("separate");
     setDeviceSaveNotice(null);
   }
 
   async function chooseSeparateExportDirectory() {
-    if (isSavingToDevice) return;
-    const directoryPicker = (
-      window as typeof window & {
-        showDirectoryPicker?: (options: { mode: "readwrite" }) => Promise<SaveDirectoryHandle>;
-      }
-    ).showDirectoryPicker;
-    if (!directoryPicker) return;
+    if (exportInProgressRef.current) return;
+    const pickerWindow: CropPickerWindow = window;
+    if (!pickerWindow.showDirectoryPicker) return;
 
+    exportInProgressRef.current = true;
+    setIsChoosingOutputFolder(true);
     try {
-      const directory = await directoryPicker({ mode: "readwrite" });
+      const directory = await pickerWindow.showDirectoryPicker({ mode: "readwrite" });
       setSeparateExportDirectory(directory);
-      setIsSeparateExportComplete(false);
       setDeviceSaveNotice(null);
     } catch (error) {
-      if ((error as { name?: string } | null)?.name === "AbortError") return;
-      showDeviceSaveNotice("The selected folder could not be opened. You can keep using Downloads.");
-    }
-  }
-
-  async function writeBlobToDirectory(directory: SaveDirectoryHandle, blob: Blob, fileName: string) {
-    const fileHandle = await directory.getFileHandle(fileName, { create: true });
-    const writable = await fileHandle.createWritable();
-    try {
-      await writable.write(blob);
-      await writable.close();
-    } catch (error) {
-      try {
-        await writable.abort?.();
-      } catch {
-        // Preserve the original write or close error.
+      if ((error as { name?: string } | null)?.name !== "AbortError") {
+        showDeviceSaveNotice("The folder could not be opened. Choose a folder you can write to.");
       }
-      throw error;
+    } finally {
+      exportInProgressRef.current = false;
+      setIsChoosingOutputFolder(false);
     }
   }
 
   async function saveSingleSeparateCropAs() {
-    if (exportQueue.length !== 1 || exportInProgressRef.current) return;
-    const picker = (
-      window as typeof window & {
-        showSaveFilePicker?: (options: {
-          suggestedName: string;
-          types: Array<{ description: string; accept: Record<string, string[]> }>;
-        }) => Promise<SaveFileHandle>;
-      }
-    ).showSaveFilePicker;
-    if (!picker) return;
+    if (exportQueue.length !== 1 || exportInProgressRef.current || separateExportDirectory) return;
 
     const result = exportQueue[0];
+    const exportOrder = separateExportOrderRef.current;
     const fileName = separateExportFileName(
       separateExportBaseName,
-      0,
-      1,
+      exportOrder.get(cropResultKey(result)) ?? 0,
+      exportOrder.size,
       separateExportFormat,
     );
     const isPng = separateExportFormat === "png";
@@ -1382,76 +1362,60 @@ export function CropImageTool() {
     setDeviceSaveNotice(null);
 
     try {
-      const fileHandle = await picker({
-        suggestedName: fileName,
-        types: [{
-          description: isPng ? "PNG Image" : "JPEG Image",
-          accept: isPng
-            ? { "image/png": [".png"] }
-            : { "image/jpeg": [".jpg", ".jpeg"] },
-        }],
-      });
+      const fileHandle = await pickCropSaveFile(
+        fileName,
+        isPng ? "PNG Image" : "JPEG Image",
+        isPng ? { "image/png": [".png"] } : { "image/jpeg": [".jpg", ".jpeg"] },
+      );
+      if (!fileHandle) return;
       const blob = await encodeSeparateCrop(result, separateExportFormat);
-      const writable = await fileHandle.createWritable();
-      try {
-        await writable.write(blob);
-        await writable.close();
-      } catch (error) {
-        try {
-          await writable.abort?.();
-        } catch {
-          // Preserve the original write or close error.
-        }
-        throw error;
-      }
+      await writeCropBlob(fileHandle, blob);
 
       markResultsSaved([result]);
       showDeviceSaveNotice("1 crop image saved successfully.");
       setIsExportModalOpen(false);
       setExportQueue([]);
       setExportModalView("choice");
-      setSeparateExportLocationMode("directory");
     } catch (error) {
-      if ((error as { name?: string } | null)?.name !== "AbortError") {
-        showDeviceSaveNotice(
-          error instanceof Error
-            ? `${error.message} The crop remains ready to retry.`
-            : "The crop could not be saved. It remains ready to retry.",
-        );
-      }
+      showDeviceSaveNotice(
+        error instanceof Error
+          ? `${error.message} The crop remains ready to retry.`
+          : "The crop could not be saved. It remains ready to retry.",
+      );
     } finally {
       exportInProgressRef.current = false;
       setIsSavingToDevice(false);
     }
   }
 
-  async function downloadSeparateCrops(queuedResults = exportQueue) {
-    if (!queuedResults.length || exportInProgressRef.current) return;
+  async function exportSeparateCrops() {
+    if (!exportQueue.length || exportInProgressRef.current) return;
     exportInProgressRef.current = true;
     setIsSavingToDevice(true);
     setDeviceSaveNotice(null);
     const failedResults: CropResult[] = [];
     const failureMessages: string[] = [];
     const directory = separateExportDirectory;
+    const exportOrder = separateExportOrderRef.current;
     let completedCount = 0;
 
     try {
-      for (let index = 0; index < queuedResults.length; index += 1) {
-        const result = queuedResults[index];
+      for (const result of exportQueue) {
         try {
           const blob = await encodeSeparateCrop(result, separateExportFormat);
           const fileName = separateExportFileName(
             separateExportBaseName,
-            index,
-            queuedResults.length,
+            exportOrder.get(cropResultKey(result)) ?? 0,
+            exportOrder.size,
             separateExportFormat,
           );
           if (directory) {
-            await writeBlobToDirectory(directory, blob, fileName);
+            const fileHandle = await createCropFileInFolder(directory, fileName);
+            await writeCropBlob(fileHandle, blob);
+            markResultsSaved([result]);
           } else {
             triggerBlobDownload(blob, fileName);
           }
-          markResultsSaved([result]);
           completedCount += 1;
         } catch (error) {
           failedResults.push(result);
@@ -1468,18 +1432,18 @@ export function CropImageTool() {
           setIsSeparateExportComplete(true);
         } else {
           showDeviceSaveNotice(
-            `${completedCount} crop image${completedCount === 1 ? "" : "s"} downloaded successfully. Check your browser downloads.`,
+            `Download started for ${completedCount} crop image${completedCount === 1 ? "" : "s"}. Check your browser downloads.`,
           );
           setIsExportModalOpen(false);
           setExportQueue([]);
           setExportModalView("choice");
-          setSeparateExportDirectory(null);
-          setSeparateExportLocationMode("directory");
           setIsSeparateExportComplete(false);
         }
       } else {
         const successLabel = completedCount > 0
-          ? `${completedCount} image${completedCount === 1 ? "" : "s"} ${directory ? "saved" : "downloaded"}. `
+          ? (directory
+              ? `${completedCount} image${completedCount === 1 ? "" : "s"} saved to ${directory.name}. `
+              : `Download started for ${completedCount} image${completedCount === 1 ? "" : "s"}. `)
           : "";
         const targetFailure = failureMessages.some((message) => message.includes("Unable to produce"));
         const failureLabel = targetFailure
@@ -1530,26 +1494,33 @@ export function CropImageTool() {
     return document.output("blob");
   }
 
-  async function saveMultipleAsPdf(queuedResults = exportQueue) {
-    if (!queuedResults.length || isSavingToDevice) return;
+  async function saveMultipleAsPdf() {
+    if (!exportQueue.length || exportInProgressRef.current) return;
+    const fileName = "PDFRoot-cropped-images.pdf";
+    exportInProgressRef.current = true;
     setIsSavingToDevice(true);
     setDeviceSaveNotice(null);
     try {
-      const pdf = await createCombinedCropPdf(queuedResults);
-      const saved = await writeBlobWithSaveAs(
-        pdf,
-        "PDFRoot-cropped-images.pdf",
-        "PDF document",
-        [".pdf"],
-      );
-      if (!saved) return;
-      markResultsSaved(queuedResults);
-      showDeviceSaveNotice(`${queuedResults.length} completed images saved as one PDF.`);
+      const fileHandle = isSaveFilePickerSupported
+        ? await pickCropSaveFile(fileName, "PDF document", { "application/pdf": [".pdf"] })
+        : undefined;
+      if (isSaveFilePickerSupported && !fileHandle) return;
+
+      const pdf = await createCombinedCropPdf(exportQueue);
+      if (fileHandle) {
+        await writeCropBlob(fileHandle, pdf);
+        markResultsSaved(exportQueue);
+        showDeviceSaveNotice(`${exportQueue.length} completed images saved as one PDF.`);
+      } else {
+        triggerBlobDownload(pdf, fileName);
+        showDeviceSaveNotice("Combined PDF download started. Check your browser downloads.");
+      }
       setIsExportModalOpen(false);
       setExportQueue([]);
     } catch {
-      showDeviceSaveNotice("Completed images could not be saved as a PDF. Please try again.");
+      showDeviceSaveNotice("Completed images could not be exported as a PDF. Please try again.");
     } finally {
+      exportInProgressRef.current = false;
       setIsSavingToDevice(false);
     }
   }
@@ -3521,7 +3492,8 @@ export function CropImageTool() {
     const completedCount = results.length;
     const unsavedCompletedCount = results.filter((result) => !savedCropKeys.has(cropResultKey(result))).length;
     const saveToDeviceMessage = deviceSaveNotice ?? (completedCount === 0 ? "Complete at least one image before saving." : null);
-    const saveToDeviceSucceeded = Boolean(deviceSaveNotice && (deviceSaveNotice.includes("saved to") || deviceSaveNotice.includes("saved as") || deviceSaveNotice.includes("downloaded as")));
+    const saveToDeviceSucceeded = Boolean(deviceSaveNotice && (deviceSaveNotice.includes("saved to") || deviceSaveNotice.includes("saved as") || deviceSaveNotice.includes("saved successfully")));
+    const downloadStarted = Boolean(deviceSaveNotice?.startsWith("Download started") && !deviceSaveNotice.includes("ready to retry"));
     const quickActionClass = "relative isolate flex h-20 min-w-0 flex-col items-center justify-center gap-1.5 overflow-visible rounded-xl border border-slate-200 bg-white px-1.5 text-[13px] font-medium text-slate-700 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D] active:scale-[0.98]";
     const precisionButtonClass = "grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition hover:border-red-200 hover:bg-red-50 hover:text-[#FF2D2D]";
 
@@ -3695,7 +3667,7 @@ export function CropImageTool() {
           <p
             role="status"
             data-crop-image-device-save-notice="true"
-            className={`mt-2 flex items-start gap-1.5 text-xs font-medium leading-4 ${saveToDeviceSucceeded ? "text-emerald-700" : deviceSaveNotice ? "text-red-600" : "text-slate-500"}`}
+            className={`mt-2 flex items-start gap-1.5 text-xs font-medium leading-4 ${saveToDeviceSucceeded ? "text-emerald-700" : deviceSaveNotice && !downloadStarted ? "text-red-600" : "text-slate-500"}`}
           >
             {saveToDeviceSucceeded && <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
             {saveToDeviceMessage}
@@ -4163,16 +4135,16 @@ export function CropImageTool() {
 
   function renderExportModal() {
     if (!isExportModalOpen || !exportQueue.length) return null;
-    const usesSingleFilePicker = separateExportLocationMode === "file";
+    const canSaveSingleFile = exportQueue.length === 1 && isSaveFilePickerSupported && !separateExportDirectory;
+    const canChooseDestination = canSaveSingleFile || isDirectoryPickerSupported;
+    const isExportBusy = isSavingToDevice || isChoosingOutputFolder;
     const isTargetSizeExport = exportQueue.some((result) => result.targetKb !== null);
     const closeModal = () => {
       setIsExportModalOpen(false);
       setExportQueue([]);
       setExportModalView("choice");
-      setSeparateExportDirectory(null);
-      setSeparateExportLocationMode("directory");
       setIsSeparateExportComplete(false);
-      setDeviceSaveNotice(null);
+      if (!isSeparateExportComplete) setDeviceSaveNotice(null);
     };
 
     return (
@@ -4205,7 +4177,7 @@ export function CropImageTool() {
             <button
               type="button"
               onClick={closeModal}
-              disabled={isSavingToDevice}
+              disabled={isExportBusy}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-950 disabled:opacity-50"
               aria-label="Close crop export options"
             >
@@ -4218,7 +4190,7 @@ export function CropImageTool() {
                 <button
                   type="button"
                   onClick={() => openSeparateExportSettings()}
-                  disabled={isSavingToDevice}
+                  disabled={isExportBusy}
                   className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-4 py-3 text-sm font-black text-white shadow-[0_12px_30px_rgba(255,45,45,0.22)] transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
                 >
                   <Save className="h-5 w-5" aria-hidden="true" />
@@ -4227,17 +4199,22 @@ export function CropImageTool() {
                 <button
                   type="button"
                   onClick={() => void saveMultipleAsPdf()}
-                  disabled={isSavingToDevice}
+                  disabled={isExportBusy}
                   className="inline-flex min-h-14 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-[#FF2D2D] transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
                 >
                   <FileArchive className="h-5 w-5" aria-hidden="true" />
-                  Combine into PDF
+                  {isSaveFilePickerSupported ? "Combine into PDF" : "Download combined PDF"}
                 </button>
               </div>
+              {deviceSaveNotice && (
+                <p role="status" className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700">
+                  {deviceSaveNotice}
+                </p>
+              )}
               <button
                 type="button"
                 onClick={closeModal}
-                disabled={isSavingToDevice}
+                disabled={isExportBusy}
                 className="mt-3 min-h-11 w-full rounded-xl px-4 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 disabled:opacity-50"
               >
                 Cancel
@@ -4253,7 +4230,7 @@ export function CropImageTool() {
                     aria-label="Base filename"
                     value={separateExportBaseName}
                     onChange={(event) => setSeparateExportBaseName(event.target.value)}
-                    disabled={isSavingToDevice || isSeparateExportComplete}
+                    disabled={isExportBusy || isSeparateExportComplete}
                     className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
                   />
                 </label>
@@ -4263,7 +4240,7 @@ export function CropImageTool() {
                     aria-label="Output format"
                     value={separateExportFormat}
                     onChange={(event) => setSeparateExportFormat(event.target.value as SeparateExportFormat)}
-                    disabled={isSavingToDevice || isSeparateExportComplete}
+                    disabled={isExportBusy || isSeparateExportComplete}
                     className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-950 outline-none transition focus:border-[#FF2D2D] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
                   >
                     <option value="jpg">JPG / JPEG</option>
@@ -4274,15 +4251,15 @@ export function CropImageTool() {
                   <span className="text-sm font-bold text-slate-800">Save location (optional)</span>
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                     <span className={`text-sm ${separateExportDirectory ? "font-black text-slate-950" : "font-semibold text-slate-700"}`}>
-                      {!usesSingleFilePicker && separateExportDirectory
+                      {separateExportDirectory
                         ? `Selected folder: ${separateExportDirectory.name}`
-                        : "Default Downloads"}
+                        : "No folder selected"}
                     </span>
-                    {usesSingleFilePicker && isSaveFilePickerSupported && (
+                    {canSaveSingleFile && (
                       <button
                         type="button"
                         onClick={() => void saveSingleSeparateCropAs()}
-                        disabled={isSavingToDevice || isSeparateExportComplete}
+                        disabled={isExportBusy || isSeparateExportComplete}
                         className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
                       >
                         {isSavingToDevice
@@ -4290,36 +4267,35 @@ export function CropImageTool() {
                           : "Save as..."}
                       </button>
                     )}
-                    {!usesSingleFilePicker && isDirectoryPickerSupported && (
+                    {isDirectoryPickerSupported && (
                       <button
                         type="button"
                         onClick={() => void chooseSeparateExportDirectory()}
-                        disabled={isSavingToDevice || isSeparateExportComplete}
-                        className="min-h-9 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
+                        disabled={isExportBusy || isSeparateExportComplete}
+                        className={`min-h-9 rounded-lg px-3 py-2 text-sm font-bold transition disabled:opacity-50 ${
+                          separateExportDirectory || canSaveSingleFile
+                            ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                            : "bg-[#FF2D2D] text-white hover:bg-red-600"
+                        }`}
                       >
                         {separateExportDirectory ? "Change folder" : "Choose output folder"}
                       </button>
                     )}
                   </div>
-                  {!usesSingleFilePicker && separateExportDirectory && (
+                  {separateExportDirectory && (
                     <button
                       type="button"
                       onClick={() => {
                         setSeparateExportDirectory(null);
                         setDeviceSaveNotice(null);
                       }}
-                      disabled={isSavingToDevice || isSeparateExportComplete}
+                      disabled={isExportBusy || isSeparateExportComplete}
                       className="w-fit text-sm font-bold text-[#FF2D2D] transition hover:text-red-700 disabled:opacity-50"
                     >
                       Use Downloads instead
                     </button>
                   )}
-                  {usesSingleFilePicker && !isSaveFilePickerSupported && (
-                    <p className="text-sm font-medium leading-5 text-slate-600">
-                      Save As is not supported in this browser. Files will use the browser&apos;s normal download location.
-                    </p>
-                  )}
-                  {!usesSingleFilePicker && !isDirectoryPickerSupported && (
+                  {!canChooseDestination && (
                     <p className="text-sm font-medium leading-5 text-slate-600">
                       Folder selection is not supported in this browser. Files will use the browser&apos;s normal download location.
                     </p>
@@ -4335,16 +4311,20 @@ export function CropImageTool() {
                 <button
                   type="button"
                   onClick={closeModal}
-                  disabled={isSavingToDevice}
+                  disabled={isExportBusy}
                   className="min-h-12 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100 disabled:opacity-50"
                 >
                   {isSeparateExportComplete ? "Done" : "Cancel"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => void downloadSeparateCrops()}
-                  disabled={isSavingToDevice || isSeparateExportComplete}
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#FF2D2D] px-5 py-3 text-sm font-black text-white shadow-[0_12px_30px_rgba(255,45,45,0.22)] transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
+                  onClick={() => void exportSeparateCrops()}
+                  disabled={isExportBusy || isSeparateExportComplete}
+                  className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition disabled:opacity-60 ${
+                    separateExportDirectory || !canChooseDestination
+                      ? "bg-[#FF2D2D] text-white hover:bg-red-600"
+                      : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  }`}
                 >
                   {separateExportDirectory
                     ? <Save className="h-5 w-5" aria-hidden="true" />
