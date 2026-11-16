@@ -103,7 +103,7 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
     };
     Object.defineProperty(window, "showSaveFilePicker", {
       configurable: true,
-      value: async function (this: Window, options: {
+      value: directoryPickerSupported ? async function (this: Window, options: {
         suggestedName: string;
         types?: Array<{ description: string; accept: Record<string, string[]> }>;
       }) {
@@ -137,13 +137,15 @@ async function openCropTool(page: Page, options: { directoryPickerSupported?: bo
             abort: async () => undefined,
           }),
         };
-      },
+      } : undefined,
     });
     if (directoryPickerSupported) {
       Object.defineProperty(window, "showDirectoryPicker", {
         configurable: true,
-        value: async function (this: Window) {
-          if (this !== window) throw new TypeError("Folder picker must be called on window");
+        value: async function (this: Window, options: { id: string; mode: string }) {
+          if (this !== window || options.mode !== "readwrite" || options.id !== "pdfroot-crop-output") {
+            throw new TypeError("The folder picker needs write access and a stable ID");
+          }
           pickerCalls.directory += 1;
           const testWindow = window as typeof window & {
             __cropCancelDirectoryPicker?: boolean;
@@ -256,10 +258,10 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const formatSelector = singleModal.getByRole("combobox", { name: "Output format" });
     await expect(formatSelector).toHaveValue("jpg");
     await expect(formatSelector.locator("option")).toHaveText(["JPG / JPEG", "PNG"]);
-    await expect(singleModal.getByText("Save location (optional)", { exact: true })).toBeVisible();
+    await expect(singleModal.getByText("Save location", { exact: true })).toBeVisible();
     await expect(singleModal.getByText("No folder selected", { exact: true })).toBeVisible();
     await expect(singleModal.getByRole("button", { name: "Save as..." })).toBeVisible();
-    await expect(singleModal.getByRole("button", { name: "Download 1 file" })).toBeVisible();
+    await expect(singleModal.getByRole("button", { name: "Choose folder & save 1 file" })).toBeVisible();
     await expect(singleModal.getByText("Filename preview", { exact: true })).toHaveCount(0);
     await singleModal.getByRole("button", { name: "Save as..." }).click();
     await expect(singleModal).toHaveCount(0);
@@ -302,15 +304,12 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await page.getByRole("button", { name: "Save 1 Image" }).click();
     const modal = page.locator('[data-crop-image-export-modal="true"]');
     await expect(modal.getByRole("heading", { name: "Save 1 new crop separately" })).toBeVisible();
-    await modal.getByRole("button", { name: "Download 1 file" }).click();
-    await expect(modal).toHaveCount(0);
-    expect((await pickerCalls(page)).downloads).toEqual([
-      expect.objectContaining({ fileName: "pending-crop-01.jpg", mimeType: "image/jpeg" }),
-    ]);
-    await expect(page.getByText(
-      "Download started for 1 crop image. Check your browser downloads.",
-      { exact: true },
-    )).toBeVisible();
+    await modal.getByRole("button", { name: "Choose folder & save 1 file" }).click();
+    await expect(modal.getByRole("status")).toHaveText("1 crop image saved to: Customer Images");
+    expect(await pickerCalls(page)).toMatchObject({
+      directoryFiles: ["pending-crop-01.jpg"],
+      downloads: [],
+    });
   });
 
   test("cancelling single-crop Save As keeps it eligible and JPG options match the encoded file", async ({ page }) => {
@@ -330,7 +329,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await modal.getByRole("button", { name: "Save as..." }).click();
 
     await expect(modal).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Download 1 file" })).toBeEnabled();
+    await expect(modal.getByRole("button", { name: "Choose folder & save 1 file" })).toBeEnabled();
     expect((await pickerCalls(page)).save).toEqual([
       expect.objectContaining({
         suggestedName: "portrait-01.jpg",
@@ -363,7 +362,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("multiple new crops support explicit PNG downloads, sanitize names, and skip pending crops", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await image("separate-one.png", "#ef4444"),
       await image("separate-two.png", "#22c55e"),
@@ -380,9 +379,9 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const baseName = modal.getByRole("textbox", { name: "Base filename" });
     await expect(baseName).toBeVisible();
     await expect(modal.getByRole("combobox", { name: "Output format" })).toBeVisible();
-    await expect(modal.getByText("Save location (optional)", { exact: true })).toBeVisible();
-    await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Choose output folder" })).toBeVisible();
+    await expect(modal.getByText("Save location", { exact: true })).toBeVisible();
+    await expect(modal.getByText("Browser download location", { exact: true })).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Choose folder & save 2 files" })).toHaveCount(0);
     await expect(modal.getByRole("button", { name: "Cancel" })).toBeVisible();
     await expect(modal.getByRole("button", { name: "Download 2 files" })).toBeVisible();
     await expect(modal.getByText("Filename preview", { exact: true })).toHaveCount(0);
@@ -419,12 +418,9 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await modal.getByRole("button", { name: "Save separately" }).click();
     await modal.getByRole("textbox", { name: "Base filename" }).fill("folder-export");
     await modal.getByRole("combobox", { name: "Output format" }).selectOption("jpg");
-    await modal.getByRole("button", { name: "Choose output folder" }).click();
 
-    await expect(modal.getByText("Selected folder: Customer Images", { exact: true })).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Change folder" })).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Use Downloads instead" })).toBeVisible();
-    await modal.getByRole("button", { name: "Save 2 files" }).click();
+    await expect(modal.getByRole("button", { name: "Download 2 files", exact: true })).toHaveCount(0);
+    await modal.getByRole("button", { name: "Choose folder & save 2 files" }).click();
     await expect(modal).toBeVisible();
     await expect(modal.getByRole("status")).toHaveText(
       "2 crop images saved to: Customer Images",
@@ -466,8 +462,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const modal = page.getByRole("dialog");
     await modal.getByRole("button", { name: "Save separately" }).click();
     await modal.getByRole("textbox", { name: "Base filename" }).fill("customer");
-    await modal.getByRole("button", { name: "Choose output folder" }).click();
-    await modal.getByRole("button", { name: "Save 2 files" }).click();
+    await modal.getByRole("button", { name: "Choose folder & save 2 files" }).click();
 
     await expect(modal.getByText("Selected folder: Customer Images")).toBeVisible();
     await expect(modal.getByRole("status")).toHaveText(
@@ -478,18 +473,23 @@ test.describe("Crop Image isolated Save and crop history", () => {
       downloads: [],
     });
 
+    await page.evaluate(() => {
+      (window as typeof window & { __cropCancelDirectoryPicker?: boolean }).__cropCancelDirectoryPicker = true;
+    });
+    await modal.getByRole("button", { name: "Change folder" }).click();
+    await expect(modal.getByText("Selected folder: Customer Images", { exact: true })).toBeVisible();
     await modal.getByRole("button", { name: "Save 1 file" }).click();
     await expect(modal.getByRole("status")).toHaveText("1 crop image saved to: Customer Images");
     await modal.getByRole("button", { name: "Done" }).click();
     await expect(page.getByRole("button", { name: "Saved", exact: true })).toBeVisible();
     expect(await pickerCalls(page)).toMatchObject({
-      directory: 1,
+      directory: 2,
       directoryFiles: ["customer-01-2.jpg", "customer-02.jpg"],
       downloads: [],
     });
   });
 
-  test("folder cancellation preserves the current destination and Downloads can be restored", async ({ page }) => {
+  test("canceling folder selection keeps every crop ready for the next save", async ({ page }) => {
     await openCropTool(page);
     await page.locator("#crop-image-upload").setInputFiles([
       await image("cancel-one.png", "#f97316"),
@@ -499,33 +499,25 @@ test.describe("Crop Image isolated Save and crop history", () => {
     await completeCurrentImage(page);
 
     await page.getByRole("button", { name: "Save 2 Images" }).click();
-    const modal = page.locator('[data-crop-image-export-modal="true"]');
+    const modal = page.getByRole("dialog");
     await modal.getByRole("button", { name: "Save separately" }).click();
     await page.evaluate(() => {
       (window as typeof window & { __cropCancelDirectoryPicker?: boolean }).__cropCancelDirectoryPicker = true;
     });
-    await modal.getByRole("button", { name: "Choose output folder" }).click();
+    const saveToFolder = modal.getByRole("button", { name: "Choose folder & save 2 files" });
+    await saveToFolder.click();
+    await expect(modal.getByRole("status")).toHaveText("Choose a writable folder to save your crops.");
     await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Download 2 files" })).toBeVisible();
+    await expect(saveToFolder).toBeEnabled();
+    expect(await pickerCalls(page)).toMatchObject({ directory: 1, directoryFiles: [], downloads: [] });
 
-    await modal.getByRole("button", { name: "Choose output folder" }).click();
-    await expect(modal.getByText("Selected folder: Customer Images", { exact: true })).toBeVisible();
-    await page.evaluate(() => {
-      (window as typeof window & { __cropCancelDirectoryPicker?: boolean }).__cropCancelDirectoryPicker = true;
+    await saveToFolder.click();
+    await expect(modal.getByRole("status")).toHaveText("2 crop images saved to: Customer Images");
+    expect(await pickerCalls(page)).toMatchObject({
+      directory: 2,
+      directoryFiles: ["cancel-one-crop-01.jpg", "cancel-one-crop-02.jpg"],
+      downloads: [],
     });
-    await modal.getByRole("button", { name: "Change folder" }).click();
-    await expect(modal.getByText("Selected folder: Customer Images", { exact: true })).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Save 2 files" })).toBeVisible();
-
-    await modal.getByRole("button", { name: "Use Downloads instead" }).click();
-    await expect(modal.getByText("No folder selected", { exact: true })).toBeVisible();
-    await modal.getByRole("button", { name: "Download 2 files" }).click();
-    await expect(modal).toHaveCount(0);
-
-    const calls = await pickerCalls(page);
-    expect(calls.directory).toBe(3);
-    expect(calls.directoryFiles).toEqual([]);
-    expect(calls.downloads).toHaveLength(2);
   });
 
   test("unsupported browsers explain the limitation and retain direct downloads", async ({ page }) => {
@@ -541,10 +533,10 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const modal = page.locator('[data-crop-image-export-modal="true"]');
     await modal.getByRole("button", { name: "Save separately" }).click();
     await expect(modal.getByText(
-      "Folder selection is not supported in this browser. Files will use the browser's normal download location.",
+      "To save to a selected folder, open PDFRoot in desktop Chrome or Edge.",
       { exact: true },
     )).toBeVisible();
-    await expect(modal.getByRole("button", { name: "Choose output folder" })).toHaveCount(0);
+    await expect(modal.getByRole("button", { name: "Choose folder & save 2 files" })).toHaveCount(0);
     await modal.getByRole("button", { name: "Download 2 files" }).click();
     await expect(modal).toHaveCount(0);
 
@@ -554,7 +546,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("JPG encoding matches its extension and rapid clicks do not duplicate downloads", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await image("jpg-one.png", "#7c3aed"),
       await image("jpg-two.png", "#0891b2"),
@@ -586,7 +578,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("an encoding failure leaves only the failed crop ready for retry", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await image("retry-one.png", "#dc2626"),
       await image("retry-two.png", "#16a34a"),
@@ -636,7 +628,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("a 50 KB JPG direct download uses measured iterative encoding within tolerance", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await noisyImage("target-50.png"),
     ]);
@@ -670,7 +662,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("JPG target encoding reduces dimensions proportionally when minimum quality is too large", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await noisyImage("dimension-target.png"),
     ]);
@@ -697,7 +689,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("an impossible target reports a local error and leaves the completed crop retryable", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await noisyImage("impossible-target.png"),
     ]);
@@ -733,8 +725,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
     const modal = page.locator('[data-crop-image-export-modal="true"]');
     await modal.getByRole("button", { name: "Save separately" }).click();
     await modal.getByRole("combobox", { name: "Output format" }).selectOption("png");
-    await modal.getByRole("button", { name: "Choose output folder" }).click();
-    await modal.getByRole("button", { name: "Save 2 files" }).click();
+    await modal.getByRole("button", { name: "Choose folder & save 2 files" }).click();
 
     await expect(modal.getByRole("status")).toHaveText(
       "2 crop images saved to: Customer Images",
@@ -753,7 +744,7 @@ test.describe("Crop Image isolated Save and crop history", () => {
   });
 
   test("transparent pixels are composited onto white for the default JPG export", async ({ page }) => {
-    await openCropTool(page);
+    await openCropTool(page, { directoryPickerSupported: false });
     await page.locator("#crop-image-upload").setInputFiles([
       await noisyImage("transparent.png", true),
     ]);
