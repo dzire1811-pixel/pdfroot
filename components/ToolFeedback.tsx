@@ -1,225 +1,121 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Star } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Star } from "lucide-react";
+import type { ToolRating } from "@/lib/tool-review-types";
 
-import type { ToolReviews } from "@/lib/tool-review-types";
+type RatingProps = { toolName: string; toolSlug: string };
+const stars = [1, 2, 3, 4, 5];
 
-const ratingValues = [1, 2, 3, 4, 5] as const;
-
-type FeedbackProps = { toolName: string; toolSlug: string };
-
-export function ToolFeedback(props: FeedbackProps) {
-  return <FeedbackPanel key={props.toolSlug} {...props} />;
+export function ToolFeedback(props: RatingProps) {
+  return <RatingRow key={props.toolSlug} {...props} />;
 }
 
-function FeedbackPanel({ toolName, toolSlug }: FeedbackProps) {
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [submissionState, setSubmissionState] = useState<"idle" | "submitting" | "submitted">("idle");
-  const submissionStartedRef = useRef(false);
-  const visibleRating = hoveredRating || rating;
+function RatingRow({ toolName, toolSlug }: RatingProps) {
+  const row = useRef<HTMLElement>(null);
+  const read = useRef<AbortController | null>(null);
+  const requestId = useRef("");
+  const busy = useRef(false);
+  const [summary, setSummary] = useState<ToolRating | null>(null);
+  const [preview, setPreview] = useState(0);
+  const [state, setState] = useState<"ready" | "saving" | "voted">("ready");
+  const [error, setError] = useState("");
+  const storageKey = `pdfroot:tool-vote:${toolSlug}`;
 
-  const panelRef = useRef<HTMLElement>(null);
-  const activeRead = useRef<AbortController | null>(null);
-  const lastAttempt = useRef<{ payload: string; id: string } | null>(null);
-  const [page, setPage] = useState<ToolReviews | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [readError, setReadError] = useState("");
-  const [submitError, setSubmitError] = useState("");
+  useEffect(() => {
+    try {
+      const previous = localStorage.getItem(storageKey);
+      if (previous === "voted") setState("voted");
+      else if (previous) requestId.current = previous;
+    } catch { /* Voting also works when browser storage is unavailable. */ }
 
-  const loadReviews = useCallback(async (before: string | null = null) => {
-    activeRead.current?.abort();
     const controller = new AbortController();
-    activeRead.current = controller;
-    setLoading(true);
-    setReadError("");
-    try {
-      const params = new URLSearchParams({ tool: toolSlug });
-      if (before) params.set("before", before);
-      const response = await fetch(`/api/tool-reviews?${params}`, { signal: controller.signal, cache: "no-store" });
-      if (!response.ok) throw new Error();
-      const fresh: ToolReviews = await response.json();
-      if (!controller.signal.aborted) {
-        setPage(previous => before && previous ? { ...fresh, reviews: [...previous.reviews, ...fresh.reviews] } : fresh);
-      }
-    } catch {
-      if (!controller.signal.aborted) setReadError("Could not load reviews.");
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }, [toolSlug]);
-
-  useEffect(() => {
-    const panel = panelRef.current;
-    if (!panel) return;
+    read.current = controller;
     const observer = new IntersectionObserver(entries => {
-      if (entries.some(entry => entry.isIntersecting)) {
-        observer.disconnect();
-        void loadReviews();
-      }
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      fetch(`/api/tool-reviews?tool=${encodeURIComponent(toolSlug)}`, { signal: controller.signal, cache: "no-store" })
+        .then(async response => {
+          if (!response.ok) throw new Error();
+          const data: ToolRating = await response.json();
+          if (!controller.signal.aborted) setSummary(data);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setError("Ratings unavailable.");
+        });
     }, { rootMargin: "240px" });
-    observer.observe(panel);
-    return () => { observer.disconnect(); activeRead.current?.abort(); };
-  }, [loadReviews]);
+    if (row.current) observer.observe(row.current);
+    return () => { observer.disconnect(); controller.abort(); };
+  }, [toolSlug, storageKey]);
 
-  useEffect(() => {
-    if (submissionState !== "submitted") return;
-
-    const resetTimer = window.setTimeout(() => {
-      setRating(0);
-      setHoveredRating(0);
-      setSubmissionState("idle");
-      submissionStartedRef.current = false;
-    }, 3000);
-
-    return () => window.clearTimeout(resetTimer);
-  }, [submissionState]);
-
-  async function submitFeedback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (submissionStartedRef.current || rating === 0) return;
-
-    submissionStartedRef.current = true;
-    setSubmissionState("submitting");
-    const formData = new FormData(event.currentTarget);
-    const feedback = String(formData.get("feedback") ?? "").trim();
-    const payload = JSON.stringify({ tool: toolSlug, rating, comment: feedback });
-    setSubmitError("");
+  async function vote(rating: number) {
+    if (busy.current || state !== "ready") return;
+    busy.current = true;
+    setState("saving");
+    setPreview(rating);
+    setError("");
     try {
-      if (lastAttempt.current?.payload !== payload) {
-        lastAttempt.current = { payload, id: crypto.randomUUID() };
-      }
+      requestId.current ||= crypto.randomUUID();
+      try { localStorage.setItem(storageKey, requestId.current); } catch { /* Optional storage. */ }
       const response = await fetch("/api/tool-reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: toolSlug, rating, comment: feedback, requestId: lastAttempt.current.id }),
+        body: JSON.stringify({ tool: toolSlug, rating, requestId: requestId.current }),
       });
       if (!response.ok) {
-        throw new Error(response.status === 429 ? "Too many ratings. Please try again later." : "Could not submit your rating. Please try again.");
+        throw new Error(response.status === 429 ? "Too many votes. Try later." : "Vote failed. Tap a star to retry.");
       }
-      const fresh: ToolReviews = await response.json();
-      activeRead.current?.abort();
-      setPage(fresh);
-      setReadError("");
-      setLoading(false);
-      lastAttempt.current = null;
-      setSubmissionState("submitted");
-    } catch (error) {
-      setSubmitError(error instanceof TypeError ? "Check your connection and try again." : error instanceof Error ? error.message : "Please try again.");
-      submissionStartedRef.current = false;
-      setSubmissionState("idle");
+      const data: ToolRating = await response.json();
+      read.current?.abort();
+      setSummary(data);
+      setError("");
+      setState("voted");
+      try { localStorage.setItem(storageKey, "voted"); } catch { /* Optional storage. */ }
+    } catch (cause) {
+      setError(cause instanceof Error && !(cause instanceof TypeError) ? cause.message : "Vote failed. Tap a star to retry.");
+      setState("ready");
+    } finally {
+      busy.current = false;
+      setPreview(0);
     }
   }
 
+  const displayed = preview || summary?.average || 0;
+
   return (
-    <section
-      ref={panelRef}
-      data-merge-result-only="feedback"
-      aria-label={submissionState === "submitted" ? "Tool feedback" : undefined}
-      aria-labelledby={submissionState === "submitted" ? undefined : `tool-feedback-${toolSlug}`}
-      className="bg-muted/40 px-4 pb-2 pt-2 sm:px-6 lg:px-8"
-    >
-      {submissionState === "submitted" ? (
-        <div role="status" aria-live="polite" className="mx-auto max-w-[1040px] rounded-2xl border border-border bg-card px-4 py-5 text-center shadow-sm shadow-foreground/[0.03] sm:px-5">
-          <p className="text-base font-semibold text-foreground">✅ Thank you for your feedback!</p>
-          <p className="mt-1 text-sm text-muted-foreground">Your rating is included below.</p>
-        </div>
-      ) : (
-        <form onSubmit={submitFeedback} aria-busy={submissionState === "submitting"} className="mx-auto max-w-[1040px] rounded-2xl border border-border bg-card px-4 py-4 shadow-sm shadow-foreground/[0.03] sm:px-5">
-          <div>
-            <h2 id={`tool-feedback-${toolSlug}`} className="text-lg font-semibold leading-snug tracking-tight text-foreground">
-              Was this tool helpful?
-            </h2>
-
-            <fieldset aria-describedby={`tool-feedback-help-${toolSlug}`} className="mt-2.5">
-              <legend className="sr-only">Rate this tool from 1 to 5 stars</legend>
-              <div className="flex items-center gap-1" onMouseLeave={() => setHoveredRating(0)}>
-                {ratingValues.map((value) => (
-                  <label
-                    key={value}
-                    className="cursor-pointer rounded-md p-1 text-slate-300 outline-none transition-colors hover:text-amber-400 focus-within:ring-2 focus-within:ring-primary/40"
-                    onMouseEnter={() => setHoveredRating(value)}
-                  >
-                    <input
-                      className="sr-only"
-                      type="radio"
-                      name="rating"
-                      value={value}
-                      checked={rating === value}
-                      onChange={() => setRating(value)}
-                      aria-label={`${value} star${value === 1 ? "" : "s"}`}
-                      required
-                    />
-                    <Star className={`pointer-events-none h-8 w-8 transition-[color,fill,transform] duration-150 ${value <= visibleRating ? "scale-105 fill-amber-400 text-amber-400" : "fill-transparent"}`} aria-hidden="true" />
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <p id={`tool-feedback-help-${toolSlug}`} className="mt-2 text-sm text-muted-foreground">Your rating and optional review will be public. Please leave out personal details.</p>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <textarea
-              name="feedback"
-              rows={2}
-              maxLength={300}
-              aria-label="Optional public review"
-              className="h-12 min-h-12 w-full min-w-0 flex-1 resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm font-normal leading-5 text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-              placeholder="Write a public review (optional)"
-            />
-            <button
-              type="submit"
-              disabled={rating === 0 || submissionState === "submitting"}
-              className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-            >
-              {submissionState === "submitting" ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                  Submitting…
-                </>
-              ) : (
-                "Submit Feedback"
-              )}
-            </button>
-          </div>
-          {submitError && <p role="alert" className="mt-2 text-sm text-primary">{submitError}</p>}
-        </form>
-      )}
-      <div className="mx-auto mt-3 max-w-[1040px] rounded-2xl border border-border bg-card px-4 py-4 text-left shadow-sm sm:px-5">
-        <h3 className="text-lg font-semibold text-foreground">Ratings &amp; Reviews · {toolName}</h3>
-        {page && (page.ratings ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            <span aria-hidden="true" className="text-amber-500">★ </span>
-            <strong className="text-foreground">{page.average.toFixed(1)} / 5</strong>
-            {" · "}{page.ratings} {page.ratings === 1 ? "rating" : "ratings"}
-            {" · "}{page.written} {page.written === 1 ? "review" : "reviews"}
-          </p>
-        ) : <p className="mt-2 text-sm text-muted-foreground">Be the first to rate this tool.</p>)}
-        {Boolean(page?.reviews.length) && (
-          <ul className="mt-3 divide-y divide-border">
-            {page?.reviews.map(review => (
-              <li key={review.id} className="py-3">
-                <span aria-label={`${review.rating} out of 5 stars`} role="img" className="text-amber-500">
-                  {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+    <section ref={row} data-merge-result-only="feedback" aria-label={`Rate ${toolName}`} className="px-1 py-3 sm:px-2">
+      <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-[13px] leading-5 max-[359px]:gap-x-1 max-[359px]:text-xs sm:gap-x-3 sm:text-sm text-foreground">
+        <span className="font-bold">Rate this tool</span>
+        <div role="group" aria-label="Choose a star rating" className="inline-flex items-center"
+          onMouseLeave={() => { if (!busy.current) setPreview(0); }}>
+          {stars.map(value => {
+            const fill = Math.max(0, Math.min(1, displayed - value + 1)) * 100;
+            const label = `Rate ${value} ${value === 1 ? "star" : "stars"}`;
+            return (
+              <button key={value} type="button" aria-label={label} title={state === "voted" ? "Vote recorded" : label}
+                disabled={state !== "ready"} onClick={() => void vote(value)}
+                onMouseEnter={() => { if (state === "ready") setPreview(value); }}
+                onFocus={() => { if (state === "ready") setPreview(value); }}
+                onBlur={() => { if (!busy.current) setPreview(0); }}
+                className="inline-flex h-8 w-6 max-[359px]:w-5 items-center justify-center border-0 bg-transparent p-0 text-[#ffbf00] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1">
+                <span aria-hidden="true" className="relative block h-[22px] w-[22px]">
+                  <Star className="block h-[22px] w-[22px]" strokeWidth={1.5} />
+                  <span className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${fill}%` }}>
+                    <Star className="block h-[22px] w-[22px] max-w-none fill-current" strokeWidth={1.5} />
+                  </span>
                 </span>
-                <time dateTime={review.date} className="ml-2 text-xs text-muted-foreground">
-                  {new Date(review.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                </time>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground">{review.comment}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-        {loading && <p role="status" className="mt-2 text-sm text-muted-foreground">Loading reviews…</p>}
-        {readError && <p role="status" className="mt-2 text-sm text-muted-foreground">{readError}</p>}
-        {(page?.next || readError) && (
-          <button type="button" disabled={loading || submissionState === "submitting"} onClick={() => void loadReviews(page?.next ?? null)}
-            className="mt-2 rounded-md py-1 text-sm font-semibold text-primary underline disabled:opacity-60">
-            {readError ? "Retry" : page?.reviews.length === 3 ? "View all reviews" : "Show more reviews"}
-          </button>
-        )}
+              </button>
+            );
+          })}
+        </div>
+        <span aria-live="polite" className="whitespace-nowrap font-serif">
+          {summary ? <>
+            <strong className="font-sans">{summary.ratings ? summary.average.toFixed(1) : "—"}</strong>
+            {" / 5 - "}{summary.ratings.toLocaleString("en-US")} {summary.ratings === 1 ? "vote" : "votes"}
+          </> : "—"}
+          {state === "voted" && <span className="sr-only">. Vote recorded.</span>}
+        </span>
+        {error && <span role="status" className="text-xs text-muted-foreground">{error}</span>}
       </div>
     </section>
   );

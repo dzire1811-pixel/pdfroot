@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
+import type { ToolRating } from "@/lib/tool-review-types";
 import { getToolBySlug } from "@/lib/tools";
-import { readReviews, reviewDatabase } from "@/lib/tool-reviews";
+import { readRating, reviewDatabase } from "@/lib/tool-reviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,17 +10,19 @@ function json(data: unknown, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+// Keep cached older clients readable without exposing any written reviews.
+function ratingResponse(summary: ToolRating) {
+  return json({ ...summary, written: 0, reviews: [], next: null });
+}
+
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const slug = params.get("tool") ?? "";
-  const before = params.get("before");
-  if (!getToolBySlug(slug) || (before !== null && !/^[1-9]\d{0,17}$/.test(before))) {
-    return json({ error: "Unknown tool or review page." }, 400);
-  }
+  if (!getToolBySlug(slug)) return json({ error: "Unknown tool." }, 400);
   try {
-    return json(await readReviews(await reviewDatabase(), slug, before));
+    return ratingResponse(await readRating(await reviewDatabase(), slug));
   } catch {
-    return json({ error: "Reviews are temporarily unavailable." }, 503);
+    return json({ error: "Ratings are temporarily unavailable." }, 503);
   }
 }
 
@@ -37,9 +40,9 @@ export async function POST(request: Request) {
   const { tool, rating, comment, requestId } = input ?? {};
   if (typeof tool !== "string" || !getToolBySlug(tool) ||
       !Number.isInteger(rating) || rating < 1 || rating > 5 ||
-      typeof comment !== "string" || comment.length > 300 || comment.includes("\u0000") ||
+      (comment !== undefined && comment !== "") ||
       typeof requestId !== "string" || !/^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(requestId)) {
-    return json({ error: "Choose 1–5 stars and keep your review within 300 characters." }, 400);
+    return json({ error: "Choose 1–5 stars to vote." }, 400);
   }
   try {
     const pool = await reviewDatabase();
@@ -63,12 +66,12 @@ export async function POST(request: Request) {
         }
       }
       await client.query(`
-        INSERT INTO public_tool_review (tool_slug, rating, comment, request_id, visitor_bucket)
-        VALUES ($1, $2, $3, $4, $5) ON CONFLICT (request_id) DO NOTHING
-      `, [tool, rating, comment.trim() || null, requestId, bucket]);
-      const page = await readReviews(client, tool, null);
+        INSERT INTO public_tool_review (tool_slug, rating, request_id, visitor_bucket)
+        VALUES ($1, $2, $3, $4) ON CONFLICT (request_id) DO NOTHING
+      `, [tool, rating, requestId, bucket]);
+      const summary = await readRating(client, tool);
       await client.query("COMMIT");
-      return json(page);
+      return ratingResponse(summary);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
