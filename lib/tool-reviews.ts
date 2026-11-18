@@ -53,7 +53,7 @@ export async function readReviews(client: Pick<PoolClient, "query">, slug: strin
         FROM public_tool_review
         WHERE tool_slug = $1 AND NOT hidden AND comment IS NOT NULL
           AND ($2::bigint IS NULL OR id < $2)
-        ORDER BY id DESC LIMIT $3
+        ORDER BY sequence DESC LIMIT $3
       ) page) AS reviews
     FROM public_tool_review WHERE tool_slug = $1 AND NOT hidden
   `, [slug, before, limit + 1]);
