@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { db } from "./desktop-payment/db";
-import type { PublicReview, ToolReviews } from "./tool-review-types";
+import type { ToolRating } from "./tool-review-types";
 
 let setup: Promise<void> | undefined;
 
@@ -41,23 +41,11 @@ export async function reviewDatabase() {
   return db();
 }
 
-export async function readReviews(client: Pick<PoolClient, "query">, slug: string, before: string | null): Promise<ToolReviews> {
-  const limit = before ? 10 : 3;
-  const result = await client.query<{
-    ratings: number; average: number; written: number; reviews: PublicReview[];
-  }>(`
-    SELECT count(*)::int AS ratings, count(comment)::int AS written,
-      COALESCE(round(avg(rating), 1), 0)::float8 AS average,
-      (SELECT COALESCE(json_agg(page ORDER BY page.sequence DESC), '[]') FROM (
-        SELECT id AS sequence, id::text AS id, rating, comment, created_at AS date
-        FROM public_tool_review
-        WHERE tool_slug = $1 AND NOT hidden AND comment IS NOT NULL
-          AND ($2::bigint IS NULL OR id < $2)
-        ORDER BY sequence DESC LIMIT $3
-      ) page) AS reviews
-    FROM public_tool_review WHERE tool_slug = $1 AND NOT hidden
-  `, [slug, before, limit + 1]);
-  const row = result.rows[0];
-  const reviews = row.reviews.slice(0, limit).map(({ id, rating, comment, date }) => ({ id, rating, comment, date }));
-  return { ...row, reviews, next: row.reviews.length > limit ? reviews[limit - 1].id : null };
+export async function readRating(client: Pick<PoolClient, "query">, slug: string): Promise<ToolRating> {
+  const result = await client.query<ToolRating>(`
+    SELECT count(*)::int AS ratings, COALESCE(round(avg(rating), 1), 0)::float8 AS average
+    FROM public_tool_review
+    WHERE tool_slug = $1 AND NOT hidden
+  `, [slug]);
+  return result.rows[0];
 }
